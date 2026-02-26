@@ -41,6 +41,10 @@
         {
           "name": "S3_PUBLIC_BASE_URL",
           "value": "https://pikmin-postcard-images-041913718278-20260226.s3.us-east-1.amazonaws.com"
+        },
+        {
+          "name": "NEXTAUTH_URL",
+          "value": "https://pikmin.askans.app"
         }
       ],
       "secrets": [
@@ -51,6 +55,18 @@
         {
           "name": "GOOGLE_GENERATIVE_AI_API_KEY",
           "valueFrom": "arn:aws:ssm:us-east-1:041913718278:parameter/pikmin-postcard/GOOGLE_GENERATIVE_AI_API_KEY"
+        },
+        {
+          "name": "GOOGLE_CLIENT_ID",
+          "valueFrom": "arn:aws:ssm:us-east-1:041913718278:parameter/pikmin-postcard/GOOGLE_CLIENT_ID"
+        },
+        {
+          "name": "GOOGLE_CLIENT_SECRET",
+          "valueFrom": "arn:aws:ssm:us-east-1:041913718278:parameter/pikmin-postcard/GOOGLE_CLIENT_SECRET"
+        },
+        {
+          "name": "NEXTAUTH_SECRET",
+          "valueFrom": "arn:aws:ssm:us-east-1:041913718278:parameter/pikmin-postcard/NEXTAUTH_SECRET"
         }
       ],
       "logConfiguration": {

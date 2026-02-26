@@ -1,7 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import type { SavedMapMarker } from '@/components/open-map';
 
 type LocationResult = {
@@ -21,6 +21,14 @@ type PostcardRecord = {
   createdAt: string;
 };
 
+type GeoPermissionState = 'checking' | 'prompt' | 'granted' | 'denied' | 'unsupported';
+
+type DeviceLocation = {
+  latitude: number;
+  longitude: number;
+  accuracy: number;
+};
+
 const OpenMap = dynamic(
   async () => {
     const mod = await import('@/components/open-map');
@@ -34,8 +42,11 @@ export function PostcardWorkbench() {
   const [notes, setNotes] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [location, setLocation] = useState<LocationResult | null>(null);
+  const [deviceLocation, setDeviceLocation] = useState<DeviceLocation | null>(null);
+  const [geoPermission, setGeoPermission] = useState<GeoPermissionState>('checking');
   const [postcards, setPostcards] = useState<PostcardRecord[]>([]);
   const [isLoadingList, setIsLoadingList] = useState(false);
+  const [isRequestingLocation, setIsRequestingLocation] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [status, setStatus] = useState('');
@@ -64,6 +75,115 @@ export function PostcardWorkbench() {
       }));
   }, [postcards]);
 
+  const requestDeviceLocation = useCallback(async (silent = false): Promise<boolean> => {
+    if (!navigator.geolocation) {
+      setGeoPermission('unsupported');
+      if (!silent) {
+        setStatus('Browser geolocation is not supported.');
+      }
+      return false;
+    }
+
+    setIsRequestingLocation(true);
+
+    try {
+      const granted = await new Promise<boolean>((resolve) => {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            setGeoPermission('granted');
+            setDeviceLocation({
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+              accuracy: position.coords.accuracy
+            });
+            resolve(true);
+          },
+          (error) => {
+            if (error.code === error.PERMISSION_DENIED) {
+              setGeoPermission('denied');
+            } else {
+              setGeoPermission('prompt');
+            }
+            resolve(false);
+          },
+          {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 30000
+          }
+        );
+      });
+
+      if (!granted && !silent) {
+        setStatus('Location permission is required to continue.');
+      }
+
+      if (granted && !silent) {
+        setStatus('Location permission granted.');
+      }
+
+      return granted;
+    } finally {
+      setIsRequestingLocation(false);
+    }
+  }, []);
+
+  const ensureLocationReady = useCallback(async (): Promise<boolean> => {
+    if (geoPermission === 'granted' && deviceLocation) {
+      return true;
+    }
+
+    return requestDeviceLocation(false);
+  }, [deviceLocation, geoPermission, requestDeviceLocation]);
+
+  useEffect(() => {
+    let isMounted = true;
+    let permissionStatus: PermissionStatus | null = null;
+
+    async function loadPermissionStatus() {
+      if (!navigator.geolocation) {
+        setGeoPermission('unsupported');
+        return;
+      }
+
+      if (!navigator.permissions) {
+        setGeoPermission('prompt');
+        return;
+      }
+
+      try {
+        permissionStatus = await navigator.permissions.query({
+          name: 'geolocation' as PermissionName
+        });
+
+        if (!isMounted) {
+          return;
+        }
+
+        setGeoPermission(permissionStatus.state as GeoPermissionState);
+
+        permissionStatus.onchange = () => {
+          setGeoPermission(permissionStatus?.state as GeoPermissionState);
+        };
+
+        if (permissionStatus.state === 'granted') {
+          await requestDeviceLocation(true);
+        }
+      } catch {
+        setGeoPermission('prompt');
+      }
+    }
+
+    void loadPermissionStatus();
+
+    return () => {
+      isMounted = false;
+      if (permissionStatus) {
+        permissionStatus.onchange = null;
+      }
+    };
+  }, [requestDeviceLocation]);
+
   useEffect(() => {
     void loadPostcards();
   }, []);
@@ -72,6 +192,9 @@ export function PostcardWorkbench() {
     setIsLoadingList(true);
     try {
       const response = await fetch('/api/postcards', { cache: 'no-store' });
+      if (response.status === 401) {
+        throw new Error('Session expired. Please sign in again.');
+      }
       if (!response.ok) {
         throw new Error('Failed to load postcards.');
       }
@@ -86,6 +209,11 @@ export function PostcardWorkbench() {
 
   async function detectLocation(event: FormEvent) {
     event.preventDefault();
+
+    if (!(await ensureLocationReady())) {
+      return;
+    }
+
     if (!file) {
       setStatus('Choose an image first.');
       return;
@@ -102,6 +230,10 @@ export function PostcardWorkbench() {
         method: 'POST',
         body: formData
       });
+
+      if (response.status === 401) {
+        throw new Error('Unauthorized. Please sign in with Google.');
+      }
 
       if (!response.ok) {
         const errorJson = (await response.json()) as { error?: string };
@@ -131,6 +263,10 @@ export function PostcardWorkbench() {
       body: formData
     });
 
+    if (response.status === 401) {
+      throw new Error('Unauthorized. Please sign in with Google.');
+    }
+
     if (!response.ok) {
       const errorJson = (await response.json()) as { error?: string };
       throw new Error(errorJson.error ?? 'Image upload failed.');
@@ -141,6 +277,10 @@ export function PostcardWorkbench() {
   }
 
   async function savePostcard() {
+    if (!(await ensureLocationReady())) {
+      return;
+    }
+
     if (!title.trim()) {
       setStatus('Title is required.');
       return;
@@ -179,6 +319,10 @@ export function PostcardWorkbench() {
         })
       });
 
+      if (response.status === 401) {
+        throw new Error('Unauthorized. Please sign in with Google.');
+      }
+
       if (!response.ok) {
         const errorJson = (await response.json()) as { error?: string };
         throw new Error(errorJson.error ?? 'Failed to save postcard.');
@@ -197,10 +341,42 @@ export function PostcardWorkbench() {
     }
   }
 
+  const permissionText =
+    geoPermission === 'checking'
+      ? 'Checking location permission...'
+      : geoPermission === 'granted'
+        ? 'Location access granted.'
+        : geoPermission === 'prompt'
+          ? 'Location permission is required. Click "Allow location".'
+          : geoPermission === 'denied'
+            ? 'Location permission denied. Enable it in browser settings.'
+            : 'Location permission unsupported in this browser.';
+
   return (
     <section className="grid">
       <article className="panel">
         <h2 style={{ marginBottom: '1rem' }}>Postcard Input</h2>
+
+        <div style={{ marginBottom: '1rem', padding: '0.7rem', borderRadius: '10px', background: '#f3f8ee', border: '1px solid #dbe6d0' }}>
+          <strong style={{ fontSize: '0.92rem' }}>Location Permission</strong>
+          <div style={{ marginTop: '0.35rem' }}>
+            <small>{permissionText}</small>
+            {deviceLocation ? (
+              <>
+                <br />
+                <small>
+                  Device location: {deviceLocation.latitude.toFixed(6)}, {deviceLocation.longitude.toFixed(6)} (±{Math.round(deviceLocation.accuracy)}m)
+                </small>
+              </>
+            ) : null}
+          </div>
+          <div style={{ marginTop: '0.6rem' }}>
+            <button type="button" onClick={() => void requestDeviceLocation(false)} disabled={isRequestingLocation}>
+              {isRequestingLocation ? 'Requesting location...' : 'Allow location'}
+            </button>
+          </div>
+        </div>
+
         <form onSubmit={detectLocation}>
           <label>
             Postcard title
@@ -227,7 +403,7 @@ export function PostcardWorkbench() {
               onChange={(event) => setFile(event.target.files?.[0] ?? null)}
             />
           </label>
-          <button type="submit" disabled={isDetecting || isSaving}>
+          <button type="submit" disabled={isDetecting || isSaving || geoPermission === 'unsupported'}>
             {isDetecting ? 'Detecting...' : 'Detect location with Gemini'}
           </button>
         </form>

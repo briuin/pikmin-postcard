@@ -1,6 +1,7 @@
 import { LocationStatus } from '@prisma/client';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
 
 const postcardCreateSchema = z.object({
@@ -20,10 +21,26 @@ const postcardCreateSchema = z.object({
   locationModelVersion: z.string().max(100).optional()
 });
 
-const DEMO_USER_EMAIL = 'demo@pikmin-postcard.app';
-
 export async function GET() {
+  const session = await auth();
+  const userEmail = session?.user?.email;
+  if (!userEmail) {
+    return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { email: userEmail },
+    select: { id: true }
+  });
+
+  if (!user) {
+    return NextResponse.json([], { status: 200 });
+  }
+
   const postcards = await prisma.postcard.findMany({
+    where: {
+      userId: user.id
+    },
     orderBy: {
       createdAt: 'desc'
     },
@@ -42,12 +59,18 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const session = await auth();
+    const userEmail = session?.user?.email;
+    if (!userEmail) {
+      return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+    }
+
     const body = postcardCreateSchema.parse(await request.json());
 
     const user = await prisma.user.upsert({
-      where: { email: DEMO_USER_EMAIL },
+      where: { email: userEmail },
       update: {},
-      create: { email: DEMO_USER_EMAIL }
+      create: { email: userEmail }
     });
 
     const postcard = await prisma.postcard.create({

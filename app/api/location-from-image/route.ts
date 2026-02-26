@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { auth } from '@/auth';
 import { locationResultSchema } from '@/lib/location-schema';
 import { getGeminiEnv } from '@/lib/env';
 
@@ -22,6 +23,11 @@ function extractJsonObject(rawText: string): string {
 }
 
 export async function POST(request: Request) {
+  const session = await auth();
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+  }
+
   const formData = await request.formData();
   const file = formData.get('image');
 
