@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 const geminiEnvSchema = z.object({
   GOOGLE_GENERATIVE_AI_API_KEY: z.string().min(1),
-  GEMINI_MODEL: z.string().default('gemini-2.0-flash')
+  GEMINI_MODEL: z.string().default('gemini-2.5-flash')
 });
 
 export function getGeminiEnv() {

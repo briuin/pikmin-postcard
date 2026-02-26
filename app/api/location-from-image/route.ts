@@ -16,6 +16,11 @@ type GeminiLocationResult = {
   place_guess: string;
 };
 
+type GeminiDetectionSuccess = {
+  location: GeminiLocationResult;
+  modelVersion: string;
+};
+
 function extractJsonObject(rawText: string): string {
   const fenced = rawText.match(/```json\s*([\s\S]*?)```/i);
   if (fenced?.[1]) {
@@ -53,7 +58,7 @@ async function uploadImageToS3(file: File): Promise<string> {
   return `${config.baseUrl}/${key}`;
 }
 
-async function detectWithGemini(mimeType: string, fileBytes: Buffer): Promise<GeminiLocationResult> {
+async function detectWithGemini(mimeType: string, fileBytes: Buffer): Promise<GeminiDetectionSuccess> {
   const geminiEnv = getGeminiEnv();
   const base64Image = fileBytes.toString('base64');
 
@@ -70,56 +75,81 @@ async function detectWithGemini(mimeType: string, fileBytes: Buffer): Promise<Ge
     'No markdown, no explanation.'
   ].join('\n');
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${geminiEnv.GEMINI_MODEL}:generateContent?key=${geminiEnv.GOOGLE_GENERATIVE_AI_API_KEY}`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            role: 'user',
-            parts: [
-              { text: prompt },
-              {
-                inlineData: {
-                  mimeType,
-                  data: base64Image
-                }
-              }
-            ]
-          }
-        ],
-        generationConfig: {
-          temperature: 0.2,
-          responseMimeType: 'application/json'
-        }
-      })
-    }
+  const modelsToTry = Array.from(
+    new Set([geminiEnv.GEMINI_MODEL, 'gemini-2.5-flash', 'gemini-2.5-flash-lite'])
   );
 
-  if (!response.ok) {
-    const errorBody = await response.text();
-    throw new Error(`Gemini request failed: ${errorBody}`);
-  }
+  let lastError: Error | null = null;
 
-  const json = (await response.json()) as {
-    candidates?: Array<{
-      content?: {
-        parts?: Array<{ text?: string }>;
+  for (let i = 0; i < modelsToTry.length; i += 1) {
+    const model = modelsToTry[i] as string;
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiEnv.GOOGLE_GENERATIVE_AI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                { text: prompt },
+                {
+                  inlineData: {
+                    mimeType,
+                    data: base64Image
+                  }
+                }
+              ]
+            }
+          ],
+          generationConfig: {
+            temperature: 0.2,
+            responseMimeType: 'application/json'
+          }
+        })
+      }
+    );
+
+    if (response.ok) {
+      const json = (await response.json()) as {
+        candidates?: Array<{
+          content?: {
+            parts?: Array<{ text?: string }>;
+          };
+        }>;
       };
-    }>;
-  };
 
-  const modelText = json.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!modelText) {
-    throw new Error('Gemini response did not include text output.');
+      const modelText = json.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!modelText) {
+        throw new Error('Gemini response did not include text output.');
+      }
+
+      const parsedJsonText = extractJsonObject(modelText);
+      return {
+        location: locationResultSchema.parse(JSON.parse(parsedJsonText)),
+        modelVersion: model
+      };
+    }
+
+    const errorBody = await response.text();
+    const shouldTryNextModel = response.status === 404 && i < modelsToTry.length - 1;
+
+    if (shouldTryNextModel) {
+      console.warn('Gemini model unavailable, trying fallback model', {
+        model,
+        responseStatus: response.status
+      });
+      continue;
+    }
+
+    lastError = new Error(`Gemini request failed: ${errorBody}`);
+    break;
   }
 
-  const parsedJsonText = extractJsonObject(modelText);
-  return locationResultSchema.parse(JSON.parse(parsedJsonText));
+  throw lastError ?? new Error('Gemini request failed with unknown error.');
 }
 
 async function processDetectionJob(params: {
@@ -135,17 +165,17 @@ async function processDetectionJob(params: {
       }
     });
 
-    const result = await detectWithGemini(params.mimeType, params.fileBytes);
+    const detection = await detectWithGemini(params.mimeType, params.fileBytes);
 
     await prisma.detectionJob.update({
       where: { id: params.jobId },
       data: {
         status: DetectionJobStatus.SUCCEEDED,
-        latitude: result.latitude,
-        longitude: result.longitude,
-        confidence: result.confidence,
-        placeGuess: result.place_guess,
-        modelVersion: process.env.GEMINI_MODEL ?? 'unknown',
+        latitude: detection.location.latitude,
+        longitude: detection.location.longitude,
+        confidence: detection.location.confidence,
+        placeGuess: detection.location.place_guess,
+        modelVersion: detection.modelVersion,
         completedAt: new Date(),
         errorMessage: null
       }

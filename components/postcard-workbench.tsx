@@ -1,8 +1,10 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { signIn, useSession } from 'next-auth/react';
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SavedMapMarker } from '@/components/open-map';
 
 type PostcardRecord = {
@@ -79,6 +81,7 @@ function parseLocationInput(input: string): { latitude: number; longitude: numbe
 }
 
 export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
+  const router = useRouter();
   const { status: sessionStatus } = useSession();
   const isAuthenticated = sessionStatus === 'authenticated';
 
@@ -103,6 +106,10 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
   const [isSubmittingAi, setIsSubmittingAi] = useState(false);
   const [isSavingManual, setIsSavingManual] = useState(false);
   const [createStatus, setCreateStatus] = useState('');
+  const [queuedAiJobId, setQueuedAiJobId] = useState<string | null>(null);
+  const [queuedAiImageUrl, setQueuedAiImageUrl] = useState<string | null>(null);
+  const [aiInputVersion, setAiInputVersion] = useState(0);
+  const aiRedirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [jobs, setJobs] = useState<DetectionJobRecord[]>([]);
   const [myPostcards, setMyPostcards] = useState<PostcardRecord[]>([]);
@@ -246,6 +253,14 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
   }, []);
 
   useEffect(() => {
+    return () => {
+      if (aiRedirectTimerRef.current) {
+        clearTimeout(aiRedirectTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     if (!showDashboard || !isAuthenticated) {
       return;
     }
@@ -312,6 +327,11 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
       return;
     }
 
+    if (aiRedirectTimerRef.current) {
+      clearTimeout(aiRedirectTimerRef.current);
+    }
+    setQueuedAiJobId(null);
+    setQueuedAiImageUrl(null);
     setIsSubmittingAi(true);
     setCreateStatus('Submitting AI detection job...');
 
@@ -328,14 +348,20 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
         throw new Error('Unauthorized. Please sign in with Google.');
       }
 
-      const payload = (await response.json()) as { id?: string; error?: string; message?: string };
+      const payload = (await response.json()) as { id?: string; imageUrl?: string; error?: string; message?: string };
 
       if (!response.ok) {
         throw new Error(payload.error ?? 'Failed to submit AI detection job.');
       }
 
       setAiFile(null);
-      setCreateStatus(payload.message ?? `Detection job submitted (id: ${payload.id ?? 'unknown'}). Check Dashboard later.`);
+      setAiInputVersion((current) => current + 1);
+      setQueuedAiJobId(payload.id ?? null);
+      setQueuedAiImageUrl(payload.imageUrl ?? null);
+      setCreateStatus(`Detection job submitted (id: ${payload.id ?? 'unknown'}). Redirecting to dashboard...`);
+      aiRedirectTimerRef.current = setTimeout(() => {
+        router.push('/dashboard');
+      }, 1400);
     } catch (error) {
       setCreateStatus(error instanceof Error ? error.message : 'Unknown AI detection submit error.');
     } finally {
@@ -532,6 +558,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
             <label>
               Image
               <input
+                key={aiInputVersion}
                 type="file"
                 accept="image/*"
                 onChange={(event) => setAiFile(event.target.files?.[0] ?? null)}
@@ -542,6 +569,21 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
               {isSubmittingAi ? 'Submitting...' : 'Submit AI Detect Job'}
             </button>
           </form>
+
+          {queuedAiJobId ? (
+            <div className="status-box status-success">
+              <small>Queued. You can leave this page; processing continues in background.</small>
+              <small>Job ID: {queuedAiJobId}</small>
+              {queuedAiImageUrl ? (
+                <small>
+                  Image: <Link href={queuedAiImageUrl} target="_blank" rel="noreferrer">open uploaded image</Link>
+                </small>
+              ) : null}
+              <button type="button" onClick={() => router.push('/dashboard')}>
+                Open Dashboard
+              </button>
+            </div>
+          ) : null}
 
           <div className="form-stack">
             <h3>Option 2: Manual Create</h3>

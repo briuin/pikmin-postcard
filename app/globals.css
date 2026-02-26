@@ -295,6 +295,11 @@ h3 {
   background: #fbfffa;
 }
 
+.status-success {
+  border-color: #b9e3c3;
+  background: linear-gradient(145deg, rgba(230, 255, 236, 0.92), rgba(243, 255, 250, 0.95));
+}
+
 .create-map-block {
   display: grid;
   gap: 0.4rem;
