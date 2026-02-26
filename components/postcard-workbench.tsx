@@ -16,6 +16,13 @@ type PostcardRecord = {
   imageUrl: string | null;
   latitude: number | null;
   longitude: number | null;
+  aiConfidence: number | null;
+  aiPlaceGuess: string | null;
+  locationStatus: 'AUTO' | 'USER_CONFIRMED' | 'MANUAL';
+  locationModelVersion: string | null;
+  user?: {
+    email: string;
+  } | null;
   createdAt: string;
 };
 
@@ -134,7 +141,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
     }
 
     return postcards.filter((postcard) => {
-      const haystack = `${postcard.title} ${postcard.placeName ?? ''} ${postcard.notes ?? ''}`.toLowerCase();
+      const haystack = `${postcard.title} ${postcard.placeName ?? ''} ${postcard.notes ?? ''} ${postcard.aiPlaceGuess ?? ''} ${postcard.user?.email ?? ''}`.toLowerCase();
       return haystack.includes(query);
     });
   }, [postcards, searchText]);
@@ -148,7 +155,14 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
         latitude: postcard.latitude as number,
         longitude: postcard.longitude as number,
         placeName: postcard.placeName,
-        imageUrl: postcard.imageUrl
+        imageUrl: postcard.imageUrl,
+        notes: postcard.notes,
+        createdAt: postcard.createdAt,
+        locationStatus: postcard.locationStatus,
+        aiConfidence: postcard.aiConfidence,
+        aiPlaceGuess: postcard.aiPlaceGuess,
+        locationModelVersion: postcard.locationModelVersion,
+        uploaderEmail: postcard.user?.email ?? null
       }));
   }, [filteredPostcards]);
 

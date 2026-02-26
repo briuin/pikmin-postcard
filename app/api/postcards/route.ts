@@ -45,6 +45,9 @@ export async function GET(request: Request) {
       where: { userId: user.id },
       orderBy: { createdAt: 'desc' },
       include: {
+        user: {
+          select: { email: true }
+        },
         tags: {
           include: { tag: true }
         }
@@ -60,6 +63,9 @@ export async function GET(request: Request) {
       createdAt: 'desc'
     },
     include: {
+      user: {
+        select: { email: true }
+      },
       tags: {
         include: {
           tag: true

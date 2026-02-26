@@ -1,9 +1,9 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import L from 'leaflet';
 import Image from 'next/image';
-import { MapContainer, Marker, Popup, TileLayer, useMapEvents } from 'react-leaflet';
+import { MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 
 export type SavedMapMarker = {
   id: string;
@@ -12,6 +12,13 @@ export type SavedMapMarker = {
   longitude: number;
   placeName?: string | null;
   imageUrl?: string | null;
+  notes?: string | null;
+  createdAt?: string;
+  locationStatus?: 'AUTO' | 'USER_CONFIRMED' | 'MANUAL';
+  aiConfidence?: number | null;
+  aiPlaceGuess?: string | null;
+  locationModelVersion?: string | null;
+  uploaderEmail?: string | null;
 };
 
 type DraftPoint = {
@@ -74,6 +81,48 @@ function MapClickHandler({ onPick }: { onPick?: (lat: number, lng: number) => vo
   return null;
 }
 
+function MapViewportManager({
+  draftPoint,
+  viewerPoint,
+  markers
+}: {
+  draftPoint?: DraftPoint;
+  viewerPoint?: ViewerPoint;
+  markers: SavedMapMarker[];
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (draftPoint) {
+      map.setView([draftPoint.latitude, draftPoint.longitude], 10);
+      return;
+    }
+
+    const points: Array<[number, number]> = markers.map((marker) => [marker.latitude, marker.longitude]);
+    if (viewerPoint) {
+      points.push([viewerPoint.latitude, viewerPoint.longitude]);
+    }
+
+    if (points.length === 0) {
+      map.setView([35.6812, 139.7671], 3);
+      return;
+    }
+
+    if (points.length === 1) {
+      const zoom = viewerPoint && markers.length === 0 ? 11 : 6;
+      map.setView(points[0], zoom);
+      return;
+    }
+
+    map.fitBounds(points, {
+      padding: [36, 36],
+      maxZoom: 7
+    });
+  }, [map, draftPoint, viewerPoint, markers]);
+
+  return null;
+}
+
 type MarkerCluster = {
   id: string;
   latitude: number;
@@ -118,33 +167,34 @@ function clusterByDistance(markers: SavedMapMarker[]): MarkerCluster[] {
   return clusters;
 }
 
+function getLocationMethodText(marker: SavedMapMarker): string {
+  if (marker.locationStatus === 'MANUAL') {
+    return 'Location: manual input';
+  }
+
+  if (typeof marker.aiConfidence === 'number') {
+    return `Location: AI detected (${Math.round(marker.aiConfidence * 100)}% confidence)`;
+  }
+
+  if (marker.locationStatus === 'USER_CONFIRMED') {
+    return 'Location: AI detected and user confirmed';
+  }
+
+  return 'Location: unknown method';
+}
+
 export function OpenMap({ draftPoint, viewerPoint, markers = [], onPick, className }: OpenMapProps) {
-  const center = useMemo<[number, number]>(() => {
-    if (draftPoint) {
-      return [draftPoint.latitude, draftPoint.longitude];
-    }
-
-    if (viewerPoint) {
-      return [viewerPoint.latitude, viewerPoint.longitude];
-    }
-
-    if (markers.length > 0) {
-      return [markers[0].latitude, markers[0].longitude];
-    }
-
-    return [35.6812, 139.7671];
-  }, [draftPoint, viewerPoint, markers]);
-
   const clusters = useMemo(() => clusterByDistance(markers), [markers]);
 
   return (
     <div className={className ? `map-shell ${className}` : 'map-shell'}>
-      <MapContainer center={center} zoom={draftPoint || viewerPoint ? 10 : 3} style={{ height: '100%', width: '100%' }}>
+      <MapContainer center={[35.6812, 139.7671]} zoom={3} style={{ height: '100%', width: '100%' }}>
         <TileLayer
           attribution='&copy; OpenStreetMap contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <MapClickHandler onPick={onPick} />
+        <MapViewportManager draftPoint={draftPoint} viewerPoint={viewerPoint} markers={markers} />
 
         {clusters.map((cluster) => {
           if (cluster.points.length === 1) {
@@ -155,14 +205,44 @@ export function OpenMap({ draftPoint, viewerPoint, markers = [], onPick, classNa
                   <strong>{point.title}</strong>
                   <br />
                   {point.placeName || 'Unknown place'}
+                  <br />
+                  {getLocationMethodText(point)}
+                  <br />
+                  by {point.uploaderEmail ?? 'unknown uploader'}
+                  {point.aiPlaceGuess ? (
+                    <>
+                      <br />
+                      AI guess: {point.aiPlaceGuess}
+                    </>
+                  ) : null}
+                  {point.locationModelVersion ? (
+                    <>
+                      <br />
+                      model: {point.locationModelVersion}
+                    </>
+                  ) : null}
+                  <br />
+                  {point.latitude.toFixed(6)}, {point.longitude.toFixed(6)}
+                  {point.createdAt ? (
+                    <>
+                      <br />
+                      uploaded: {new Date(point.createdAt).toLocaleString()}
+                    </>
+                  ) : null}
+                  {point.notes ? (
+                    <>
+                      <br />
+                      {point.notes}
+                    </>
+                  ) : null}
                   {point.imageUrl ? (
                     <>
                       <br />
                       <Image
                         alt={point.title}
                         src={point.imageUrl}
-                        width={130}
-                        height={94}
+                        width={160}
+                        height={116}
                         style={{ marginTop: '0.45rem', borderRadius: '6px', objectFit: 'cover' }}
                       />
                     </>
@@ -182,7 +262,7 @@ export function OpenMap({ draftPoint, viewerPoint, markers = [], onPick, classNa
                 <strong>{cluster.points.length} postcards nearby</strong>
                 <ul style={{ margin: '0.45rem 0 0', paddingLeft: '1rem' }}>
                   {cluster.points.slice(0, 6).map((point) => (
-                    <li key={point.id}>{point.title}</li>
+                    <li key={point.id}>{point.title} ({point.uploaderEmail ?? 'unknown'})</li>
                   ))}
                 </ul>
               </Popup>
