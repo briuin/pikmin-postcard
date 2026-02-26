@@ -45,6 +45,9 @@ model Postcard {
   aiLongitude          Float?
   aiConfidence         Float?
   aiPlaceGuess         String?
+  likeCount            Int            @default(0)
+  dislikeCount         Int            @default(0)
+  wrongLocationReports Int            @default(0)
   locationStatus       LocationStatus @default(AUTO)
   locationModelVersion String?
   deletedAt            DateTime?

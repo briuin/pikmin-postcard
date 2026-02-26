@@ -18,11 +18,12 @@ type PostcardRecord = {
   longitude: number | null;
   aiConfidence: number | null;
   aiPlaceGuess: string | null;
+  likeCount: number;
+  dislikeCount: number;
+  wrongLocationReports: number;
   locationStatus: 'AUTO' | 'USER_CONFIRMED' | 'MANUAL';
   locationModelVersion: string | null;
-  user?: {
-    email: string;
-  } | null;
+  uploaderMasked?: string | null;
   createdAt: string;
 };
 
@@ -105,9 +106,11 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
   const showDashboard = mode === 'dashboard';
 
   const [searchText, setSearchText] = useState('');
+  const [focusedMarkerId, setFocusedMarkerId] = useState<string | null>(null);
   const [postcards, setPostcards] = useState<PostcardRecord[]>([]);
   const [isLoadingPublic, setIsLoadingPublic] = useState(false);
   const [exploreStatus, setExploreStatus] = useState('');
+  const [feedbackPendingKey, setFeedbackPendingKey] = useState<string | null>(null);
 
   const [deviceLocation, setDeviceLocation] = useState<DeviceLocation | null>(null);
   const [geoPermission, setGeoPermission] = useState<GeoPermissionState>('prompt');
@@ -134,6 +137,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
   const [isLoadingJobs, setIsLoadingJobs] = useState(false);
   const [isLoadingMine, setIsLoadingMine] = useState(false);
   const [dashboardStatus, setDashboardStatus] = useState('');
+  const [dashboardViewMode, setDashboardViewMode] = useState<'grid' | 'list'>('grid');
 
   const filteredPostcards = useMemo(() => {
     const query = searchText.trim().toLowerCase();
@@ -142,7 +146,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
     }
 
     return postcards.filter((postcard) => {
-      const haystack = `${postcard.title} ${postcard.placeName ?? ''} ${postcard.notes ?? ''} ${postcard.aiPlaceGuess ?? ''} ${postcard.user?.email ?? ''}`.toLowerCase();
+      const haystack = `${postcard.title} ${postcard.placeName ?? ''} ${postcard.notes ?? ''} ${postcard.aiPlaceGuess ?? ''} ${postcard.uploaderMasked ?? ''}`.toLowerCase();
       return haystack.includes(query);
     });
   }, [postcards, searchText]);
@@ -163,7 +167,10 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
         aiConfidence: postcard.aiConfidence,
         aiPlaceGuess: postcard.aiPlaceGuess,
         locationModelVersion: postcard.locationModelVersion,
-        uploaderEmail: postcard.user?.email ?? null
+        uploaderMasked: postcard.uploaderMasked ?? null,
+        likeCount: postcard.likeCount ?? 0,
+        dislikeCount: postcard.dislikeCount ?? 0,
+        wrongLocationReports: postcard.wrongLocationReports ?? 0
       }));
   }, [filteredPostcards]);
 
@@ -332,6 +339,45 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
       setExploreStatus(error instanceof Error ? error.message : 'Unknown list error.');
     } finally {
       setIsLoadingPublic(false);
+    }
+  }
+
+  async function submitExploreFeedback(
+    postcardId: string,
+    action: 'like' | 'dislike' | 'report_wrong_location'
+  ) {
+    if (!isAuthenticated) {
+      setExploreStatus('Sign in with Google to submit likes/dislikes/reports.');
+      return;
+    }
+
+    const key = `${postcardId}:${action}`;
+    setFeedbackPendingKey(key);
+
+    try {
+      const response = await fetch(`/api/postcards/${postcardId}/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action })
+      });
+
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error ?? 'Failed to submit feedback.');
+      }
+
+      setExploreStatus(
+        action === 'like'
+          ? 'Thanks for the like.'
+          : action === 'dislike'
+            ? 'Dislike recorded.'
+            : 'Wrong-location report submitted.'
+      );
+      await loadPublicPostcards();
+    } catch (error) {
+      setExploreStatus(error instanceof Error ? error.message : 'Unknown feedback error.');
+    } finally {
+      setFeedbackPendingKey(null);
     }
   }
 
@@ -673,6 +719,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
           <OpenMap
             className="map-shell-large"
             markers={publicMarkers}
+            focusedMarkerId={focusedMarkerId}
             viewerPoint={
               deviceLocation
                 ? {
@@ -698,7 +745,45 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
                   <small>{new Date(postcard.createdAt).toLocaleDateString()}</small>
                 </div>
                 <small>{postcard.placeName || 'Unknown place'}</small>
+                {postcard.uploaderMasked ? <small>by {postcard.uploaderMasked}</small> : null}
+                <small>
+                  👍 {postcard.likeCount} · 👎 {postcard.dislikeCount} · ⚠️ {postcard.wrongLocationReports}
+                </small>
                 {postcard.notes ? <p>{postcard.notes}</p> : null}
+                <div className="chip-row">
+                  <button
+                    type="button"
+                    className="action-button"
+                    onClick={() => setFocusedMarkerId(postcard.id)}
+                    disabled={typeof postcard.latitude !== 'number' || typeof postcard.longitude !== 'number'}
+                  >
+                    Focus on map
+                  </button>
+                  <button
+                    type="button"
+                    className="action-button"
+                    onClick={() => void submitExploreFeedback(postcard.id, 'like')}
+                    disabled={feedbackPendingKey === `${postcard.id}:like`}
+                  >
+                    {feedbackPendingKey === `${postcard.id}:like` ? '...' : 'Like'}
+                  </button>
+                  <button
+                    type="button"
+                    className="action-button"
+                    onClick={() => void submitExploreFeedback(postcard.id, 'dislike')}
+                    disabled={feedbackPendingKey === `${postcard.id}:dislike`}
+                  >
+                    {feedbackPendingKey === `${postcard.id}:dislike` ? '...' : 'Dislike'}
+                  </button>
+                  <button
+                    type="button"
+                    className="action-button"
+                    onClick={() => void submitExploreFeedback(postcard.id, 'report_wrong_location')}
+                    disabled={feedbackPendingKey === `${postcard.id}:report_wrong_location`}
+                  >
+                    {feedbackPendingKey === `${postcard.id}:report_wrong_location` ? '...' : 'Report Wrong Location'}
+                  </button>
+                </div>
               </article>
             ))}
           </div>
@@ -827,12 +912,22 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
             </div>
           ) : (
             <>
-              <div className="chip-row">
-                <span className="chip">AI Jobs: {jobs.length}</span>
-                <span className="chip">My Postcards: {myPostcards.length}</span>
-                <button type="button" onClick={() => void loadDashboardData()} disabled={isLoadingJobs || isLoadingMine}>
-                  Refresh
-                </button>
+              <div className="dashboard-toolbar">
+                <div className="chip-row">
+                  <span className="chip">AI Jobs: {jobs.length}</span>
+                  <span className="chip">My Postcards: {myPostcards.length}</span>
+                </div>
+                <div className="chip-row">
+                  <button type="button" className="action-button" onClick={() => setDashboardViewMode('grid')} disabled={dashboardViewMode === 'grid'}>
+                    Grid
+                  </button>
+                  <button type="button" className="action-button" onClick={() => setDashboardViewMode('list')} disabled={dashboardViewMode === 'list'}>
+                    List
+                  </button>
+                  <button type="button" className="action-button" onClick={() => void loadDashboardData()} disabled={isLoadingJobs || isLoadingMine}>
+                    Refresh
+                  </button>
+                </div>
               </div>
 
               {dashboardStatus ? <small>{dashboardStatus}</small> : null}
@@ -840,7 +935,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
               <h3 style={{ marginTop: '0.5rem' }}>AI Detection Jobs</h3>
               {isLoadingJobs ? <small>Loading AI jobs...</small> : null}
               {!isLoadingJobs && jobs.length === 0 ? <small>No AI jobs yet.</small> : null}
-              <div className="postcard-list">
+              <div className={dashboardViewMode === 'grid' ? 'postcard-list dashboard-grid' : 'postcard-list dashboard-list'}>
                 {jobs.slice(0, 20).map((job) => (
                   <article key={job.id} className="postcard-item">
                     <div className="postcard-item-head">
@@ -914,7 +1009,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
               <h3 style={{ marginTop: '0.5rem' }}>My Postcards</h3>
               {isLoadingMine ? <small>Loading your postcards...</small> : null}
               {!isLoadingMine && myPostcards.length === 0 ? <small>You have not created postcards yet.</small> : null}
-              <div className="postcard-list">
+              <div className={dashboardViewMode === 'grid' ? 'postcard-list dashboard-grid' : 'postcard-list dashboard-list'}>
                 {myPostcards.slice(0, 20).map((postcard) => (
                   <article key={postcard.id} className="postcard-item">
                     <div className="postcard-item-head">
@@ -937,6 +1032,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
                     {postcard.notes ? <p>{postcard.notes}</p> : null}
                     <button
                       type="button"
+                      className="action-button"
                       onClick={() => void softDeletePostcard(postcard)}
                       disabled={deletingPostcardId === postcard.id}
                     >

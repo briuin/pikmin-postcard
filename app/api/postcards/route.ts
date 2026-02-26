@@ -21,6 +21,42 @@ const postcardCreateSchema = z.object({
   locationModelVersion: z.string().max(100).optional()
 });
 
+function maskEmail(email: string | null | undefined): string | null {
+  if (!email) {
+    return null;
+  }
+
+  const parts = email.split('@');
+  if (parts.length !== 2) {
+    return 'hidden';
+  }
+
+  const [local, domain] = parts;
+  const maskedLocal = local.length <= 2 ? `${local[0] ?? '*'}*` : `${local.slice(0, 2)}***`;
+
+  const domainParts = domain.split('.');
+  const root = domainParts[0] ?? '';
+  const tld = domainParts.slice(1).join('.') || '***';
+  const maskedRoot = root.length <= 1 ? '*' : `${root[0]}***`;
+
+  return `${maskedLocal}@${maskedRoot}.${tld}`;
+}
+
+function serializePostcards(
+  postcards: Array<{
+    user?: { email: string } | null;
+    [key: string]: unknown;
+  }>
+) {
+  return postcards.map((postcard) => {
+    const { user, ...rest } = postcard;
+    return {
+      ...rest,
+      uploaderMasked: maskEmail(user?.email)
+    };
+  });
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const mineOnly = url.searchParams.get('mine') === '1';
@@ -58,7 +94,7 @@ export async function GET(request: Request) {
       take: 200
     });
 
-    return NextResponse.json(postcards, { status: 200 });
+    return NextResponse.json(serializePostcards(postcards), { status: 200 });
   }
 
   const postcards = await prisma.postcard.findMany({
@@ -81,7 +117,7 @@ export async function GET(request: Request) {
     take: 200
   });
 
-  return NextResponse.json(postcards, { status: 200 });
+  return NextResponse.json(serializePostcards(postcards), { status: 200 });
 }
 
 export async function POST(request: Request) {

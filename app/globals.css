@@ -244,6 +244,26 @@ h3 {
   gap: 0.62rem;
 }
 
+.dashboard-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  padding: 0.56rem 0.62rem;
+  border: 1px solid #deead9;
+  border-radius: 14px;
+  background: linear-gradient(140deg, rgba(244, 255, 245, 0.95), rgba(247, 254, 255, 0.92));
+}
+
+.dashboard-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dashboard-list {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .postcard-item {
   display: grid;
   gap: 0.4rem;
@@ -371,6 +391,13 @@ button:disabled {
   opacity: 0.58;
   cursor: not-allowed;
   box-shadow: none;
+}
+
+.action-button {
+  padding: 0.42rem 0.66rem;
+  border-radius: 10px;
+  font-size: 0.83rem;
+  box-shadow: 0 4px 10px rgba(47, 158, 88, 0.18);
 }
 
 small {

@@ -18,7 +18,10 @@ export type SavedMapMarker = {
   aiConfidence?: number | null;
   aiPlaceGuess?: string | null;
   locationModelVersion?: string | null;
-  uploaderEmail?: string | null;
+  uploaderMasked?: string | null;
+  likeCount?: number;
+  dislikeCount?: number;
+  wrongLocationReports?: number;
 };
 
 type DraftPoint = {
@@ -37,6 +40,7 @@ type OpenMapProps = {
   draftPoint?: DraftPoint;
   viewerPoint?: ViewerPoint;
   markers?: SavedMapMarker[];
+  focusedMarkerId?: string | null;
   onPick?: (lat: number, lng: number) => void;
   className?: string;
 };
@@ -84,15 +88,22 @@ function MapClickHandler({ onPick }: { onPick?: (lat: number, lng: number) => vo
 function MapViewportManager({
   draftPoint,
   viewerPoint,
-  markers
+  markers,
+  focusedMarker
 }: {
   draftPoint?: DraftPoint;
   viewerPoint?: ViewerPoint;
   markers: SavedMapMarker[];
+  focusedMarker?: SavedMapMarker;
 }) {
   const map = useMap();
 
   useEffect(() => {
+    if (focusedMarker) {
+      map.setView([focusedMarker.latitude, focusedMarker.longitude], 12);
+      return;
+    }
+
     if (draftPoint) {
       map.setView([draftPoint.latitude, draftPoint.longitude], 10);
       return;
@@ -118,7 +129,7 @@ function MapViewportManager({
       padding: [36, 36],
       maxZoom: 7
     });
-  }, [map, draftPoint, viewerPoint, markers]);
+  }, [map, focusedMarker, draftPoint, viewerPoint, markers]);
 
   return null;
 }
@@ -183,8 +194,12 @@ function getLocationMethodText(marker: SavedMapMarker): string {
   return 'Location: unknown method';
 }
 
-export function OpenMap({ draftPoint, viewerPoint, markers = [], onPick, className }: OpenMapProps) {
+export function OpenMap({ draftPoint, viewerPoint, markers = [], focusedMarkerId, onPick, className }: OpenMapProps) {
   const clusters = useMemo(() => clusterByDistance(markers), [markers]);
+  const focusedMarker = useMemo(
+    () => (focusedMarkerId ? markers.find((marker) => marker.id === focusedMarkerId) : undefined),
+    [focusedMarkerId, markers]
+  );
 
   return (
     <div className={className ? `map-shell ${className}` : 'map-shell'}>
@@ -194,7 +209,7 @@ export function OpenMap({ draftPoint, viewerPoint, markers = [], onPick, classNa
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <MapClickHandler onPick={onPick} />
-        <MapViewportManager draftPoint={draftPoint} viewerPoint={viewerPoint} markers={markers} />
+        <MapViewportManager draftPoint={draftPoint} viewerPoint={viewerPoint} markers={markers} focusedMarker={focusedMarker} />
 
         {clusters.map((cluster) => {
           if (cluster.points.length === 1) {
@@ -208,7 +223,7 @@ export function OpenMap({ draftPoint, viewerPoint, markers = [], onPick, classNa
                   <br />
                   {getLocationMethodText(point)}
                   <br />
-                  by {point.uploaderEmail ?? 'unknown uploader'}
+                  by {point.uploaderMasked ?? 'unknown uploader'}
                   {point.aiPlaceGuess ? (
                     <>
                       <br />
@@ -235,6 +250,8 @@ export function OpenMap({ draftPoint, viewerPoint, markers = [], onPick, classNa
                       {point.notes}
                     </>
                   ) : null}
+                  <br />
+                  👍 {point.likeCount ?? 0} · 👎 {point.dislikeCount ?? 0} · ⚠️ {point.wrongLocationReports ?? 0}
                   {point.imageUrl ? (
                     <>
                       <br />
@@ -262,7 +279,7 @@ export function OpenMap({ draftPoint, viewerPoint, markers = [], onPick, classNa
                 <strong>{cluster.points.length} postcards nearby</strong>
                 <ul style={{ margin: '0.45rem 0 0', paddingLeft: '1rem' }}>
                   {cluster.points.slice(0, 6).map((point) => (
-                    <li key={point.id}>{point.title} ({point.uploaderEmail ?? 'unknown'})</li>
+                    <li key={point.id}>{point.title} ({point.uploaderMasked ?? 'unknown'})</li>
                   ))}
                 </ul>
               </Popup>
