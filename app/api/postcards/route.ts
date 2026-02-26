@@ -22,25 +22,7 @@ const postcardCreateSchema = z.object({
 });
 
 export async function GET() {
-  const session = await auth();
-  const userEmail = session?.user?.email;
-  if (!userEmail) {
-    return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
-  }
-
-  const user = await prisma.user.findUnique({
-    where: { email: userEmail },
-    select: { id: true }
-  });
-
-  if (!user) {
-    return NextResponse.json([], { status: 200 });
-  }
-
   const postcards = await prisma.postcard.findMany({
-    where: {
-      userId: user.id
-    },
     orderBy: {
       createdAt: 'desc'
     },
@@ -51,7 +33,7 @@ export async function GET() {
         }
       }
     },
-    take: 50
+    take: 200
   });
 
   return NextResponse.json(postcards, { status: 200 });

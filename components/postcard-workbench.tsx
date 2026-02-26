@@ -1,6 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import { signIn, useSession } from 'next-auth/react';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import type { SavedMapMarker } from '@/components/open-map';
 
@@ -14,6 +15,7 @@ type LocationResult = {
 type PostcardRecord = {
   id: string;
   title: string;
+  notes: string | null;
   placeName: string | null;
   imageUrl: string | null;
   latitude: number | null;
@@ -29,6 +31,10 @@ type DeviceLocation = {
   accuracy: number;
 };
 
+type PostcardWorkbenchProps = {
+  mode?: 'explore' | 'create' | 'full';
+};
+
 const OpenMap = dynamic(
   async () => {
     const mod = await import('@/components/open-map');
@@ -37,13 +43,20 @@ const OpenMap = dynamic(
   { ssr: false }
 );
 
-export function PostcardWorkbench() {
+export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
+  const { status: sessionStatus } = useSession();
+  const isAuthenticated = sessionStatus === 'authenticated';
+
+  const showExplore = mode !== 'create';
+  const showCreate = mode !== 'explore';
+
   const [title, setTitle] = useState('');
   const [notes, setNotes] = useState('');
+  const [searchText, setSearchText] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [location, setLocation] = useState<LocationResult | null>(null);
   const [deviceLocation, setDeviceLocation] = useState<DeviceLocation | null>(null);
-  const [geoPermission, setGeoPermission] = useState<GeoPermissionState>('checking');
+  const [geoPermission, setGeoPermission] = useState<GeoPermissionState>('prompt');
   const [postcards, setPostcards] = useState<PostcardRecord[]>([]);
   const [isLoadingList, setIsLoadingList] = useState(false);
   const [isRequestingLocation, setIsRequestingLocation] = useState(false);
@@ -58,13 +71,23 @@ export function PostcardWorkbench() {
     return `${Math.round(location.confidence * 100)}%`;
   }, [location]);
 
+  const filteredPostcards = useMemo(() => {
+    const query = searchText.trim().toLowerCase();
+    if (!query) {
+      return postcards;
+    }
+
+    return postcards.filter((postcard) => {
+      const haystack = `${postcard.title} ${postcard.placeName ?? ''} ${postcard.notes ?? ''}`.toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [postcards, searchText]);
+
   const markers = useMemo<SavedMapMarker[]>(() => {
-    return postcards
-      .filter(
-        (postcard) =>
-          typeof postcard.latitude === 'number' &&
-          typeof postcard.longitude === 'number'
-      )
+    const source = showExplore ? filteredPostcards : postcards;
+
+    return source
+      .filter((postcard) => typeof postcard.latitude === 'number' && typeof postcard.longitude === 'number')
       .map((postcard) => ({
         id: postcard.id,
         title: postcard.title,
@@ -73,7 +96,26 @@ export function PostcardWorkbench() {
         placeName: postcard.placeName,
         imageUrl: postcard.imageUrl
       }));
-  }, [postcards]);
+  }, [filteredPostcards, postcards, showExplore]);
+
+  const setDraftLocation = useCallback((lat: number, lng: number) => {
+    setLocation((prev) => {
+      if (!prev) {
+        return {
+          latitude: lat,
+          longitude: lng,
+          confidence: 1,
+          place_guess: 'Manual map pick'
+        };
+      }
+
+      return {
+        ...prev,
+        latitude: lat,
+        longitude: lng
+      };
+    });
+  }, []);
 
   const requestDeviceLocation = useCallback(async (silent = false): Promise<boolean> => {
     if (!navigator.geolocation) {
@@ -129,14 +171,25 @@ export function PostcardWorkbench() {
   }, []);
 
   const ensureLocationReady = useCallback(async (): Promise<boolean> => {
+    if (!isAuthenticated) {
+      setStatus('Sign in with Google to analyze images or add postcards.');
+      return false;
+    }
+
     if (geoPermission === 'granted' && deviceLocation) {
       return true;
     }
 
     return requestDeviceLocation(false);
-  }, [deviceLocation, geoPermission, requestDeviceLocation]);
+  }, [deviceLocation, geoPermission, isAuthenticated, requestDeviceLocation]);
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      setGeoPermission('prompt');
+      setDeviceLocation(null);
+      return;
+    }
+
     let isMounted = true;
     let permissionStatus: PermissionStatus | null = null;
 
@@ -182,7 +235,7 @@ export function PostcardWorkbench() {
         permissionStatus.onchange = null;
       }
     };
-  }, [requestDeviceLocation]);
+  }, [isAuthenticated, requestDeviceLocation]);
 
   useEffect(() => {
     void loadPostcards();
@@ -192,9 +245,6 @@ export function PostcardWorkbench() {
     setIsLoadingList(true);
     try {
       const response = await fetch('/api/postcards', { cache: 'no-store' });
-      if (response.status === 401) {
-        throw new Error('Session expired. Please sign in again.');
-      }
       if (!response.ok) {
         throw new Error('Failed to load postcards.');
       }
@@ -341,8 +391,9 @@ export function PostcardWorkbench() {
     }
   }
 
-  const permissionText =
-    geoPermission === 'checking'
+  const permissionText = !isAuthenticated
+    ? 'Sign in first to enable geolocation and postcard creation tools.'
+    : geoPermission === 'checking'
       ? 'Checking location permission...'
       : geoPermission === 'granted'
         ? 'Location access granted.'
@@ -352,135 +403,154 @@ export function PostcardWorkbench() {
             ? 'Location permission denied. Enable it in browser settings.'
             : 'Location permission unsupported in this browser.';
 
-  return (
-    <section className="grid">
-      <article className="panel">
-        <h2 style={{ marginBottom: '1rem' }}>Postcard Input</h2>
+  const visiblePostcardCount = filteredPostcards.length;
+  const mappedPostcardCount = markers.length;
+  const canPickDraftOnMap = isAuthenticated && showCreate;
 
-        <div style={{ marginBottom: '1rem', padding: '0.7rem', borderRadius: '10px', background: '#f3f8ee', border: '1px solid #dbe6d0' }}>
-          <strong style={{ fontSize: '0.92rem' }}>Location Permission</strong>
-          <div style={{ marginTop: '0.35rem' }}>
-            <small>{permissionText}</small>
-            {deviceLocation ? (
-              <>
-                <br />
-                <small>
-                  Device location: {deviceLocation.latitude.toFixed(6)}, {deviceLocation.longitude.toFixed(6)} (±{Math.round(deviceLocation.accuracy)}m)
-                </small>
-              </>
-            ) : null}
+  return (
+    <section className={showExplore && showCreate ? 'workbench' : 'workbench workbench-single'}>
+      {showExplore ? (
+        <article className="panel explore-panel">
+          <div className="section-head">
+            <div>
+              <h2>Explore Postcards</h2>
+              <small>Public view. Search list and browse the open map without login.</small>
+            </div>
+            <div className="chip-row">
+              <span className="chip">{visiblePostcardCount} in search</span>
+              <span className="chip">{mappedPostcardCount} with coordinates</span>
+            </div>
           </div>
-          <div style={{ marginTop: '0.6rem' }}>
-            <button type="button" onClick={() => void requestDeviceLocation(false)} disabled={isRequestingLocation}>
+
+          <label className="search-label">
+            Search postcards
+            <input
+              value={searchText}
+              onChange={(event) => setSearchText(event.target.value)}
+              placeholder="Try city, place name, or postcard title"
+            />
+          </label>
+
+          <OpenMap
+            className="map-shell-large"
+            markers={markers}
+            draftPoint={showCreate && location ? { latitude: location.latitude, longitude: location.longitude, label: 'Current draft location' } : undefined}
+            onPick={canPickDraftOnMap ? setDraftLocation : undefined}
+          />
+
+          {isLoadingList ? <small className="list-note">Loading postcards...</small> : null}
+          {!isLoadingList && filteredPostcards.length === 0 ? (
+            <small className="list-note">No postcards match this search.</small>
+          ) : null}
+
+          <div className="postcard-list">
+            {filteredPostcards.slice(0, 12).map((postcard) => (
+              <article key={postcard.id} className="postcard-item">
+                <div className="postcard-item-head">
+                  <strong>{postcard.title}</strong>
+                  <small>{new Date(postcard.createdAt).toLocaleDateString()}</small>
+                </div>
+                <small>{postcard.placeName || 'Unknown place'}</small>
+                {postcard.notes ? <p>{postcard.notes}</p> : null}
+              </article>
+            ))}
+          </div>
+        </article>
+      ) : null}
+
+      {showCreate ? (
+        <article className="panel create-panel">
+          <div className="section-head">
+            <div>
+              <h2>Create Postcard</h2>
+              <small>Google login and location permission are required for AI analysis and adding new cards.</small>
+            </div>
+          </div>
+
+          <div className="auth-callout">
+            <strong>Create & AI Analysis</strong>
+            <small>{permissionText}</small>
+            {!isAuthenticated ? (
+              <button type="button" onClick={() => signIn('google')}>
+                Sign in with Google
+              </button>
+            ) : null}
+            {deviceLocation ? (
+              <small>
+                Device location: {deviceLocation.latitude.toFixed(6)}, {deviceLocation.longitude.toFixed(6)} (+/-
+                {Math.round(deviceLocation.accuracy)}m)
+              </small>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => void requestDeviceLocation(false)}
+              disabled={!isAuthenticated || isRequestingLocation}
+            >
               {isRequestingLocation ? 'Requesting location...' : 'Allow location'}
             </button>
           </div>
-        </div>
 
-        <form onSubmit={detectLocation}>
-          <label>
-            Postcard title
-            <input
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              placeholder="Central Park bloom walk"
-            />
-          </label>
-          <label>
-            Notes
-            <textarea
-              rows={4}
-              value={notes}
-              onChange={(event) => setNotes(event.target.value)}
-              placeholder="Spotted red Pikmin decor near the fountain"
-            />
-          </label>
-          <label>
-            Photo
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-            />
-          </label>
-          <button type="submit" disabled={isDetecting || isSaving || geoPermission === 'unsupported'}>
-            {isDetecting ? 'Detecting...' : 'Detect location with Gemini'}
-          </button>
-        </form>
+          <form onSubmit={detectLocation} className="form-stack">
+            <label>
+              Postcard title
+              <input
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                placeholder="Central Park bloom walk"
+                disabled={!isAuthenticated}
+              />
+            </label>
+            <label>
+              Notes
+              <textarea
+                rows={4}
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+                placeholder="Spotted red Pikmin decor near the fountain"
+                disabled={!isAuthenticated}
+              />
+            </label>
+            <label>
+              Photo
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+                disabled={!isAuthenticated}
+              />
+            </label>
+            <button type="submit" disabled={!isAuthenticated || isDetecting || isSaving || geoPermission === 'unsupported'}>
+              {isDetecting ? 'Detecting...' : 'Detect location with Gemini'}
+            </button>
+          </form>
 
-        <div style={{ marginTop: '1rem', display: 'grid', gap: '0.4rem' }}>
-          <small>{status || 'No action yet.'}</small>
-          {location ? (
-            <small>
-              Result: {location.place_guess} ({location.latitude.toFixed(6)},{' '}
-              {location.longitude.toFixed(6)}), confidence {confidenceLabel}
-            </small>
+          <div className="status-box">
+            <small>{status || 'No action yet.'}</small>
+            {location ? (
+              <small>
+                Result: {location.place_guess} ({location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}), confidence {confidenceLabel}
+              </small>
+            ) : null}
+          </div>
+
+          {!showExplore ? (
+            <div className="create-map-block">
+              <h3>Draft Location Map</h3>
+              <small>Click map to fine-tune your draft location before saving.</small>
+              <OpenMap
+                className="map-shell-create"
+                markers={markers}
+                draftPoint={location ? { latitude: location.latitude, longitude: location.longitude, label: 'Current draft location' } : undefined}
+                onPick={canPickDraftOnMap ? setDraftLocation : undefined}
+              />
+            </div>
           ) : null}
-        </div>
 
-        <div style={{ marginTop: '1rem' }}>
-          <button type="button" disabled={isSaving || !location} onClick={savePostcard}>
+          <button type="button" disabled={!isAuthenticated || isSaving || !location} onClick={savePostcard}>
             {isSaving ? 'Saving...' : 'Save postcard'}
           </button>
-        </div>
-
-        <hr style={{ border: 0, borderTop: '1px solid #e5ebdf', margin: '1rem 0' }} />
-
-        <h2 style={{ marginBottom: '0.5rem' }}>Recent Postcards</h2>
-        {isLoadingList ? <small>Loading...</small> : null}
-        {!isLoadingList && postcards.length === 0 ? <small>No postcards yet.</small> : null}
-        <div style={{ display: 'grid', gap: '0.5rem', marginTop: '0.4rem' }}>
-          {postcards.slice(0, 8).map((postcard) => (
-            <div
-              key={postcard.id}
-              style={{
-                padding: '0.55rem 0.65rem',
-                borderRadius: '8px',
-                border: '1px solid #e5ebdf',
-                background: '#fcfffa'
-              }}
-            >
-              <strong style={{ fontSize: '0.93rem' }}>{postcard.title}</strong>
-              <br />
-              <small>{postcard.placeName || 'Unknown place'}</small>
-            </div>
-          ))}
-        </div>
-      </article>
-
-      <article className="panel">
-        <h2 style={{ marginBottom: '1rem' }}>Open Map</h2>
-        <OpenMap
-          markers={markers}
-          draftPoint={
-            location
-              ? {
-                  latitude: location.latitude,
-                  longitude: location.longitude,
-                  label: 'Current draft location'
-                }
-              : undefined
-          }
-          onPick={(lat, lng) => {
-            setLocation((prev) => {
-              if (!prev) {
-                return {
-                  latitude: lat,
-                  longitude: lng,
-                  confidence: 1,
-                  place_guess: 'Manual map pick'
-                };
-              }
-
-              return {
-                ...prev,
-                latitude: lat,
-                longitude: lng
-              };
-            });
-          }}
-        />
-      </article>
+        </article>
+      ) : null}
     </section>
   );
 }

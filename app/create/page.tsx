@@ -1,9 +1,9 @@
 import { HomeShell } from '@/components/home-shell';
 
-export default function HomePage() {
+export default function CreatePage() {
   return (
     <main>
-      <HomeShell page="explore" />
+      <HomeShell page="create" />
     </main>
   );
 }

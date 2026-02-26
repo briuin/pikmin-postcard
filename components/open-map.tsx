@@ -24,6 +24,7 @@ type OpenMapProps = {
   draftPoint?: DraftPoint;
   markers?: SavedMapMarker[];
   onPick?: (lat: number, lng: number) => void;
+  className?: string;
 };
 
 const markerIcon = new L.Icon({
@@ -110,7 +111,7 @@ function clusterByDistance(markers: SavedMapMarker[]): MarkerCluster[] {
   return clusters;
 }
 
-export function OpenMap({ draftPoint, markers = [], onPick }: OpenMapProps) {
+export function OpenMap({ draftPoint, markers = [], onPick, className }: OpenMapProps) {
   const center = useMemo<[number, number]>(() => {
     if (draftPoint) {
       return [draftPoint.latitude, draftPoint.longitude];
@@ -126,7 +127,7 @@ export function OpenMap({ draftPoint, markers = [], onPick }: OpenMapProps) {
   const clusters = useMemo(() => clusterByDistance(markers), [markers]);
 
   return (
-    <div className="map-shell">
+    <div className={className ? `map-shell ${className}` : 'map-shell'}>
       <MapContainer center={center} zoom={draftPoint ? 10 : 3} style={{ height: '100%', width: '100%' }}>
         <TileLayer
           attribution='&copy; OpenStreetMap contributors'
