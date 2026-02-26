@@ -157,11 +157,11 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
       });
 
       if (!granted && !silent) {
-        setStatus('Location permission is required to continue.');
+        setStatus('Unable to get your current location. You can still create postcards without this.');
       }
 
       if (granted && !silent) {
-        setStatus('Location permission granted.');
+        setStatus('Your current location is now shown on the map.');
       }
 
       return granted;
@@ -178,18 +178,6 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
 
     return true;
   }, [isAuthenticated]);
-
-  const ensureLocationReady = useCallback(async (): Promise<boolean> => {
-    if (!ensureAuthenticated()) {
-      return false;
-    }
-
-    if (geoPermission === 'granted' && deviceLocation) {
-      return true;
-    }
-
-    return requestDeviceLocation(false);
-  }, [deviceLocation, ensureAuthenticated, geoPermission, requestDeviceLocation]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -335,7 +323,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
   }
 
   async function savePostcard() {
-    if (!(await ensureLocationReady())) {
+    if (!ensureAuthenticated()) {
       return;
     }
 
@@ -345,7 +333,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
     }
 
     if (!location) {
-      setStatus('Detect location first, then save.');
+      setStatus('Set postcard location first by AI detection or by clicking the map.');
       return;
     }
 
@@ -400,16 +388,16 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
   }
 
   const permissionText = !isAuthenticated
-    ? 'Sign in first to enable geolocation and postcard creation tools.'
+    ? 'Sign in to use AI and save postcards. Location permission is optional and only for finding yourself on the map.'
     : geoPermission === 'checking'
-      ? 'Checking location permission...'
+      ? 'Checking map location permission...'
       : geoPermission === 'granted'
-        ? 'Location access granted.'
+        ? 'Location access granted. You can find your current position on the map.'
         : geoPermission === 'prompt'
-          ? 'Location permission is required. Click "Allow location".'
+          ? 'Location permission is optional. Use it when you want to find yourself on the map.'
           : geoPermission === 'denied'
-            ? 'Location permission denied. Enable it in browser settings.'
-            : 'Location permission unsupported in this browser.';
+            ? 'Location permission denied. You can still create postcards using AI detection or map pin.'
+            : 'Geolocation unsupported. You can still create postcards using AI detection or map pin.';
 
   const visiblePostcardCount = filteredPostcards.length;
   const mappedPostcardCount = markers.length;
@@ -476,7 +464,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
           </div>
 
           <div className="auth-callout">
-            <strong>Location Permission (for create flow)</strong>
+            <strong>Find Me On Map (Optional)</strong>
             <small>{permissionText}</small>
             {!isAuthenticated ? (
               <button type="button" onClick={() => signIn('google')}>
@@ -485,7 +473,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
             ) : null}
             {deviceLocation ? (
               <small>
-                Device location: {deviceLocation.latitude.toFixed(6)}, {deviceLocation.longitude.toFixed(6)} (+/-
+                Current location: {deviceLocation.latitude.toFixed(6)}, {deviceLocation.longitude.toFixed(6)} (+/-
                 {Math.round(deviceLocation.accuracy)}m)
               </small>
             ) : null}
@@ -494,7 +482,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
               onClick={() => void requestDeviceLocation(false)}
               disabled={!isAuthenticated || isRequestingLocation}
             >
-              {isRequestingLocation ? 'Requesting location...' : 'Allow location'}
+              {isRequestingLocation ? 'Finding...' : 'Find my location on map'}
             </button>
           </div>
 
@@ -526,7 +514,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
 
           <div className="form-stack">
             <h3>2. Create Postcard Location</h3>
-            <small>After AI result, adjust pin on map or keep detected coordinates, then save.</small>
+            <small>No location permission required. Use AI result or click map to set the postcard location.</small>
             <label>
               Postcard title
               <input
@@ -554,11 +542,20 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
           {!showExplore ? (
             <div className="create-map-block">
               <h3>Draft Location Map</h3>
-              <small>Click map to fine-tune your draft location before saving.</small>
+              <small>Click map to fine-tune postcard location. Optional: find your current location on map.</small>
               <OpenMap
                 className="map-shell-create"
                 markers={markers}
                 draftPoint={location ? { latitude: location.latitude, longitude: location.longitude, label: 'Current draft location' } : undefined}
+                viewerPoint={
+                  deviceLocation
+                    ? {
+                        latitude: deviceLocation.latitude,
+                        longitude: deviceLocation.longitude,
+                        label: 'Your current location'
+                      }
+                    : undefined
+                }
                 onPick={canPickDraftOnMap ? setDraftLocation : undefined}
               />
             </div>

@@ -20,8 +20,15 @@ type DraftPoint = {
   label: string;
 };
 
+type ViewerPoint = {
+  latitude: number;
+  longitude: number;
+  label?: string;
+};
+
 type OpenMapProps = {
   draftPoint?: DraftPoint;
+  viewerPoint?: ViewerPoint;
   markers?: SavedMapMarker[];
   onPick?: (lat: number, lng: number) => void;
   className?: string;
@@ -111,10 +118,14 @@ function clusterByDistance(markers: SavedMapMarker[]): MarkerCluster[] {
   return clusters;
 }
 
-export function OpenMap({ draftPoint, markers = [], onPick, className }: OpenMapProps) {
+export function OpenMap({ draftPoint, viewerPoint, markers = [], onPick, className }: OpenMapProps) {
   const center = useMemo<[number, number]>(() => {
     if (draftPoint) {
       return [draftPoint.latitude, draftPoint.longitude];
+    }
+
+    if (viewerPoint) {
+      return [viewerPoint.latitude, viewerPoint.longitude];
     }
 
     if (markers.length > 0) {
@@ -122,13 +133,13 @@ export function OpenMap({ draftPoint, markers = [], onPick, className }: OpenMap
     }
 
     return [35.6812, 139.7671];
-  }, [draftPoint, markers]);
+  }, [draftPoint, viewerPoint, markers]);
 
   const clusters = useMemo(() => clusterByDistance(markers), [markers]);
 
   return (
     <div className={className ? `map-shell ${className}` : 'map-shell'}>
-      <MapContainer center={center} zoom={draftPoint ? 10 : 3} style={{ height: '100%', width: '100%' }}>
+      <MapContainer center={center} zoom={draftPoint || viewerPoint ? 10 : 3} style={{ height: '100%', width: '100%' }}>
         <TileLayer
           attribution='&copy; OpenStreetMap contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -185,6 +196,16 @@ export function OpenMap({ draftPoint, markers = [], onPick, className }: OpenMap
               {draftPoint.label}
               <br />
               {draftPoint.latitude.toFixed(6)}, {draftPoint.longitude.toFixed(6)}
+            </Popup>
+          </Marker>
+        ) : null}
+
+        {viewerPoint ? (
+          <Marker icon={markerIcon} position={[viewerPoint.latitude, viewerPoint.longitude]}>
+            <Popup>
+              {viewerPoint.label ?? 'Your current location'}
+              <br />
+              {viewerPoint.latitude.toFixed(6)}, {viewerPoint.longitude.toFixed(6)}
             </Popup>
           </Marker>
         ) : null}
