@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { locationResultSchema } from '@/lib/location-schema';
-import { geminiEnv } from '@/lib/env';
+import { getGeminiEnv } from '@/lib/env';
 
 export const runtime = 'nodejs';
 
@@ -41,6 +41,7 @@ export async function POST(request: Request) {
   }
 
   try {
+    const geminiEnv = getGeminiEnv();
     const fileBuffer = Buffer.from(await file.arrayBuffer());
     const base64Image = fileBuffer.toString('base64');
 

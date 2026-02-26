@@ -5,7 +5,9 @@ const geminiEnvSchema = z.object({
   GEMINI_MODEL: z.string().default('gemini-2.0-flash')
 });
 
-export const geminiEnv = geminiEnvSchema.parse({
-  GOOGLE_GENERATIVE_AI_API_KEY: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
-  GEMINI_MODEL: process.env.GEMINI_MODEL
-});
+export function getGeminiEnv() {
+  return geminiEnvSchema.parse({
+    GOOGLE_GENERATIVE_AI_API_KEY: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
+    GEMINI_MODEL: process.env.GEMINI_MODEL
+  });
+}
