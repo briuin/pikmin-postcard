@@ -5,7 +5,7 @@ import { signIn, signOut, useSession } from 'next-auth/react';
 import { PostcardWorkbench } from '@/components/postcard-workbench';
 
 type HomeShellProps = {
-  page: 'explore' | 'create';
+  page: 'explore' | 'create' | 'dashboard';
 };
 
 export function HomeShell({ page }: HomeShellProps) {
@@ -15,7 +15,9 @@ export function HomeShell({ page }: HomeShellProps) {
   const subtitle =
     page === 'explore'
       ? 'Browse postcards on the map without login.'
-      : 'Sign in with Google to analyze postcard images and add new locations.';
+      : page === 'create'
+        ? 'Sign in with Google to submit AI detection and create new postcard entries.'
+        : 'Your private dashboard for AI detection jobs and your own postcards.';
 
   return (
     <div className="home-shell">
@@ -31,6 +33,9 @@ export function HomeShell({ page }: HomeShellProps) {
             <Link href="/create" className={page === 'create' ? 'nav-tab nav-tab-active' : 'nav-tab'}>
               Create
             </Link>
+            <Link href="/dashboard" className={page === 'dashboard' ? 'nav-tab nav-tab-active' : 'nav-tab'}>
+              Dashboard
+            </Link>
           </nav>
           <div className="hero-badges">
             <span className="badge badge-public">Public: Explore + Search</span>
@@ -41,7 +46,7 @@ export function HomeShell({ page }: HomeShellProps) {
           <small className="session-label">Session</small>
           <p className="session-value">{isLoading ? 'Checking session...' : isAuthenticated ? session?.user?.email : 'Viewing as guest'}</p>
           {isAuthenticated ? (
-            <button type="button" onClick={() => signOut({ callbackUrl: page === 'create' ? '/create' : '/' })}>
+            <button type="button" onClick={() => signOut({ callbackUrl: page === 'create' ? '/create' : page === 'dashboard' ? '/dashboard' : '/' })}>
               Sign out
             </button>
           ) : (

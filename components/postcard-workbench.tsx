@@ -5,13 +5,6 @@ import { signIn, useSession } from 'next-auth/react';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import type { SavedMapMarker } from '@/components/open-map';
 
-type LocationResult = {
-  latitude: number;
-  longitude: number;
-  confidence: number;
-  place_guess: string;
-};
-
 type PostcardRecord = {
   id: string;
   title: string;
@@ -23,6 +16,20 @@ type PostcardRecord = {
   createdAt: string;
 };
 
+type DetectionJobRecord = {
+  id: string;
+  imageUrl: string;
+  status: 'QUEUED' | 'PROCESSING' | 'SUCCEEDED' | 'FAILED';
+  latitude: number | null;
+  longitude: number | null;
+  confidence: number | null;
+  placeGuess: string | null;
+  errorMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
+};
+
 type GeoPermissionState = 'checking' | 'prompt' | 'granted' | 'denied' | 'unsupported';
 
 type DeviceLocation = {
@@ -32,7 +39,7 @@ type DeviceLocation = {
 };
 
 type PostcardWorkbenchProps = {
-  mode?: 'explore' | 'create' | 'full';
+  mode?: 'explore' | 'create' | 'dashboard' | 'full';
 };
 
 const OpenMap = dynamic(
@@ -43,33 +50,65 @@ const OpenMap = dynamic(
   { ssr: false }
 );
 
+function parseLocationInput(input: string): { latitude: number; longitude: number } {
+  const parts = input
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (parts.length !== 2) {
+    throw new Error('Location must be two numbers separated by comma. Example: 25.033, 121.565 or 121.565, 25.033');
+  }
+
+  const first = Number(parts[0]);
+  const second = Number(parts[1]);
+
+  if (!Number.isFinite(first) || !Number.isFinite(second)) {
+    throw new Error('Location values must be valid numbers.');
+  }
+
+  if (Math.abs(first) <= 90 && Math.abs(second) <= 180) {
+    return { latitude: first, longitude: second };
+  }
+
+  if (Math.abs(first) <= 180 && Math.abs(second) <= 90) {
+    return { latitude: second, longitude: first };
+  }
+
+  throw new Error('Location is out of range. Latitude must be within +/-90 and longitude within +/-180.');
+}
+
 export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
   const { status: sessionStatus } = useSession();
   const isAuthenticated = sessionStatus === 'authenticated';
 
-  const showExplore = mode !== 'create';
-  const showCreate = mode !== 'explore';
+  const showExplore = mode === 'explore' || mode === 'full';
+  const showCreate = mode === 'create' || mode === 'full';
+  const showDashboard = mode === 'dashboard';
 
-  const [title, setTitle] = useState('');
-  const [notes, setNotes] = useState('');
   const [searchText, setSearchText] = useState('');
-  const [file, setFile] = useState<File | null>(null);
-  const [location, setLocation] = useState<LocationResult | null>(null);
+  const [postcards, setPostcards] = useState<PostcardRecord[]>([]);
+  const [isLoadingPublic, setIsLoadingPublic] = useState(false);
+  const [exploreStatus, setExploreStatus] = useState('');
+
   const [deviceLocation, setDeviceLocation] = useState<DeviceLocation | null>(null);
   const [geoPermission, setGeoPermission] = useState<GeoPermissionState>('prompt');
-  const [postcards, setPostcards] = useState<PostcardRecord[]>([]);
-  const [isLoadingList, setIsLoadingList] = useState(false);
   const [isRequestingLocation, setIsRequestingLocation] = useState(false);
-  const [isDetecting, setIsDetecting] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [status, setStatus] = useState('');
 
-  const confidenceLabel = useMemo(() => {
-    if (!location) {
-      return null;
-    }
-    return `${Math.round(location.confidence * 100)}%`;
-  }, [location]);
+  const [aiFile, setAiFile] = useState<File | null>(null);
+  const [manualFile, setManualFile] = useState<File | null>(null);
+  const [manualTitle, setManualTitle] = useState('');
+  const [manualNotes, setManualNotes] = useState('');
+  const [manualLocationInput, setManualLocationInput] = useState('');
+  const [isSubmittingAi, setIsSubmittingAi] = useState(false);
+  const [isSavingManual, setIsSavingManual] = useState(false);
+  const [createStatus, setCreateStatus] = useState('');
+
+  const [jobs, setJobs] = useState<DetectionJobRecord[]>([]);
+  const [myPostcards, setMyPostcards] = useState<PostcardRecord[]>([]);
+  const [isLoadingJobs, setIsLoadingJobs] = useState(false);
+  const [isLoadingMine, setIsLoadingMine] = useState(false);
+  const [dashboardStatus, setDashboardStatus] = useState('');
 
   const filteredPostcards = useMemo(() => {
     const query = searchText.trim().toLowerCase();
@@ -83,10 +122,8 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
     });
   }, [postcards, searchText]);
 
-  const markers = useMemo<SavedMapMarker[]>(() => {
-    const source = showExplore ? filteredPostcards : postcards;
-
-    return source
+  const publicMarkers = useMemo<SavedMapMarker[]>(() => {
+    return filteredPostcards
       .filter((postcard) => typeof postcard.latitude === 'number' && typeof postcard.longitude === 'number')
       .map((postcard) => ({
         id: postcard.id,
@@ -96,32 +133,21 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
         placeName: postcard.placeName,
         imageUrl: postcard.imageUrl
       }));
-  }, [filteredPostcards, postcards, showExplore]);
+  }, [filteredPostcards]);
 
-  const setDraftLocation = useCallback((lat: number, lng: number) => {
-    setLocation((prev) => {
-      if (!prev) {
-        return {
-          latitude: lat,
-          longitude: lng,
-          confidence: 1,
-          place_guess: 'Manual map pick'
-        };
-      }
-
-      return {
-        ...prev,
-        latitude: lat,
-        longitude: lng
-      };
-    });
-  }, []);
+  const ensureAuthenticated = useCallback((): boolean => {
+    if (!isAuthenticated) {
+      setCreateStatus('Sign in with Google to use AI detect and create postcards.');
+      return false;
+    }
+    return true;
+  }, [isAuthenticated]);
 
   const requestDeviceLocation = useCallback(async (silent = false): Promise<boolean> => {
     if (!navigator.geolocation) {
       setGeoPermission('unsupported');
       if (!silent) {
-        setStatus('Browser geolocation is not supported.');
+        setExploreStatus('Browser geolocation is not supported.');
       }
       return false;
     }
@@ -157,11 +183,11 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
       });
 
       if (!granted && !silent) {
-        setStatus('Unable to get your current location. You can still create postcards without this.');
+        setExploreStatus('Could not get your location. You can still use map browse normally.');
       }
 
       if (granted && !silent) {
-        setStatus('Your current location is now shown on the map.');
+        setExploreStatus('Your location is now shown on the map.');
       }
 
       return granted;
@@ -170,22 +196,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
     }
   }, []);
 
-  const ensureAuthenticated = useCallback((): boolean => {
-    if (!isAuthenticated) {
-      setStatus('Sign in with Google to analyze images or add postcards.');
-      return false;
-    }
-
-    return true;
-  }, [isAuthenticated]);
-
   useEffect(() => {
-    if (!isAuthenticated) {
-      setGeoPermission('prompt');
-      setDeviceLocation(null);
-      return;
-    }
-
     let isMounted = true;
     let permissionStatus: PermissionStatus | null = null;
 
@@ -201,16 +212,13 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
       }
 
       try {
-        permissionStatus = await navigator.permissions.query({
-          name: 'geolocation' as PermissionName
-        });
+        permissionStatus = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
 
         if (!isMounted) {
           return;
         }
 
         setGeoPermission(permissionStatus.state as GeoPermissionState);
-
         permissionStatus.onchange = () => {
           setGeoPermission(permissionStatus?.state as GeoPermissionState);
         };
@@ -231,14 +239,22 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
         permissionStatus.onchange = null;
       }
     };
-  }, [isAuthenticated, requestDeviceLocation]);
+  }, [requestDeviceLocation]);
 
   useEffect(() => {
-    void loadPostcards();
+    void loadPublicPostcards();
   }, []);
 
-  async function loadPostcards() {
-    setIsLoadingList(true);
+  useEffect(() => {
+    if (!showDashboard || !isAuthenticated) {
+      return;
+    }
+
+    void loadDashboardData();
+  }, [showDashboard, isAuthenticated]);
+
+  async function loadPublicPostcards() {
+    setIsLoadingPublic(true);
     try {
       const response = await fetch('/api/postcards', { cache: 'no-store' });
       if (!response.ok) {
@@ -247,30 +263,61 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
       const data = (await response.json()) as PostcardRecord[];
       setPostcards(data);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Unknown list error.');
+      setExploreStatus(error instanceof Error ? error.message : 'Unknown list error.');
     } finally {
-      setIsLoadingList(false);
+      setIsLoadingPublic(false);
     }
   }
 
-  async function detectLocation(event: FormEvent) {
+  async function loadDashboardData() {
+    setDashboardStatus('');
+    setIsLoadingJobs(true);
+    setIsLoadingMine(true);
+
+    try {
+      const [jobsResponse, mineResponse] = await Promise.all([
+        fetch('/api/location-from-image', { cache: 'no-store' }),
+        fetch('/api/postcards?mine=1', { cache: 'no-store' })
+      ]);
+
+      if (!jobsResponse.ok) {
+        throw new Error('Failed to load AI jobs.');
+      }
+
+      if (!mineResponse.ok) {
+        throw new Error('Failed to load your postcards.');
+      }
+
+      const jobsData = (await jobsResponse.json()) as DetectionJobRecord[];
+      const mineData = (await mineResponse.json()) as PostcardRecord[];
+      setJobs(jobsData);
+      setMyPostcards(mineData);
+    } catch (error) {
+      setDashboardStatus(error instanceof Error ? error.message : 'Unknown dashboard error.');
+    } finally {
+      setIsLoadingJobs(false);
+      setIsLoadingMine(false);
+    }
+  }
+
+  async function submitAiDetectJob(event: FormEvent) {
     event.preventDefault();
 
     if (!ensureAuthenticated()) {
       return;
     }
 
-    if (!file) {
-      setStatus('Choose an image first.');
+    if (!aiFile) {
+      setCreateStatus('Choose an image for AI detection first.');
       return;
     }
 
-    setIsDetecting(true);
-    setStatus('Detecting location from image...');
+    setIsSubmittingAi(true);
+    setCreateStatus('Submitting AI detection job...');
 
     try {
       const formData = new FormData();
-      formData.append('image', file);
+      formData.append('image', aiFile);
 
       const response = await fetch('/api/location-from-image', {
         method: 'POST',
@@ -281,127 +328,112 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
         throw new Error('Unauthorized. Please sign in with Google.');
       }
 
+      const payload = (await response.json()) as { id?: string; error?: string; message?: string };
+
       if (!response.ok) {
-        const errorJson = (await response.json()) as { error?: string };
-        throw new Error(errorJson.error ?? 'Detection failed.');
+        throw new Error(payload.error ?? 'Failed to submit AI detection job.');
       }
 
-      const result = (await response.json()) as LocationResult;
-      setLocation(result);
-      setStatus(`Location detected near ${result.place_guess}. Click map to adjust pin if needed.`);
+      setAiFile(null);
+      setCreateStatus(payload.message ?? `Detection job submitted (id: ${payload.id ?? 'unknown'}). Check Dashboard later.`);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Unknown detection error.');
+      setCreateStatus(error instanceof Error ? error.message : 'Unknown AI detection submit error.');
     } finally {
-      setIsDetecting(false);
+      setIsSubmittingAi(false);
     }
   }
 
-  async function uploadImageIfPresent(): Promise<string | undefined> {
-    if (!file) {
-      return undefined;
-    }
-
-    const formData = new FormData();
-    formData.append('image', file);
-
-    const response = await fetch('/api/upload-image', {
-      method: 'POST',
-      body: formData
-    });
-
-    if (response.status === 401) {
-      throw new Error('Unauthorized. Please sign in with Google.');
-    }
-
-    if (!response.ok) {
-      const errorJson = (await response.json()) as { error?: string };
-      throw new Error(errorJson.error ?? 'Image upload failed.');
-    }
-
-    const payload = (await response.json()) as { imageUrl: string };
-    return payload.imageUrl;
-  }
-
-  async function savePostcard() {
+  async function saveManualPostcard() {
     if (!ensureAuthenticated()) {
       return;
     }
 
-    if (!title.trim()) {
-      setStatus('Title is required.');
+    if (!manualTitle.trim()) {
+      setCreateStatus('Name is required.');
       return;
     }
 
-    if (!location) {
-      setStatus('Set postcard location first by AI detection or by clicking the map.');
+    if (!manualFile) {
+      setCreateStatus('Image is required for manual create.');
       return;
     }
 
-    setIsSaving(true);
-    setStatus('Saving postcard...');
+    let coords: { latitude: number; longitude: number };
+    try {
+      coords = parseLocationInput(manualLocationInput);
+    } catch (error) {
+      setCreateStatus(error instanceof Error ? error.message : 'Invalid location input.');
+      return;
+    }
+
+    setIsSavingManual(true);
+    setCreateStatus('Uploading image...');
 
     try {
-      setStatus('Uploading image...');
-      const imageUrl = await uploadImageIfPresent();
-      setStatus('Creating postcard entry...');
+      const uploadForm = new FormData();
+      uploadForm.append('image', manualFile);
 
-      const response = await fetch('/api/postcards', {
+      const uploadResponse = await fetch('/api/upload-image', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          title,
-          notes,
-          imageUrl,
-          latitude: location.latitude,
-          longitude: location.longitude,
-          aiLatitude: location.latitude,
-          aiLongitude: location.longitude,
-          aiConfidence: location.confidence,
-          aiPlaceGuess: location.place_guess,
-          placeName: location.place_guess,
-          locationStatus: 'USER_CONFIRMED'
-        })
+        body: uploadForm
       });
 
-      if (response.status === 401) {
+      if (uploadResponse.status === 401) {
         throw new Error('Unauthorized. Please sign in with Google.');
       }
 
-      if (!response.ok) {
-        const errorJson = (await response.json()) as { error?: string };
-        throw new Error(errorJson.error ?? 'Failed to save postcard.');
+      const uploadPayload = (await uploadResponse.json()) as { imageUrl?: string; error?: string };
+      if (!uploadResponse.ok || !uploadPayload.imageUrl) {
+        throw new Error(uploadPayload.error ?? 'Image upload failed.');
       }
 
-      await loadPostcards();
-      setStatus('Postcard saved.');
-      setTitle('');
-      setNotes('');
-      setFile(null);
-      setLocation(null);
+      setCreateStatus('Saving postcard...');
+
+      const createResponse = await fetch('/api/postcards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: manualTitle,
+          notes: manualNotes,
+          imageUrl: uploadPayload.imageUrl,
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+          locationStatus: 'MANUAL'
+        })
+      });
+
+      const createPayload = (await createResponse.json()) as { error?: string };
+
+      if (createResponse.status === 401) {
+        throw new Error('Unauthorized. Please sign in with Google.');
+      }
+
+      if (!createResponse.ok) {
+        throw new Error(createPayload.error ?? 'Failed to create postcard.');
+      }
+
+      setManualTitle('');
+      setManualNotes('');
+      setManualLocationInput('');
+      setManualFile(null);
+      setCreateStatus('Postcard created.');
+      await loadPublicPostcards();
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Unknown save error.');
+      setCreateStatus(error instanceof Error ? error.message : 'Unknown create error.');
     } finally {
-      setIsSaving(false);
+      setIsSavingManual(false);
     }
   }
 
-  const permissionText = !isAuthenticated
-    ? 'Sign in to use AI and save postcards. Location permission is optional and only for finding yourself on the map.'
-    : geoPermission === 'checking'
-      ? 'Checking map location permission...'
-      : geoPermission === 'granted'
-        ? 'Location access granted. You can find your current position on the map.'
-        : geoPermission === 'prompt'
-          ? 'Location permission is optional. Use it when you want to find yourself on the map.'
-          : geoPermission === 'denied'
-            ? 'Location permission denied. You can still create postcards using AI detection or map pin.'
-            : 'Geolocation unsupported. You can still create postcards using AI detection or map pin.';
-
-  const visiblePostcardCount = filteredPostcards.length;
-  const mappedPostcardCount = markers.length;
-  const canPickDraftOnMap = isAuthenticated && showCreate;
+  const permissionText = geoPermission === 'checking'
+    ? 'Checking map location permission...'
+    : geoPermission === 'granted'
+      ? 'Location access granted. You can show your current position on map.'
+      : geoPermission === 'prompt'
+        ? 'Location permission is optional and only used for Find Me on map.'
+        : geoPermission === 'denied'
+          ? 'Location permission denied. Map browsing still works.'
+          : 'Geolocation unsupported in this browser.';
 
   return (
     <section className={showExplore && showCreate ? 'workbench' : 'workbench workbench-single'}>
@@ -410,12 +442,25 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
           <div className="section-head">
             <div>
               <h2>Explore Postcards</h2>
-              <small>Public view. Search list and browse the open map without login.</small>
+              <small>Public view and search. Use Find Me to show your current location on the map.</small>
             </div>
             <div className="chip-row">
-              <span className="chip">{visiblePostcardCount} in search</span>
-              <span className="chip">{mappedPostcardCount} with coordinates</span>
+              <span className="chip">{filteredPostcards.length} in search</span>
+              <span className="chip">{publicMarkers.length} with coordinates</span>
             </div>
+          </div>
+
+          <div className="auth-callout" style={{ marginBottom: '0.8rem' }}>
+            <strong>Find Me On Map</strong>
+            <small>{permissionText}</small>
+            {deviceLocation ? (
+              <small>
+                Current location: {deviceLocation.latitude.toFixed(6)}, {deviceLocation.longitude.toFixed(6)} (+/-{Math.round(deviceLocation.accuracy)}m)
+              </small>
+            ) : null}
+            <button type="button" onClick={() => void requestDeviceLocation(false)} disabled={isRequestingLocation}>
+              {isRequestingLocation ? 'Finding...' : 'Find my location on map'}
+            </button>
           </div>
 
           <label className="search-label">
@@ -429,15 +474,23 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
 
           <OpenMap
             className="map-shell-large"
-            markers={markers}
-            draftPoint={showCreate && location ? { latitude: location.latitude, longitude: location.longitude, label: 'Current draft location' } : undefined}
-            onPick={canPickDraftOnMap ? setDraftLocation : undefined}
+            markers={publicMarkers}
+            viewerPoint={
+              deviceLocation
+                ? {
+                    latitude: deviceLocation.latitude,
+                    longitude: deviceLocation.longitude,
+                    label: 'Your current location'
+                  }
+                : undefined
+            }
           />
 
-          {isLoadingList ? <small className="list-note">Loading postcards...</small> : null}
-          {!isLoadingList && filteredPostcards.length === 0 ? (
+          {isLoadingPublic ? <small className="list-note">Loading postcards...</small> : null}
+          {!isLoadingPublic && filteredPostcards.length === 0 ? (
             <small className="list-note">No postcards match this search.</small>
           ) : null}
+          {exploreStatus ? <small className="list-note">{exploreStatus}</small> : null}
 
           <div className="postcard-list">
             {filteredPostcards.slice(0, 12).map((postcard) => (
@@ -458,108 +511,160 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
         <article className="panel create-panel">
           <div className="section-head">
             <div>
-              <h2>Create Postcard</h2>
-              <small>AI location detection and manual postcard creation are separate steps.</small>
+              <h2>Create</h2>
+              <small>Two upload options: async AI detect job or manual postcard create.</small>
             </div>
           </div>
 
-          <div className="auth-callout">
-            <strong>Find Me On Map (Optional)</strong>
-            <small>{permissionText}</small>
-            {!isAuthenticated ? (
+          {!isAuthenticated ? (
+            <div className="auth-callout">
+              <strong>Login Required</strong>
+              <small>Sign in with Google to submit AI jobs and create postcards.</small>
               <button type="button" onClick={() => signIn('google')}>
                 Sign in with Google
               </button>
-            ) : null}
-            {deviceLocation ? (
-              <small>
-                Current location: {deviceLocation.latitude.toFixed(6)}, {deviceLocation.longitude.toFixed(6)} (+/-
-                {Math.round(deviceLocation.accuracy)}m)
-              </small>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => void requestDeviceLocation(false)}
-              disabled={!isAuthenticated || isRequestingLocation}
-            >
-              {isRequestingLocation ? 'Finding...' : 'Find my location on map'}
-            </button>
-          </div>
+            </div>
+          ) : null}
 
-          <form onSubmit={detectLocation} className="form-stack">
-            <h3>1. AI Detect Location</h3>
-            <small>Only image upload is needed for AI detection.</small>
+          <form onSubmit={submitAiDetectJob} className="form-stack">
+            <h3>Option 1: AI Detect (Async)</h3>
+            <small>Upload image and submit. You can leave this page and check result later in Dashboard.</small>
             <label>
-              Photo
+              Image
               <input
                 type="file"
                 accept="image/*"
-                onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-                disabled={!isAuthenticated}
+                onChange={(event) => setAiFile(event.target.files?.[0] ?? null)}
+                disabled={!isAuthenticated || isSubmittingAi || isSavingManual}
               />
             </label>
-            <button type="submit" disabled={!isAuthenticated || isDetecting || isSaving}>
-              {isDetecting ? 'Detecting...' : 'Detect location with Gemini'}
+            <button type="submit" disabled={!isAuthenticated || !aiFile || isSubmittingAi || isSavingManual}>
+              {isSubmittingAi ? 'Submitting...' : 'Submit AI Detect Job'}
             </button>
           </form>
 
-          <div className="status-box">
-            <small>{status || 'No action yet.'}</small>
-            {location ? (
-              <small>
-                Result: {location.place_guess} ({location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}), confidence {confidenceLabel}
-              </small>
-            ) : null}
-          </div>
-
           <div className="form-stack">
-            <h3>2. Create Postcard Location</h3>
-            <small>No location permission required. Use AI result or click map to set the postcard location.</small>
+            <h3>Option 2: Manual Create</h3>
+            <small>Fill name, description, location (single field), and image.</small>
             <label>
-              Postcard title
+              Name
               <input
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
+                value={manualTitle}
+                onChange={(event) => setManualTitle(event.target.value)}
                 placeholder="Central Park bloom walk"
-                disabled={!isAuthenticated}
+                disabled={!isAuthenticated || isSavingManual || isSubmittingAi}
               />
             </label>
             <label>
-              Notes
+              Description
               <textarea
                 rows={4}
-                value={notes}
-                onChange={(event) => setNotes(event.target.value)}
+                value={manualNotes}
+                onChange={(event) => setManualNotes(event.target.value)}
                 placeholder="Spotted red Pikmin decor near the fountain"
-                disabled={!isAuthenticated}
+                disabled={!isAuthenticated || isSavingManual || isSubmittingAi}
               />
             </label>
-            <button type="button" disabled={!isAuthenticated || isSaving || !location} onClick={savePostcard}>
-              {isSaving ? 'Saving...' : 'Save postcard'}
+            <label>
+              Location (lat,lon or lon,lat)
+              <input
+                value={manualLocationInput}
+                onChange={(event) => setManualLocationInput(event.target.value)}
+                placeholder="25.033, 121.565"
+                disabled={!isAuthenticated || isSavingManual || isSubmittingAi}
+              />
+            </label>
+            <label>
+              Image
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(event) => setManualFile(event.target.files?.[0] ?? null)}
+                disabled={!isAuthenticated || isSavingManual || isSubmittingAi}
+              />
+            </label>
+            <button type="button" disabled={!isAuthenticated || isSavingManual || isSubmittingAi} onClick={saveManualPostcard}>
+              {isSavingManual ? 'Saving...' : 'Create Postcard'}
             </button>
           </div>
 
-          {!showExplore ? (
-            <div className="create-map-block">
-              <h3>Draft Location Map</h3>
-              <small>Click map to fine-tune postcard location. Optional: find your current location on map.</small>
-              <OpenMap
-                className="map-shell-create"
-                markers={markers}
-                draftPoint={location ? { latitude: location.latitude, longitude: location.longitude, label: 'Current draft location' } : undefined}
-                viewerPoint={
-                  deviceLocation
-                    ? {
-                        latitude: deviceLocation.latitude,
-                        longitude: deviceLocation.longitude,
-                        label: 'Your current location'
-                      }
-                    : undefined
-                }
-                onPick={canPickDraftOnMap ? setDraftLocation : undefined}
-              />
+          <div className="status-box">
+            <small>{createStatus || 'No action yet.'}</small>
+          </div>
+        </article>
+      ) : null}
+
+      {showDashboard ? (
+        <article className="panel create-panel">
+          <div className="section-head">
+            <div>
+              <h2>Dashboard</h2>
+              <small>Your AI detection jobs and your own postcards.</small>
             </div>
-          ) : null}
+          </div>
+
+          {!isAuthenticated ? (
+            <div className="auth-callout">
+              <strong>Login Required</strong>
+              <small>Sign in to view your private dashboard.</small>
+              <button type="button" onClick={() => signIn('google')}>
+                Sign in with Google
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="chip-row">
+                <span className="chip">AI Jobs: {jobs.length}</span>
+                <span className="chip">My Postcards: {myPostcards.length}</span>
+                <button type="button" onClick={() => void loadDashboardData()} disabled={isLoadingJobs || isLoadingMine}>
+                  Refresh
+                </button>
+              </div>
+
+              {dashboardStatus ? <small>{dashboardStatus}</small> : null}
+
+              <h3 style={{ marginTop: '0.5rem' }}>AI Detection Jobs</h3>
+              {isLoadingJobs ? <small>Loading AI jobs...</small> : null}
+              {!isLoadingJobs && jobs.length === 0 ? <small>No AI jobs yet.</small> : null}
+              <div className="postcard-list">
+                {jobs.slice(0, 20).map((job) => (
+                  <article key={job.id} className="postcard-item">
+                    <div className="postcard-item-head">
+                      <strong>{job.status}</strong>
+                      <small>{new Date(job.createdAt).toLocaleString()}</small>
+                    </div>
+                    <small>{job.placeGuess ?? 'No place guess yet'}</small>
+                    {job.status === 'SUCCEEDED' && job.latitude !== null && job.longitude !== null ? (
+                      <small>
+                        {job.latitude.toFixed(6)}, {job.longitude.toFixed(6)}
+                        {job.confidence !== null ? ` (confidence ${Math.round(job.confidence * 100)}%)` : ''}
+                      </small>
+                    ) : null}
+                    {job.status === 'FAILED' && job.errorMessage ? <small>{job.errorMessage}</small> : null}
+                  </article>
+                ))}
+              </div>
+
+              <h3 style={{ marginTop: '0.5rem' }}>My Postcards</h3>
+              {isLoadingMine ? <small>Loading your postcards...</small> : null}
+              {!isLoadingMine && myPostcards.length === 0 ? <small>You have not created postcards yet.</small> : null}
+              <div className="postcard-list">
+                {myPostcards.slice(0, 20).map((postcard) => (
+                  <article key={postcard.id} className="postcard-item">
+                    <div className="postcard-item-head">
+                      <strong>{postcard.title}</strong>
+                      <small>{new Date(postcard.createdAt).toLocaleDateString()}</small>
+                    </div>
+                    <small>{postcard.placeName || 'Unknown place'}</small>
+                    {typeof postcard.latitude === 'number' && typeof postcard.longitude === 'number' ? (
+                      <small>{postcard.latitude.toFixed(6)}, {postcard.longitude.toFixed(6)}</small>
+                    ) : null}
+                    {postcard.notes ? <p>{postcard.notes}</p> : null}
+                  </article>
+                ))}
+              </div>
+            </>
+          )}
         </article>
       ) : null}
     </section>
