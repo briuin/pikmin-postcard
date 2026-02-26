@@ -93,3 +93,8 @@ small {
   border-radius: 12px;
   overflow: hidden;
 }
+
+.cluster-icon {
+  background: transparent;
+  border: 0;
+}

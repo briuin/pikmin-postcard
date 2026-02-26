@@ -11,6 +11,7 @@
     "prisma:migrate": "prisma migrate deploy"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.862.0",
     "@prisma/client": "^6.4.1",
     "leaflet": "^1.9.4",
     "next": "^15.1.7",

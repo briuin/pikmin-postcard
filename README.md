@@ -18,6 +18,7 @@ This is a bootstrap build for the MVP foundation. Auth and production storage ar
 2. Fill required values in `.env`:
    - `DATABASE_URL`
    - `GOOGLE_GENERATIVE_AI_API_KEY`
+   - `S3_BUCKET_NAME`
 3. Install and run:
    ```bash
    npm install
@@ -29,6 +30,9 @@ This is a bootstrap build for the MVP foundation. Auth and production storage ar
 - `POST /api/location-from-image`
   - multipart form field: `image`
   - returns JSON with `latitude`, `longitude`, `confidence`, `place_guess`
+- `POST /api/upload-image`
+  - multipart form field: `image`
+  - uploads to S3 and returns `imageUrl`
 - `GET /api/postcards`
   - returns latest postcards
 - `POST /api/postcards`
@@ -40,17 +44,13 @@ Workflow: `.github/workflows/deploy.yml`
 ### 1) Create GitHub Secrets
 - `AWS_ROLE_ARN` (IAM role for OIDC assume)
 
-### 2) Create GitHub Variables
-- `ECR_REPOSITORY`
-- `ECS_CLUSTER`
-- `ECS_SERVICE`
-
-### 3) Configure ECS Task Definition
+### 2) Configure ECS Task Definition
 Edit `infra/ecs-task-definition.json`:
 - replace account IDs and role ARNs
 - update Parameter Store ARNs for `DATABASE_URL` and `GOOGLE_GENERATIVE_AI_API_KEY`
+- set `S3_BUCKET_NAME` (and optional `S3_PUBLIC_BASE_URL`) in container environment
 
-### 4) Push to `main`
+### 3) Push to `main`
 The workflow will lint, build, push Docker image to ECR, and deploy ECS service.
 
 ## Security Notes

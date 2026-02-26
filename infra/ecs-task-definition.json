@@ -4,12 +4,12 @@
   "requiresCompatibilities": ["FARGATE"],
   "cpu": "512",
   "memory": "1024",
-  "executionRoleArn": "arn:aws:iam::123456789012:role/pikmin-postcard-task-execution",
-  "taskRoleArn": "arn:aws:iam::123456789012:role/pikmin-postcard-task",
+  "executionRoleArn": "arn:aws:iam::041913718278:role/pikmin-postcard-task-execution",
+  "taskRoleArn": "arn:aws:iam::041913718278:role/pikmin-postcard-task",
   "containerDefinitions": [
     {
       "name": "pikmin-postcard-app",
-      "image": "123456789012.dkr.ecr.us-east-1.amazonaws.com/pikmin-postcard:latest",
+      "image": "041913718278.dkr.ecr.us-east-1.amazonaws.com/pikmin-postcard:latest",
       "essential": true,
       "portMappings": [
         {
@@ -29,16 +29,28 @@
         {
           "name": "GEMINI_MODEL",
           "value": "gemini-2.0-flash"
+        },
+        {
+          "name": "S3_BUCKET_NAME",
+          "value": "pikmin-postcard-images-041913718278-20260226"
+        },
+        {
+          "name": "S3_REGION",
+          "value": "us-east-1"
+        },
+        {
+          "name": "S3_PUBLIC_BASE_URL",
+          "value": "https://pikmin-postcard-images-041913718278-20260226.s3.us-east-1.amazonaws.com"
         }
       ],
       "secrets": [
         {
           "name": "DATABASE_URL",
-          "valueFrom": "arn:aws:ssm:us-east-1:123456789012:parameter/pikmin-postcard/DATABASE_URL"
+          "valueFrom": "arn:aws:ssm:us-east-1:041913718278:parameter/pikmin-postcard/DATABASE_URL"
         },
         {
           "name": "GOOGLE_GENERATIVE_AI_API_KEY",
-          "valueFrom": "arn:aws:ssm:us-east-1:123456789012:parameter/pikmin-postcard/GOOGLE_GENERATIVE_AI_API_KEY"
+          "valueFrom": "arn:aws:ssm:us-east-1:041913718278:parameter/pikmin-postcard/GOOGLE_GENERATIVE_AI_API_KEY"
         }
       ],
       "logConfiguration": {

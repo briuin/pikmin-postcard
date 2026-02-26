@@ -11,9 +11,9 @@ permissions:
 
 env:
   AWS_REGION: us-east-1
-  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
-  ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
-  ECS_SERVICE: ${{ vars.ECS_SERVICE }}
+  ECR_REPOSITORY: pikmin-postcard
+  ECS_CLUSTER: pikmin-postcard-cluster
+  ECS_SERVICE: pikmin-postcard-service
   ECS_TASK_DEFINITION: infra/ecs-task-definition.json
   CONTAINER_NAME: pikmin-postcard-app
 
