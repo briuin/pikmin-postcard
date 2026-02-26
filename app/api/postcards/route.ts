@@ -42,7 +42,10 @@ export async function GET(request: Request) {
     }
 
     const postcards = await prisma.postcard.findMany({
-      where: { userId: user.id },
+      where: {
+        userId: user.id,
+        deletedAt: null
+      },
       orderBy: { createdAt: 'desc' },
       include: {
         user: {
@@ -59,6 +62,9 @@ export async function GET(request: Request) {
   }
 
   const postcards = await prisma.postcard.findMany({
+    where: {
+      deletedAt: null
+    },
     orderBy: {
       createdAt: 'desc'
     },

@@ -335,7 +335,8 @@ async function processDetectionJob(params: {
     const existingPostcard = await prisma.postcard.findFirst({
       where: {
         userId: params.userId,
-        imageUrl: postcardImageUrl
+        imageUrl: postcardImageUrl,
+        deletedAt: null
       },
       select: { id: true }
     });

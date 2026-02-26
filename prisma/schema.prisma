@@ -47,12 +47,14 @@ model Postcard {
   aiPlaceGuess         String?
   locationStatus       LocationStatus @default(AUTO)
   locationModelVersion String?
+  deletedAt            DateTime?
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
   user                 User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   tags                 PostcardTag[]
 
   @@index([userId, createdAt])
+  @@index([deletedAt])
 }
 
 model Tag {

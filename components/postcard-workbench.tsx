@@ -130,6 +130,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
   const [myPostcards, setMyPostcards] = useState<PostcardRecord[]>([]);
   const [jobDrafts, setJobDrafts] = useState<Record<string, DetectionDraft>>({});
   const [savingJobId, setSavingJobId] = useState<string | null>(null);
+  const [deletingPostcardId, setDeletingPostcardId] = useState<string | null>(null);
   const [isLoadingJobs, setIsLoadingJobs] = useState(false);
   const [isLoadingMine, setIsLoadingMine] = useState(false);
   const [dashboardStatus, setDashboardStatus] = useState('');
@@ -590,6 +591,38 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
     }
   }
 
+  async function softDeletePostcard(postcard: PostcardRecord) {
+    if (!ensureAuthenticated()) {
+      return;
+    }
+
+    const confirmed = window.confirm(`Remove postcard "${postcard.title}" from dashboard and map?`);
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingPostcardId(postcard.id);
+    setDashboardStatus('Removing postcard...');
+
+    try {
+      const response = await fetch(`/api/postcards/${postcard.id}`, {
+        method: 'DELETE'
+      });
+
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error ?? 'Failed to remove postcard.');
+      }
+
+      setDashboardStatus('Postcard removed (soft delete).');
+      await Promise.all([loadDashboardData(), loadPublicPostcards()]);
+    } catch (error) {
+      setDashboardStatus(error instanceof Error ? error.message : 'Unknown remove error.');
+    } finally {
+      setDeletingPostcardId(null);
+    }
+  }
+
   const permissionText = geoPermission === 'checking'
     ? 'Checking map location permission...'
     : geoPermission === 'granted'
@@ -902,6 +935,13 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
                       <small>{postcard.latitude.toFixed(6)}, {postcard.longitude.toFixed(6)}</small>
                     ) : null}
                     {postcard.notes ? <p>{postcard.notes}</p> : null}
+                    <button
+                      type="button"
+                      onClick={() => void softDeletePostcard(postcard)}
+                      disabled={deletingPostcardId === postcard.id}
+                    >
+                      {deletingPostcardId === postcard.id ? 'Removing...' : 'Remove (Soft Delete)'}
+                    </button>
                   </article>
                 ))}
               </div>
