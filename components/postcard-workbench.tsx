@@ -1,6 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { signIn, useSession } from 'next-auth/react';
@@ -26,6 +27,7 @@ type DetectionJobRecord = {
   longitude: number | null;
   confidence: number | null;
   placeGuess: string | null;
+  modelVersion: string | null;
   errorMessage: string | null;
   createdAt: string;
   updatedAt: string;
@@ -38,6 +40,12 @@ type DeviceLocation = {
   latitude: number;
   longitude: number;
   accuracy: number;
+};
+
+type DetectionDraft = {
+  title: string;
+  notes: string;
+  locationInput: string;
 };
 
 type PostcardWorkbenchProps = {
@@ -113,6 +121,8 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
 
   const [jobs, setJobs] = useState<DetectionJobRecord[]>([]);
   const [myPostcards, setMyPostcards] = useState<PostcardRecord[]>([]);
+  const [jobDrafts, setJobDrafts] = useState<Record<string, DetectionDraft>>({});
+  const [savingJobId, setSavingJobId] = useState<string | null>(null);
   const [isLoadingJobs, setIsLoadingJobs] = useState(false);
   const [isLoadingMine, setIsLoadingMine] = useState(false);
   const [dashboardStatus, setDashboardStatus] = useState('');
@@ -267,6 +277,32 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
 
     void loadDashboardData();
   }, [showDashboard, isAuthenticated]);
+
+  useEffect(() => {
+    setJobDrafts((current) => {
+      const next = { ...current };
+      let changed = false;
+
+      for (const job of jobs) {
+        if (next[job.id]) {
+          continue;
+        }
+
+        if (job.status !== 'SUCCEEDED' || job.latitude === null || job.longitude === null) {
+          continue;
+        }
+
+        next[job.id] = {
+          title: job.placeGuess?.trim() ? `AI: ${job.placeGuess}` : 'AI detected postcard',
+          notes: '',
+          locationInput: `${job.latitude.toFixed(6)}, ${job.longitude.toFixed(6)}`
+        };
+        changed = true;
+      }
+
+      return changed ? next : current;
+    });
+  }, [jobs]);
 
   async function loadPublicPostcards() {
     setIsLoadingPublic(true);
@@ -448,6 +484,95 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
       setCreateStatus(error instanceof Error ? error.message : 'Unknown create error.');
     } finally {
       setIsSavingManual(false);
+    }
+  }
+
+  function updateJobDraft(jobId: string, patch: Partial<DetectionDraft>) {
+    setJobDrafts((current) => ({
+      ...current,
+      [jobId]: {
+        ...(current[jobId] ?? {
+          title: '',
+          notes: '',
+          locationInput: ''
+        }),
+        ...patch
+      }
+    }));
+  }
+
+  function isJobAlreadySaved(job: DetectionJobRecord): boolean {
+    return myPostcards.some((postcard) => postcard.imageUrl === job.imageUrl);
+  }
+
+  async function saveDetectedJobAsPostcard(job: DetectionJobRecord) {
+    if (!ensureAuthenticated()) {
+      return;
+    }
+
+    if (job.status !== 'SUCCEEDED' || job.latitude === null || job.longitude === null) {
+      setDashboardStatus('Only successful AI jobs can be saved as postcards.');
+      return;
+    }
+
+    if (isJobAlreadySaved(job)) {
+      setDashboardStatus('This AI result is already saved as a postcard.');
+      return;
+    }
+
+    const draft = jobDrafts[job.id] ?? {
+      title: job.placeGuess?.trim() ? `AI: ${job.placeGuess}` : 'AI detected postcard',
+      notes: '',
+      locationInput: `${job.latitude.toFixed(6)}, ${job.longitude.toFixed(6)}`
+    };
+
+    if (!draft.title.trim()) {
+      setDashboardStatus('Name is required before saving AI result.');
+      return;
+    }
+
+    let coords: { latitude: number; longitude: number };
+    try {
+      coords = parseLocationInput(draft.locationInput);
+    } catch (error) {
+      setDashboardStatus(error instanceof Error ? error.message : 'Invalid location input.');
+      return;
+    }
+
+    setSavingJobId(job.id);
+    setDashboardStatus('Saving AI result as postcard...');
+
+    try {
+      const response = await fetch('/api/postcards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: draft.title.trim(),
+          notes: draft.notes.trim() ? draft.notes.trim() : undefined,
+          imageUrl: job.imageUrl,
+          placeName: job.placeGuess ?? undefined,
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+          aiLatitude: job.latitude,
+          aiLongitude: job.longitude,
+          aiConfidence: job.confidence ?? undefined,
+          aiPlaceGuess: job.placeGuess ?? undefined,
+          locationStatus: 'USER_CONFIRMED',
+          locationModelVersion: job.modelVersion ?? undefined
+        })
+      });
+
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error ?? 'Failed to save postcard from AI result.');
+      }
+
+      await Promise.all([loadDashboardData(), loadPublicPostcards()]);
+      setDashboardStatus('AI result saved as postcard. It is now visible in Explore map.');
+    } catch (error) {
+      setDashboardStatus(error instanceof Error ? error.message : 'Unknown save error.');
+    } finally {
+      setSavingJobId(null);
     }
   }
 
@@ -675,12 +800,64 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
                       <strong>{job.status}</strong>
                       <small>{new Date(job.createdAt).toLocaleString()}</small>
                     </div>
+                    {job.imageUrl ? (
+                      <Image
+                        className="postcard-thumb"
+                        src={job.imageUrl}
+                        alt={`AI job ${job.id}`}
+                        width={640}
+                        height={420}
+                      />
+                    ) : null}
                     <small>{job.placeGuess ?? 'No place guess yet'}</small>
                     {job.status === 'SUCCEEDED' && job.latitude !== null && job.longitude !== null ? (
                       <small>
                         {job.latitude.toFixed(6)}, {job.longitude.toFixed(6)}
                         {job.confidence !== null ? ` (confidence ${Math.round(job.confidence * 100)}%)` : ''}
                       </small>
+                    ) : null}
+                    {job.status === 'SUCCEEDED' && job.latitude !== null && job.longitude !== null ? (
+                      <>
+                        <label>
+                          Name
+                          <input
+                            value={jobDrafts[job.id]?.title ?? ''}
+                            onChange={(event) => updateJobDraft(job.id, { title: event.target.value })}
+                            placeholder="Postcard name"
+                            disabled={savingJobId === job.id}
+                          />
+                        </label>
+                        <label>
+                          Description
+                          <textarea
+                            rows={3}
+                            value={jobDrafts[job.id]?.notes ?? ''}
+                            onChange={(event) => updateJobDraft(job.id, { notes: event.target.value })}
+                            placeholder="Write a short description"
+                            disabled={savingJobId === job.id}
+                          />
+                        </label>
+                        <label>
+                          Location (lat,lon or lon,lat)
+                          <input
+                            value={jobDrafts[job.id]?.locationInput ?? ''}
+                            onChange={(event) => updateJobDraft(job.id, { locationInput: event.target.value })}
+                            placeholder="25.033, 121.565"
+                            disabled={savingJobId === job.id}
+                          />
+                        </label>
+                        {isJobAlreadySaved(job) ? (
+                          <small>Already saved as postcard.</small>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => void saveDetectedJobAsPostcard(job)}
+                            disabled={savingJobId === job.id}
+                          >
+                            {savingJobId === job.id ? 'Saving...' : 'Save as Postcard'}
+                          </button>
+                        )}
+                      </>
                     ) : null}
                     {job.status === 'FAILED' && job.errorMessage ? <small>{job.errorMessage}</small> : null}
                   </article>
@@ -697,6 +874,15 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
                       <strong>{postcard.title}</strong>
                       <small>{new Date(postcard.createdAt).toLocaleDateString()}</small>
                     </div>
+                    {postcard.imageUrl ? (
+                      <Image
+                        className="postcard-thumb"
+                        src={postcard.imageUrl}
+                        alt={postcard.title}
+                        width={640}
+                        height={420}
+                      />
+                    ) : null}
                     <small>{postcard.placeName || 'Unknown place'}</small>
                     {typeof postcard.latitude === 'number' && typeof postcard.longitude === 'number' ? (
                       <small>{postcard.latitude.toFixed(6)}, {postcard.longitude.toFixed(6)}</small>

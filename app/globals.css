@@ -259,6 +259,14 @@ h3 {
   font-size: 0.9rem;
 }
 
+.postcard-thumb {
+  width: 100%;
+  max-height: 180px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid #deeadb;
+}
+
 .postcard-item-head {
   display: flex;
   align-items: center;
