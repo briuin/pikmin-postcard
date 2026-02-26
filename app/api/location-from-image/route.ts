@@ -1,4 +1,5 @@
 import { DetectionJobStatus } from '@prisma/client';
+import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { getGeminiEnv } from '@/lib/env';
@@ -7,19 +8,6 @@ import { prisma } from '@/lib/prisma';
 import { assertSupportedImage, buildObjectKey, getStorageConfig } from '@/lib/storage';
 
 export const runtime = 'nodejs';
-
-type AwsS3Module = {
-  S3Client: new (config: { region: string }) => {
-    send: (command: unknown) => Promise<unknown>;
-  };
-  PutObjectCommand: new (input: {
-    Bucket: string;
-    Key: string;
-    Body: Uint8Array;
-    ContentType: string;
-    CacheControl: string;
-  }) => unknown;
-};
 
 type GeminiLocationResult = {
   latitude: number;
@@ -43,15 +31,6 @@ function extractJsonObject(rawText: string): string {
   throw new Error('Model output did not contain a JSON object.');
 }
 
-async function loadAwsS3Module(): Promise<AwsS3Module> {
-  try {
-    const load = new Function('return import("@aws-sdk/client-s3")') as () => Promise<AwsS3Module>;
-    return await load();
-  } catch {
-    throw new Error('Missing @aws-sdk/client-s3 dependency. Run npm install.');
-  }
-}
-
 async function uploadImageToS3(file: File): Promise<string> {
   assertSupportedImage(file);
 
@@ -59,7 +38,6 @@ async function uploadImageToS3(file: File): Promise<string> {
   const key = buildObjectKey(file.name);
   const bytes = new Uint8Array(await file.arrayBuffer());
 
-  const { S3Client, PutObjectCommand } = await loadAwsS3Module();
   const s3 = new S3Client({ region: config.region });
 
   await s3.send(

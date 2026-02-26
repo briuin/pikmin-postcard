@@ -1,30 +1,9 @@
+import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { assertSupportedImage, buildObjectKey, getStorageConfig } from '@/lib/storage';
 
 export const runtime = 'nodejs';
-
-type AwsS3Module = {
-  S3Client: new (config: { region: string }) => {
-    send: (command: unknown) => Promise<unknown>;
-  };
-  PutObjectCommand: new (input: {
-    Bucket: string;
-    Key: string;
-    Body: Uint8Array;
-    ContentType: string;
-    CacheControl: string;
-  }) => unknown;
-};
-
-async function loadAwsS3Module(): Promise<AwsS3Module> {
-  try {
-    const load = new Function('return import("@aws-sdk/client-s3")') as () => Promise<AwsS3Module>;
-    return await load();
-  } catch {
-    throw new Error('Missing @aws-sdk/client-s3 dependency. Run npm install.');
-  }
-}
 
 export async function POST(request: Request) {
   try {
@@ -46,7 +25,6 @@ export async function POST(request: Request) {
     const key = buildObjectKey(file.name);
     const bytes = new Uint8Array(await file.arrayBuffer());
 
-    const { S3Client, PutObjectCommand } = await loadAwsS3Module();
     const s3 = new S3Client({ region: config.region });
 
     await s3.send(
