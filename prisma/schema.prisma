@@ -1,0 +1,64 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum LocationStatus {
+  AUTO
+  USER_CONFIRMED
+  MANUAL
+}
+
+model User {
+  id        String     @id @default(cuid())
+  email     String     @unique
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  postcards Postcard[]
+}
+
+model Postcard {
+  id                   String         @id @default(cuid())
+  userId               String
+  title                String
+  notes                String?
+  imageUrl             String?
+  capturedAt           DateTime?
+  city                 String?
+  country              String?
+  placeName            String?
+  latitude             Float?
+  longitude            Float?
+  aiLatitude           Float?
+  aiLongitude          Float?
+  aiConfidence         Float?
+  aiPlaceGuess         String?
+  locationStatus       LocationStatus @default(AUTO)
+  locationModelVersion String?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  user                 User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tags                 PostcardTag[]
+
+  @@index([userId, createdAt])
+}
+
+model Tag {
+  id        String       @id @default(cuid())
+  name      String       @unique
+  createdAt DateTime     @default(now())
+  postcards PostcardTag[]
+}
+
+model PostcardTag {
+  postcardId String
+  tagId      String
+  postcard   Postcard @relation(fields: [postcardId], references: [id], onDelete: Cascade)
+  tag        Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([postcardId, tagId])
+}

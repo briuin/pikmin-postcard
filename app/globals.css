@@ -1,0 +1,95 @@
+:root {
+  --bg: #f6f8ef;
+  --surface: #ffffff;
+  --text: #20332a;
+  --accent: #2c8f5f;
+  --muted: #6e7b73;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: radial-gradient(circle at top left, #e7f4cf 0%, var(--bg) 40%);
+  color: var(--text);
+  font-family: 'Avenir Next', 'Segoe UI', sans-serif;
+}
+
+main {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 3rem;
+}
+
+h1,
+h2 {
+  margin: 0;
+}
+
+.panel {
+  background: var(--surface);
+  border-radius: 14px;
+  box-shadow: 0 8px 20px rgba(17, 26, 22, 0.08);
+  padding: 1rem;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+label {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+
+input,
+textarea,
+button {
+  font: inherit;
+}
+
+input,
+textarea {
+  width: 100%;
+  border: 1px solid #dbe6d0;
+  border-radius: 10px;
+  padding: 0.65rem 0.7rem;
+  background: #fcfffa;
+}
+
+button {
+  border: 0;
+  border-radius: 10px;
+  padding: 0.68rem 0.88rem;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+small {
+  color: var(--muted);
+}
+
+.map-shell {
+  height: 540px;
+  border-radius: 12px;
+  overflow: hidden;
+}

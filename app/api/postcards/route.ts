@@ -1,0 +1,83 @@
+import { LocationStatus } from '@prisma/client';
+import { NextResponse } from 'next/server';
+import { z } from 'zod';
+import { prisma } from '@/lib/prisma';
+
+const postcardCreateSchema = z.object({
+  title: z.string().min(1),
+  notes: z.string().max(2000).optional(),
+  imageUrl: z.string().url().optional(),
+  city: z.string().max(120).optional(),
+  country: z.string().max(120).optional(),
+  placeName: z.string().max(180).optional(),
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+  aiLatitude: z.number().min(-90).max(90).optional(),
+  aiLongitude: z.number().min(-180).max(180).optional(),
+  aiConfidence: z.number().min(0).max(1).optional(),
+  aiPlaceGuess: z.string().max(180).optional(),
+  locationStatus: z.nativeEnum(LocationStatus).optional(),
+  locationModelVersion: z.string().max(100).optional()
+});
+
+const DEMO_USER_EMAIL = 'demo@pikmin-postcard.app';
+
+export async function GET() {
+  const postcards = await prisma.postcard.findMany({
+    orderBy: {
+      createdAt: 'desc'
+    },
+    include: {
+      tags: {
+        include: {
+          tag: true
+        }
+      }
+    },
+    take: 50
+  });
+
+  return NextResponse.json(postcards, { status: 200 });
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = postcardCreateSchema.parse(await request.json());
+
+    const user = await prisma.user.upsert({
+      where: { email: DEMO_USER_EMAIL },
+      update: {},
+      create: { email: DEMO_USER_EMAIL }
+    });
+
+    const postcard = await prisma.postcard.create({
+      data: {
+        userId: user.id,
+        title: body.title,
+        notes: body.notes,
+        imageUrl: body.imageUrl,
+        city: body.city,
+        country: body.country,
+        placeName: body.placeName,
+        latitude: body.latitude,
+        longitude: body.longitude,
+        aiLatitude: body.aiLatitude,
+        aiLongitude: body.aiLongitude,
+        aiConfidence: body.aiConfidence,
+        aiPlaceGuess: body.aiPlaceGuess,
+        locationStatus: body.locationStatus ?? LocationStatus.AUTO,
+        locationModelVersion: body.locationModelVersion ?? process.env.GEMINI_MODEL ?? 'unknown'
+      }
+    });
+
+    return NextResponse.json(postcard, { status: 201 });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error: 'Invalid postcard payload.',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
+      { status: 400 }
+    );
+  }
+}
