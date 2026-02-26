@@ -170,9 +170,17 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
     }
   }, []);
 
-  const ensureLocationReady = useCallback(async (): Promise<boolean> => {
+  const ensureAuthenticated = useCallback((): boolean => {
     if (!isAuthenticated) {
       setStatus('Sign in with Google to analyze images or add postcards.');
+      return false;
+    }
+
+    return true;
+  }, [isAuthenticated]);
+
+  const ensureLocationReady = useCallback(async (): Promise<boolean> => {
+    if (!ensureAuthenticated()) {
       return false;
     }
 
@@ -181,7 +189,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
     }
 
     return requestDeviceLocation(false);
-  }, [deviceLocation, geoPermission, isAuthenticated, requestDeviceLocation]);
+  }, [deviceLocation, ensureAuthenticated, geoPermission, requestDeviceLocation]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -260,7 +268,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
   async function detectLocation(event: FormEvent) {
     event.preventDefault();
 
-    if (!(await ensureLocationReady())) {
+    if (!ensureAuthenticated()) {
       return;
     }
 
@@ -463,12 +471,12 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
           <div className="section-head">
             <div>
               <h2>Create Postcard</h2>
-              <small>Google login and location permission are required for AI analysis and adding new cards.</small>
+              <small>AI location detection and manual postcard creation are separate steps.</small>
             </div>
           </div>
 
           <div className="auth-callout">
-            <strong>Create & AI Analysis</strong>
+            <strong>Location Permission (for create flow)</strong>
             <small>{permissionText}</small>
             {!isAuthenticated ? (
               <button type="button" onClick={() => signIn('google')}>
@@ -491,6 +499,34 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
           </div>
 
           <form onSubmit={detectLocation} className="form-stack">
+            <h3>1. AI Detect Location</h3>
+            <small>Only image upload is needed for AI detection.</small>
+            <label>
+              Photo
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+                disabled={!isAuthenticated}
+              />
+            </label>
+            <button type="submit" disabled={!isAuthenticated || isDetecting || isSaving}>
+              {isDetecting ? 'Detecting...' : 'Detect location with Gemini'}
+            </button>
+          </form>
+
+          <div className="status-box">
+            <small>{status || 'No action yet.'}</small>
+            {location ? (
+              <small>
+                Result: {location.place_guess} ({location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}), confidence {confidenceLabel}
+              </small>
+            ) : null}
+          </div>
+
+          <div className="form-stack">
+            <h3>2. Create Postcard Location</h3>
+            <small>After AI result, adjust pin on map or keep detected coordinates, then save.</small>
             <label>
               Postcard title
               <input
@@ -510,27 +546,9 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
                 disabled={!isAuthenticated}
               />
             </label>
-            <label>
-              Photo
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-                disabled={!isAuthenticated}
-              />
-            </label>
-            <button type="submit" disabled={!isAuthenticated || isDetecting || isSaving || geoPermission === 'unsupported'}>
-              {isDetecting ? 'Detecting...' : 'Detect location with Gemini'}
+            <button type="button" disabled={!isAuthenticated || isSaving || !location} onClick={savePostcard}>
+              {isSaving ? 'Saving...' : 'Save postcard'}
             </button>
-          </form>
-
-          <div className="status-box">
-            <small>{status || 'No action yet.'}</small>
-            {location ? (
-              <small>
-                Result: {location.place_guess} ({location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}), confidence {confidenceLabel}
-              </small>
-            ) : null}
           </div>
 
           {!showExplore ? (
@@ -545,10 +563,6 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
               />
             </div>
           ) : null}
-
-          <button type="button" disabled={!isAuthenticated || isSaving || !location} onClick={savePostcard}>
-            {isSaving ? 'Saving...' : 'Save postcard'}
-          </button>
         </article>
       ) : null}
     </section>
