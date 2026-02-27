@@ -124,6 +124,10 @@ function deriveOriginalImageUrl(imageUrl: string | null | undefined): string | n
   }
 
   if (imageUrl.includes('/uploads/postcard/')) {
+    const fileName = imageUrl.split('/').pop()?.toLowerCase() ?? '';
+    if (fileName.includes('recrop-')) {
+      return null;
+    }
     return imageUrl.replace('/uploads/postcard/', '/uploads/original/');
   }
 
