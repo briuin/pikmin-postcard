@@ -1,11 +1,10 @@
-import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { NextResponse } from 'next/server';
-import { Prisma } from '@prisma/client';
 import sharp from 'sharp';
 import { z } from 'zod';
 import { auth } from '@/auth';
+import { deriveOriginalImageUrl, hasMissingOriginalImageColumnError } from '@/lib/postcards/shared';
 import { prisma } from '@/lib/prisma';
-import { buildObjectKey, getStorageConfig } from '@/lib/storage';
+import { buildObjectKey, buildVariantObjectKey, uploadBytesToStorage } from '@/lib/storage';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -22,55 +21,6 @@ const cropUpdateSchema = z.object({
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
-}
-
-function deriveOriginalImageUrl(imageUrl: string | null | undefined): string | null {
-  if (!imageUrl) {
-    return null;
-  }
-
-  if (imageUrl.includes('/uploads/original/')) {
-    return imageUrl;
-  }
-
-  if (imageUrl.includes('/uploads/postcard/')) {
-    const fileName = imageUrl.split('/').pop()?.toLowerCase() ?? '';
-    if (fileName.includes('recrop-')) {
-      return null;
-    }
-    return imageUrl.replace('/uploads/postcard/', '/uploads/original/');
-  }
-
-  return null;
-}
-
-function hasMissingOriginalImageColumnError(error: unknown): boolean {
-  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) {
-    return false;
-  }
-  if (error.code !== 'P2022') {
-    return false;
-  }
-
-  const column = String((error.meta as { column?: string } | undefined)?.column ?? '');
-  return column.includes('originalImageUrl');
-}
-
-async function uploadJpegToS3(bytes: Uint8Array, key: string): Promise<string> {
-  const config = getStorageConfig();
-  const s3 = new S3Client({ region: config.region });
-
-  await s3.send(
-    new PutObjectCommand({
-      Bucket: config.bucket,
-      Key: key,
-      Body: bytes,
-      ContentType: 'image/jpeg',
-      CacheControl: 'public,max-age=31536000,immutable'
-    })
-  );
-
-  return `${config.baseUrl}/${key}`;
 }
 
 async function getAuthenticatedUserId(): Promise<string | null> {
@@ -188,8 +138,12 @@ export async function PATCH(request: Request, context: RouteContext) {
       .jpeg({ quality: 92 })
       .toBuffer();
 
-    const postcardObjectKey = buildObjectKey(`recrop-${id}.jpg`).replace(/^postcards\//, 'uploads/postcard/');
-    const postcardImageUrl = await uploadJpegToS3(new Uint8Array(croppedBytes), postcardObjectKey);
+    const postcardObjectKey = buildVariantObjectKey(buildObjectKey(`recrop-${id}.jpg`), 'postcard');
+    const postcardImageUrl = await uploadBytesToStorage({
+      key: postcardObjectKey,
+      bytes: new Uint8Array(croppedBytes),
+      contentType: 'image/jpeg'
+    });
 
     try {
       await prisma.postcard.update({

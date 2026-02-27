@@ -1,8 +1,9 @@
-import { DetectionJobStatus, Prisma } from '@prisma/client';
+import { DetectionJobStatus } from '@prisma/client';
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { buildCroppedPostcardImage } from '@/lib/location-detection/crop';
 import { detectWithGemini } from '@/lib/location-detection/gemini';
+import { hasMissingOriginalImageColumnError } from '@/lib/postcards/shared';
 import { prisma } from '@/lib/prisma';
 import {
   assertSupportedImage,
@@ -12,18 +13,6 @@ import {
 } from '@/lib/storage';
 
 export const runtime = 'nodejs';
-
-function hasMissingOriginalImageColumnError(error: unknown): boolean {
-  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) {
-    return false;
-  }
-  if (error.code !== 'P2022') {
-    return false;
-  }
-
-  const column = String((error.meta as { column?: string } | undefined)?.column ?? '');
-  return column.includes('originalImageUrl');
-}
 
 function buildAutoPostcardData(params: {
   userId: string;
