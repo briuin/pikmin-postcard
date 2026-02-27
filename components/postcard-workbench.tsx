@@ -9,6 +9,7 @@ import ReactCrop, { type PercentCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MapViewportBounds, SavedMapMarker } from '@/components/open-map';
+import { messages, type Locale } from '@/lib/i18n';
 
 type PostcardRecord = {
   id: string;
@@ -71,6 +72,7 @@ type CropDraft = PercentCrop;
 
 type PostcardWorkbenchProps = {
   mode?: 'explore' | 'create' | 'dashboard' | 'full';
+  locale?: Locale;
 };
 
 type ExploreSort = 'ranking' | 'newest' | 'likes' | 'reports';
@@ -91,21 +93,28 @@ const OpenMap = dynamic(
   { ssr: false }
 );
 
-function parseLocationInput(input: string): { latitude: number; longitude: number } {
+function parseLocationInput(
+  input: string,
+  text: {
+    parseLocationTwoNumbers: string;
+    parseLocationNumeric: string;
+    parseLocationRange: string;
+  }
+): { latitude: number; longitude: number } {
   const parts = input
     .split(',')
     .map((part) => part.trim())
     .filter(Boolean);
 
   if (parts.length !== 2) {
-    throw new Error('Location must be two numbers separated by comma. Example: 25.033, 121.565 or 121.565, 25.033');
+    throw new Error(text.parseLocationTwoNumbers);
   }
 
   const first = Number(parts[0]);
   const second = Number(parts[1]);
 
   if (!Number.isFinite(first) || !Number.isFinite(second)) {
-    throw new Error('Location values must be valid numbers.');
+    throw new Error(text.parseLocationNumeric);
   }
 
   if (Math.abs(first) <= 90 && Math.abs(second) <= 180) {
@@ -116,7 +125,7 @@ function parseLocationInput(input: string): { latitude: number; longitude: numbe
     return { latitude: second, longitude: first };
   }
 
-  throw new Error('Location is out of range. Latitude must be within +/-90 and longitude within +/-180.');
+  throw new Error(text.parseLocationRange);
 }
 
 function deriveOriginalImageUrl(imageUrl: string | null | undefined): string | null {
@@ -183,10 +192,11 @@ function toNormalizedCrop(crop: CropDraft): { x: number; y: number; width: numbe
   };
 }
 
-export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
+export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWorkbenchProps) {
   const router = useRouter();
   const { status: sessionStatus } = useSession();
   const isAuthenticated = sessionStatus === 'authenticated';
+  const text = messages[locale].workbench;
 
   const showExplore = mode === 'explore' || mode === 'full';
   const showCreate = mode === 'create' || mode === 'full';
@@ -263,17 +273,17 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
 
   const ensureAuthenticated = useCallback((): boolean => {
     if (!isAuthenticated) {
-      setCreateStatus('Sign in with Google to use AI detect and create postcards.');
+      setCreateStatus(text.authRequiredCreate);
       return false;
     }
     return true;
-  }, [isAuthenticated]);
+  }, [isAuthenticated, text.authRequiredCreate]);
 
   const requestDeviceLocation = useCallback(async (silent = false): Promise<boolean> => {
     if (!navigator.geolocation) {
       setGeoPermission('unsupported');
       if (!silent) {
-        setExploreStatus('Browser geolocation is not supported.');
+        setExploreStatus(text.geoUnsupported);
       }
       return false;
     }
@@ -309,20 +319,20 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
       });
 
       if (!granted && !silent) {
-        setExploreStatus('Could not get your location. You can still use map browse normally.');
+        setExploreStatus(text.geoLocateFailed);
       }
 
       if (granted && !silent) {
         setFocusedMarkerId(null);
         setViewerFocusSignal((current) => current + 1);
-        setExploreStatus('Your location is now shown on the map.');
+        setExploreStatus(text.geoLocated);
       }
 
       return granted;
     } finally {
       setIsRequestingLocation(false);
     }
-  }, []);
+  }, [text.geoLocateFailed, text.geoLocated, text.geoUnsupported]);
 
   const handleViewportChange = useCallback((bounds: MapViewportBounds) => {
     setMapBounds((current) => {
@@ -409,7 +419,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
 
       const response = await fetch(`/api/postcards?${params.toString()}`, { cache: 'no-store' });
       if (!response.ok) {
-        throw new Error('Failed to load postcards.');
+        throw new Error(text.exploreLoadFailed);
       }
 
       const data = (await response.json()) as PublicPostcardsPayload | PostcardRecord[];
@@ -424,11 +434,19 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
       setVisibleTotal(typeof data.total === 'number' ? data.total : data.items?.length ?? 0);
       setVisibleHasMore(Boolean(data.hasMore));
     } catch (error) {
-      setExploreStatus(error instanceof Error ? error.message : 'Unknown list error.');
+      setExploreStatus(error instanceof Error ? error.message : text.exploreUnknownError);
     } finally {
       setIsLoadingPublic(false);
     }
-  }, [mapBounds, showExplore, exploreSort, exploreLimit, searchText]);
+  }, [
+    mapBounds,
+    showExplore,
+    exploreSort,
+    exploreLimit,
+    searchText,
+    text.exploreLoadFailed,
+    text.exploreUnknownError
+  ]);
 
   useEffect(() => {
     if (!showExplore || !mapBounds) {
@@ -456,6 +474,8 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
     }
 
     void loadDashboardData();
+    // loadDashboardData uses current render values and should only run on auth/page state changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showDashboard, isAuthenticated]);
 
   useEffect(() => {
@@ -473,7 +493,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
         }
 
         next[job.id] = {
-          title: job.placeGuess?.trim() ? `AI: ${job.placeGuess}` : 'AI detected postcard',
+          title: job.placeGuess?.trim() ? `AI: ${job.placeGuess}` : text.aiDetectedPostcardTitle,
           notes: '',
           locationInput: `${job.latitude.toFixed(6)}, ${job.longitude.toFixed(6)}`
         };
@@ -482,14 +502,14 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
 
       return changed ? next : current;
     });
-  }, [jobs]);
+  }, [jobs, text.aiDetectedPostcardTitle]);
 
   async function submitExploreFeedback(
     postcardId: string,
     action: 'like' | 'dislike' | 'report_wrong_location'
   ) {
     if (!isAuthenticated) {
-      setExploreStatus('Sign in with Google to submit likes/dislikes/reports.');
+      setExploreStatus(text.feedbackRequireAuth);
       return;
     }
 
@@ -505,19 +525,19 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
 
       const payload = (await response.json()) as { error?: string };
       if (!response.ok) {
-        throw new Error(payload.error ?? 'Failed to submit feedback.');
+        throw new Error(payload.error ?? text.feedbackFailed);
       }
 
       setExploreStatus(
         action === 'like'
-          ? 'Thanks for the like.'
+          ? text.feedbackThanksLike
           : action === 'dislike'
-            ? 'Dislike recorded.'
-            : 'Wrong-location report submitted.'
+            ? text.feedbackDislikeRecorded
+            : text.feedbackWrongLocation
       );
       await loadPublicPostcards();
     } catch (error) {
-      setExploreStatus(error instanceof Error ? error.message : 'Unknown feedback error.');
+      setExploreStatus(error instanceof Error ? error.message : text.feedbackUnknownError);
     } finally {
       setFeedbackPendingKey(null);
     }
@@ -535,11 +555,11 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
       ]);
 
       if (!jobsResponse.ok) {
-        throw new Error('Failed to load AI jobs.');
+        throw new Error(text.dashboardLoadJobsFailed);
       }
 
       if (!mineResponse.ok) {
-        throw new Error('Failed to load your postcards.');
+        throw new Error(text.dashboardLoadMineFailed);
       }
 
       const jobsData = (await jobsResponse.json()) as DetectionJobRecord[];
@@ -547,7 +567,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
       setJobs(jobsData);
       setMyPostcards(mineData);
     } catch (error) {
-      setDashboardStatus(error instanceof Error ? error.message : 'Unknown dashboard error.');
+      setDashboardStatus(error instanceof Error ? error.message : text.dashboardUnknownError);
     } finally {
       setIsLoadingJobs(false);
       setIsLoadingMine(false);
@@ -562,7 +582,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
     }
 
     if (!aiFile) {
-      setCreateStatus('Choose an image for AI detection first.');
+      setCreateStatus(text.aiNeedImage);
       return;
     }
 
@@ -572,7 +592,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
     setQueuedAiJobId(null);
     setQueuedAiImageUrl(null);
     setIsSubmittingAi(true);
-    setCreateStatus('Submitting AI detection job...');
+    setCreateStatus(text.aiSubmitting);
 
     try {
       const formData = new FormData();
@@ -584,25 +604,25 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
       });
 
       if (response.status === 401) {
-        throw new Error('Unauthorized. Please sign in with Google.');
+        throw new Error(text.aiUnauthorized);
       }
 
       const payload = (await response.json()) as { id?: string; imageUrl?: string; error?: string; message?: string };
 
       if (!response.ok) {
-        throw new Error(payload.error ?? 'Failed to submit AI detection job.');
+        throw new Error(payload.error ?? text.aiSubmitFailed);
       }
 
       setAiFile(null);
       setAiInputVersion((current) => current + 1);
       setQueuedAiJobId(payload.id ?? null);
       setQueuedAiImageUrl(payload.imageUrl ?? null);
-      setCreateStatus(`Detection job submitted (id: ${payload.id ?? 'unknown'}). Redirecting to dashboard...`);
+      setCreateStatus(text.aiDetectionSubmitted(payload.id ?? 'unknown'));
       aiRedirectTimerRef.current = setTimeout(() => {
         router.push('/dashboard');
       }, 1400);
     } catch (error) {
-      setCreateStatus(error instanceof Error ? error.message : 'Unknown AI detection submit error.');
+      setCreateStatus(error instanceof Error ? error.message : text.aiUnknownError);
     } finally {
       setIsSubmittingAi(false);
     }
@@ -614,25 +634,25 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
     }
 
     if (!manualTitle.trim()) {
-      setCreateStatus('Name is required.');
+      setCreateStatus(text.manualNameRequired);
       return;
     }
 
     if (!manualFile) {
-      setCreateStatus('Image is required for manual create.');
+      setCreateStatus(text.manualImageRequired);
       return;
     }
 
     let coords: { latitude: number; longitude: number };
     try {
-      coords = parseLocationInput(manualLocationInput);
+      coords = parseLocationInput(manualLocationInput, text);
     } catch (error) {
-      setCreateStatus(error instanceof Error ? error.message : 'Invalid location input.');
+      setCreateStatus(error instanceof Error ? error.message : text.manualInvalidLocation);
       return;
     }
 
     setIsSavingManual(true);
-    setCreateStatus('Uploading image...');
+    setCreateStatus(text.manualUploadingImage);
 
     try {
       const uploadForm = new FormData();
@@ -644,15 +664,15 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
       });
 
       if (uploadResponse.status === 401) {
-        throw new Error('Unauthorized. Please sign in with Google.');
+        throw new Error(text.aiUnauthorized);
       }
 
       const uploadPayload = (await uploadResponse.json()) as { imageUrl?: string; error?: string };
       if (!uploadResponse.ok || !uploadPayload.imageUrl) {
-        throw new Error(uploadPayload.error ?? 'Image upload failed.');
+        throw new Error(uploadPayload.error ?? text.manualImageUploadFailed);
       }
 
-      setCreateStatus('Saving postcard...');
+      setCreateStatus(text.manualSaving);
 
       const createResponse = await fetch('/api/postcards', {
         method: 'POST',
@@ -670,21 +690,21 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
       const createPayload = (await createResponse.json()) as { error?: string };
 
       if (createResponse.status === 401) {
-        throw new Error('Unauthorized. Please sign in with Google.');
+        throw new Error(text.aiUnauthorized);
       }
 
       if (!createResponse.ok) {
-        throw new Error(createPayload.error ?? 'Failed to create postcard.');
+        throw new Error(createPayload.error ?? text.manualCreateFailed);
       }
 
       setManualTitle('');
       setManualNotes('');
       setManualLocationInput('');
       setManualFile(null);
-      setCreateStatus('Postcard created.');
+      setCreateStatus(text.manualCreated);
       await loadPublicPostcards();
     } catch (error) {
-      setCreateStatus(error instanceof Error ? error.message : 'Unknown create error.');
+      setCreateStatus(error instanceof Error ? error.message : text.manualUnknownError);
     } finally {
       setIsSavingManual(false);
     }
@@ -714,36 +734,36 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
     }
 
     if (job.status !== 'SUCCEEDED' || job.latitude === null || job.longitude === null) {
-      setDashboardStatus('Only successful AI jobs can be saved as postcards.');
+      setDashboardStatus(text.aiSaveOnlySuccess);
       return;
     }
 
     if (isJobAlreadySaved(job)) {
-      setDashboardStatus('This AI result is already saved as a postcard.');
+      setDashboardStatus(text.aiSaveAlreadySaved);
       return;
     }
 
     const draft = jobDrafts[job.id] ?? {
-      title: job.placeGuess?.trim() ? `AI: ${job.placeGuess}` : 'AI detected postcard',
+      title: job.placeGuess?.trim() ? `AI: ${job.placeGuess}` : text.aiDetectedPostcardTitle,
       notes: '',
       locationInput: `${job.latitude.toFixed(6)}, ${job.longitude.toFixed(6)}`
     };
 
     if (!draft.title.trim()) {
-      setDashboardStatus('Name is required before saving AI result.');
+      setDashboardStatus(text.aiSaveNameRequired);
       return;
     }
 
     let coords: { latitude: number; longitude: number };
     try {
-      coords = parseLocationInput(draft.locationInput);
+      coords = parseLocationInput(draft.locationInput, text);
     } catch (error) {
-      setDashboardStatus(error instanceof Error ? error.message : 'Invalid location input.');
+      setDashboardStatus(error instanceof Error ? error.message : text.aiSaveInvalidLocation);
       return;
     }
 
     setSavingJobId(job.id);
-    setDashboardStatus('Saving AI result as postcard...');
+    setDashboardStatus(text.aiSaveSaving);
 
     try {
       const response = await fetch('/api/postcards', {
@@ -768,13 +788,13 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
 
       const payload = (await response.json()) as { error?: string };
       if (!response.ok) {
-        throw new Error(payload.error ?? 'Failed to save postcard from AI result.');
+        throw new Error(payload.error ?? text.aiSaveFailed);
       }
 
       await Promise.all([loadDashboardData(), loadPublicPostcards()]);
-      setDashboardStatus('AI result saved as postcard. It is now visible in Explore map.');
+      setDashboardStatus(text.aiSaveDone);
     } catch (error) {
-      setDashboardStatus(error instanceof Error ? error.message : 'Unknown save error.');
+      setDashboardStatus(error instanceof Error ? error.message : text.aiSaveUnknownError);
     } finally {
       setSavingJobId(null);
     }
@@ -784,7 +804,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
     const derivedOriginalUrl = deriveOriginalImageUrl(postcard.imageUrl);
     const sourceUrl = postcard.originalImageUrl ?? derivedOriginalUrl ?? postcard.imageUrl;
     if (!sourceUrl) {
-      setDashboardStatus('Image is not available for this postcard.');
+      setDashboardStatus(text.cropNoImage);
       return;
     }
 
@@ -792,7 +812,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
     setEditingCropOriginalUrl(sourceUrl);
     setCropDraft({ ...DEFAULT_CROP_DRAFT });
     if (!postcard.originalImageUrl && !derivedOriginalUrl) {
-      setDashboardStatus('Original upload not found. Recrop is based on current postcard image.');
+      setDashboardStatus(text.cropFallbackNotice);
     } else {
       setDashboardStatus('');
     }
@@ -809,7 +829,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
     }
 
     setSavingCropPostcardId(postcardId);
-    setDashboardStatus('Saving crop...');
+    setDashboardStatus(text.cropSaving);
 
     try {
       const response = await fetch(`/api/postcards/${postcardId}`, {
@@ -820,14 +840,14 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
 
       const payload = (await response.json()) as { error?: string };
       if (!response.ok) {
-        throw new Error(payload.error ?? 'Failed to save crop.');
+        throw new Error(payload.error ?? text.cropSaveFailed);
       }
 
       await Promise.all([loadDashboardData(), loadPublicPostcards()]);
       closeCropEditor();
-      setDashboardStatus('Crop updated successfully.');
+      setDashboardStatus(text.cropSaved);
     } catch (error) {
-      setDashboardStatus(error instanceof Error ? error.message : 'Unknown crop edit error.');
+      setDashboardStatus(error instanceof Error ? error.message : text.cropUnknownError);
     } finally {
       setSavingCropPostcardId(null);
     }
@@ -838,13 +858,13 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
       return;
     }
 
-    const confirmed = window.confirm(`Remove postcard "${postcard.title}" from dashboard and map?`);
+    const confirmed = window.confirm(text.removeConfirm(postcard.title));
     if (!confirmed) {
       return;
     }
 
     setDeletingPostcardId(postcard.id);
-    setDashboardStatus('Removing postcard...');
+    setDashboardStatus(text.removeRunning);
 
     try {
       const response = await fetch(`/api/postcards/${postcard.id}`, {
@@ -853,16 +873,16 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
 
       const payload = (await response.json()) as { error?: string };
       if (!response.ok) {
-        throw new Error(payload.error ?? 'Failed to remove postcard.');
+        throw new Error(payload.error ?? text.removeFailed);
       }
 
       if (editingCropPostcardId === postcard.id) {
         closeCropEditor();
       }
-      setDashboardStatus('Postcard removed (soft delete).');
+      setDashboardStatus(text.removeDone);
       await Promise.all([loadDashboardData(), loadPublicPostcards()]);
     } catch (error) {
-      setDashboardStatus(error instanceof Error ? error.message : 'Unknown remove error.');
+      setDashboardStatus(error instanceof Error ? error.message : text.removeUnknownError);
     } finally {
       setDeletingPostcardId(null);
     }
@@ -879,37 +899,37 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
         <article className="panel explore-panel explore-map-layout">
           <aside className="explore-sidebar">
             <div className="section-head">
-              <h2>Explore</h2>
+              <h2>{text.exploreTitle}</h2>
               <div className="chip-row">
-                <span className="chip">{visiblePostcards.length} loaded</span>
-                <span className="chip">{publicMarkers.length} markers</span>
-                <span className="chip">{visibleTotal} in area</span>
-                {visibleHasMore ? <span className="chip">limited to {exploreLimit}</span> : null}
+                <span className="chip">{text.chipLoaded(visiblePostcards.length)}</span>
+                <span className="chip">{text.chipMarkers(publicMarkers.length)}</span>
+                <span className="chip">{text.chipInArea(visibleTotal)}</span>
+                {visibleHasMore ? <span className="chip">{text.chipLimitedTo(exploreLimit)}</span> : null}
               </div>
             </div>
 
             <details className="explore-filter-collapse">
-              <summary>Search & Filters</summary>
+              <summary>{text.exploreFiltersTitle}</summary>
               <div className="explore-filter-stack">
                 <label className="inline-field">
-                  Search
+                  {text.exploreSearchLabel}
                   <input
                     value={searchText}
                     onChange={(event) => setSearchText(event.target.value)}
-                    placeholder="Title, place, note, AI guess"
+                    placeholder={text.exploreSearchPlaceholder}
                   />
                 </label>
                 <label className="inline-field">
-                  Ranking
+                  {text.exploreSortLabel}
                   <select value={exploreSort} onChange={(event) => setExploreSort(event.target.value as ExploreSort)}>
-                    <option value="ranking">Top ranked</option>
-                    <option value="newest">Newest</option>
-                    <option value="likes">Most likes</option>
-                    <option value="reports">Most reported</option>
+                    <option value="ranking">{text.exploreSortRanking}</option>
+                    <option value="newest">{text.exploreSortNewest}</option>
+                    <option value="likes">{text.exploreSortLikes}</option>
+                    <option value="reports">{text.exploreSortReports}</option>
                   </select>
                 </label>
                 <label className="inline-field">
-                  Max results
+                  {text.exploreMaxResultsLabel}
                   <select value={exploreLimit} onChange={(event) => setExploreLimit(Number(event.target.value))}>
                     <option value={60}>60</option>
                     <option value={120}>120</option>
@@ -920,10 +940,10 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
             </details>
 
             <div className="explore-status-stack">
-              {!mapBounds ? <small className="list-note">Loading map area...</small> : null}
-              {isLoadingPublic ? <small className="list-note">Loading postcards...</small> : null}
+              {!mapBounds ? <small className="list-note">{text.exploreLoadingArea}</small> : null}
+              {isLoadingPublic ? <small className="list-note">{text.exploreLoadingPostcards}</small> : null}
               {!isLoadingPublic && mapBounds && visiblePostcards.length === 0 ? (
-                <small className="list-note">No postcards found in this area.</small>
+                <small className="list-note">{text.exploreNoResults}</small>
               ) : null}
               {exploreStatus ? <small className="list-note">{exploreStatus}</small> : null}
             </div>
@@ -959,7 +979,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
                     }}
                     role={hasMapPoint ? 'button' : undefined}
                     tabIndex={hasMapPoint ? 0 : undefined}
-                    aria-label={hasMapPoint ? `Focus ${postcard.title} on map` : undefined}
+                    aria-label={hasMapPoint ? text.exploreFocusOnMapAria(postcard.title) : undefined}
                   >
                     {postcard.imageUrl ? (
                       <Image
@@ -972,10 +992,10 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
                     ) : null}
                     <div className="postcard-item-head">
                       <strong>{postcard.title}</strong>
-                      <small>{new Date(postcard.createdAt).toLocaleDateString()}</small>
+                      <small>{new Date(postcard.createdAt).toLocaleDateString(text.dateLocale)}</small>
                     </div>
-                    <small>{postcard.placeName || 'Unknown place'}</small>
-                    {postcard.uploaderMasked ? <small>by {postcard.uploaderMasked}</small> : null}
+                    <small>{postcard.placeName || text.exploreUnknownPlace}</small>
+                    {postcard.uploaderMasked ? <small>{text.exploreUploaderBy(postcard.uploaderMasked)}</small> : null}
                     <small>
                       👍 {postcard.likeCount} · 👎 {postcard.dislikeCount} · ⚠️ {postcard.wrongLocationReports}
                     </small>
@@ -990,7 +1010,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
                         }}
                         disabled={feedbackPendingKey === `${postcard.id}:like`}
                       >
-                        {feedbackPendingKey === `${postcard.id}:like` ? '...' : 'Vote Up'}
+                        {feedbackPendingKey === `${postcard.id}:like` ? '...' : text.exploreVoteUp}
                       </button>
                       <button
                         type="button"
@@ -1001,7 +1021,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
                         }}
                         disabled={feedbackPendingKey === `${postcard.id}:dislike`}
                       >
-                        {feedbackPendingKey === `${postcard.id}:dislike` ? '...' : 'Vote Down'}
+                        {feedbackPendingKey === `${postcard.id}:dislike` ? '...' : text.exploreVoteDown}
                       </button>
                       <button
                         type="button"
@@ -1012,7 +1032,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
                         }}
                         disabled={feedbackPendingKey === `${postcard.id}:report_wrong_location`}
                       >
-                        {feedbackPendingKey === `${postcard.id}:report_wrong_location` ? '...' : 'Flag'}
+                        {feedbackPendingKey === `${postcard.id}:report_wrong_location` ? '...' : text.exploreFlag}
                       </button>
                     </div>
                   </article>
@@ -1035,7 +1055,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
                 ? {
                     latitude: deviceLocation.latitude,
                     longitude: deviceLocation.longitude,
-                    label: 'Your current location',
+                    label: text.exploreViewerLabel,
                     accuracy: deviceLocation.accuracy
                   }
                 : undefined
@@ -1049,26 +1069,26 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
         <article className="panel create-panel">
           <div className="section-head">
             <div>
-              <h2>Create</h2>
-              <small>Two upload options: async AI detect job or manual postcard create.</small>
+              <h2>{text.createTitle}</h2>
+              <small>{text.createSubtitle}</small>
             </div>
           </div>
 
           {!isAuthenticated ? (
             <div className="auth-callout">
-              <strong>Login Required</strong>
-              <small>Sign in with Google to submit AI jobs and create postcards.</small>
+              <strong>{text.loginRequiredTitle}</strong>
+              <small>{text.loginRequiredCreateBody}</small>
               <button type="button" onClick={() => signIn('google')}>
-                Sign in with Google
+                {text.buttonSignInGoogle}
               </button>
             </div>
           ) : null}
 
           <form onSubmit={submitAiDetectJob} className="form-stack">
-            <h3>Option 1: AI Detect (Async)</h3>
-            <small>Upload image and submit. You can leave this page and check result later in Dashboard.</small>
+            <h3>{text.optionAiTitle}</h3>
+            <small>{text.optionAiBody}</small>
             <label>
-              Image
+              {text.fieldImage}
               <input
                 key={aiInputVersion}
                 type="file"
@@ -1078,58 +1098,58 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
               />
             </label>
             <button type="submit" disabled={!isAuthenticated || !aiFile || isSubmittingAi || isSavingManual}>
-              {isSubmittingAi ? 'Submitting...' : 'Submit AI Detect Job'}
+              {isSubmittingAi ? text.buttonSubmitting : text.buttonSubmitAiJob}
             </button>
           </form>
 
           {queuedAiJobId ? (
             <div className="status-box status-success">
-              <small>Queued. You can leave this page; processing continues in background.</small>
-              <small>Job ID: {queuedAiJobId}</small>
+              <small>{text.queuedBody}</small>
+              <small>{text.queuedJobId(queuedAiJobId)}</small>
               {queuedAiImageUrl ? (
                 <small>
-                  Image: <Link href={queuedAiImageUrl} target="_blank" rel="noreferrer">open uploaded image</Link>
+                  {text.queuedImageLabel}: <Link href={queuedAiImageUrl} target="_blank" rel="noreferrer">{text.queuedOpenUploadedImage}</Link>
                 </small>
               ) : null}
               <button type="button" onClick={() => router.push('/dashboard')}>
-                Open Dashboard
+                {text.buttonOpenDashboard}
               </button>
             </div>
           ) : null}
 
           <div className="form-stack">
-            <h3>Option 2: Manual Create</h3>
-            <small>Fill name, description, location (single field), and image.</small>
+            <h3>{text.optionManualTitle}</h3>
+            <small>{text.optionManualBody}</small>
             <label>
-              Name
+              {text.fieldName}
               <input
                 value={manualTitle}
                 onChange={(event) => setManualTitle(event.target.value)}
-                placeholder="Central Park bloom walk"
+                placeholder={text.manualNamePlaceholder}
                 disabled={!isAuthenticated || isSavingManual || isSubmittingAi}
               />
             </label>
             <label>
-              Description
+              {text.fieldDescription}
               <textarea
                 rows={4}
                 value={manualNotes}
                 onChange={(event) => setManualNotes(event.target.value)}
-                placeholder="Spotted red Pikmin decor near the fountain"
+                placeholder={text.manualDescriptionPlaceholder}
                 disabled={!isAuthenticated || isSavingManual || isSubmittingAi}
               />
             </label>
             <label>
-              Location (lat,lon or lon,lat)
+              {text.fieldLocation}
               <input
                 value={manualLocationInput}
                 onChange={(event) => setManualLocationInput(event.target.value)}
-                placeholder="25.033, 121.565"
+                placeholder={text.manualLocationPlaceholder}
                 disabled={!isAuthenticated || isSavingManual || isSubmittingAi}
               />
             </label>
             <label>
-              Image
+              {text.fieldImage}
               <input
                 type="file"
                 accept="image/*"
@@ -1138,12 +1158,12 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
               />
             </label>
             <button type="button" disabled={!isAuthenticated || isSavingManual || isSubmittingAi} onClick={saveManualPostcard}>
-              {isSavingManual ? 'Saving...' : 'Create Postcard'}
+              {isSavingManual ? text.buttonSaving : text.buttonCreatePostcard}
             </button>
           </div>
 
           <div className="status-box">
-            <small>{createStatus || 'No action yet.'}</small>
+            <small>{createStatus || text.noActionYet}</small>
           </div>
         </article>
       ) : null}
@@ -1152,106 +1172,106 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
         <article className="panel create-panel">
           <div className="section-head">
             <div>
-              <h2>Dashboard</h2>
-              <small>Your AI detection jobs and your own postcards.</small>
+              <h2>{text.dashboardTitle}</h2>
+              <small>{text.dashboardSubtitle}</small>
             </div>
           </div>
 
           {!isAuthenticated ? (
             <div className="auth-callout">
-              <strong>Login Required</strong>
-              <small>Sign in to view your private dashboard.</small>
+              <strong>{text.loginRequiredTitle}</strong>
+              <small>{text.loginRequiredDashboardBody}</small>
               <button type="button" onClick={() => signIn('google')}>
-                Sign in with Google
+                {text.buttonSignInGoogle}
               </button>
             </div>
           ) : (
             <>
               <div className="dashboard-toolbar">
                 <div className="chip-row">
-                  <span className="chip">AI Jobs: {jobs.length}</span>
-                  <span className="chip">My Postcards: {myPostcards.length}</span>
+                  <span className="chip">{text.chipAiJobs(jobs.length)}</span>
+                  <span className="chip">{text.chipMyPostcards(myPostcards.length)}</span>
                 </div>
                 <div className="chip-row">
                   <button type="button" className="action-button" onClick={() => setDashboardViewMode('grid')} disabled={dashboardViewMode === 'grid'}>
-                    Grid
+                    {text.buttonGrid}
                   </button>
                   <button type="button" className="action-button" onClick={() => setDashboardViewMode('list')} disabled={dashboardViewMode === 'list'}>
-                    List
+                    {text.buttonList}
                   </button>
                   <button type="button" className="action-button" onClick={() => void loadDashboardData()} disabled={isLoadingJobs || isLoadingMine}>
-                    Refresh
+                    {text.buttonRefresh}
                   </button>
                 </div>
               </div>
 
               {dashboardStatus ? <small>{dashboardStatus}</small> : null}
 
-              <h3 style={{ marginTop: '0.5rem' }}>AI Detection Jobs</h3>
-              {isLoadingJobs ? <small>Loading AI jobs...</small> : null}
-              {!isLoadingJobs && jobs.length === 0 ? <small>No AI jobs yet.</small> : null}
+              <h3 style={{ marginTop: '0.5rem' }}>{text.aiJobsTitle}</h3>
+              {isLoadingJobs ? <small>{text.aiJobsLoading}</small> : null}
+              {!isLoadingJobs && jobs.length === 0 ? <small>{text.aiJobsEmpty}</small> : null}
               <div className={dashboardViewMode === 'grid' ? 'postcard-list dashboard-grid' : 'postcard-list dashboard-list'}>
                 {jobs.slice(0, 20).map((job) => (
                   <article key={job.id} className="postcard-item">
                     <div className="postcard-item-head">
                       <strong>{job.status}</strong>
-                      <small>{new Date(job.createdAt).toLocaleString()}</small>
+                      <small>{new Date(job.createdAt).toLocaleString(text.dateLocale)}</small>
                     </div>
                     {job.imageUrl ? (
                       <Image
                         className="postcard-thumb postcard-thumb-contain"
                         src={job.imageUrl}
-                        alt={`AI job ${job.id}`}
+                        alt={text.aiJobImageAlt(job.id)}
                         width={640}
                         height={420}
                       />
                     ) : null}
-                    <small>{job.placeGuess ?? 'No place guess yet'}</small>
+                    <small>{job.placeGuess ?? text.aiJobNoGuess}</small>
                     {job.status === 'SUCCEEDED' && job.latitude !== null && job.longitude !== null ? (
                       <small>
                         {job.latitude.toFixed(6)}, {job.longitude.toFixed(6)}
-                        {job.confidence !== null ? ` (confidence ${Math.round(job.confidence * 100)}%)` : ''}
+                        {job.confidence !== null ? ` (${text.aiConfidenceLabel(Math.round(job.confidence * 100))})` : ''}
                       </small>
                     ) : null}
                     {job.status === 'SUCCEEDED' && job.latitude !== null && job.longitude !== null ? (
                       <>
                         <label>
-                          Name
+                          {text.fieldName}
                           <input
                             value={jobDrafts[job.id]?.title ?? ''}
                             onChange={(event) => updateJobDraft(job.id, { title: event.target.value })}
-                            placeholder="Postcard name"
+                            placeholder={text.fieldName}
                             disabled={savingJobId === job.id}
                           />
                         </label>
                         <label>
-                          Description
+                          {text.fieldDescription}
                           <textarea
                             rows={3}
                             value={jobDrafts[job.id]?.notes ?? ''}
                             onChange={(event) => updateJobDraft(job.id, { notes: event.target.value })}
-                            placeholder="Write a short description"
+                            placeholder={text.fieldDescription}
                             disabled={savingJobId === job.id}
                           />
                         </label>
                         <label>
-                          Location (lat,lon or lon,lat)
+                          {text.fieldLocation}
                           <input
                             value={jobDrafts[job.id]?.locationInput ?? ''}
                             onChange={(event) => updateJobDraft(job.id, { locationInput: event.target.value })}
-                            placeholder="25.033, 121.565"
+                            placeholder={text.manualLocationPlaceholder}
                             disabled={savingJobId === job.id}
                           />
                         </label>
                         {isJobAlreadySaved(job) ? (
-                          <small>Already saved as postcard.</small>
+                          <small>{text.aiResultAlreadySaved}</small>
                         ) : (
                           <button
                             type="button"
                             onClick={() => void saveDetectedJobAsPostcard(job)}
                             disabled={savingJobId === job.id}
                           >
-                            {savingJobId === job.id ? 'Saving...' : 'Save as Postcard'}
+                            {savingJobId === job.id ? text.buttonSaving : text.saveAsPostcard}
                           </button>
                         )}
                       </>
@@ -1261,16 +1281,16 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
                 ))}
               </div>
 
-              <h3 style={{ marginTop: '0.5rem' }}>My Postcards</h3>
-              {isLoadingMine ? <small>Loading your postcards...</small> : null}
-              {!isLoadingMine && myPostcards.length === 0 ? <small>You have not created postcards yet.</small> : null}
+              <h3 style={{ marginTop: '0.5rem' }}>{text.myPostcardsTitle}</h3>
+              {isLoadingMine ? <small>{text.myPostcardsLoading}</small> : null}
+              {!isLoadingMine && myPostcards.length === 0 ? <small>{text.myPostcardsEmpty}</small> : null}
               <div className={dashboardViewMode === 'grid' ? 'postcard-list dashboard-grid' : 'postcard-list dashboard-list'}>
                 {myPostcards.slice(0, 20).map((postcard) => {
                   return (
                     <article key={postcard.id} className="postcard-item">
                     <div className="postcard-item-head">
                       <strong>{postcard.title}</strong>
-                      <small>{new Date(postcard.createdAt).toLocaleDateString()}</small>
+                      <small>{new Date(postcard.createdAt).toLocaleDateString(text.dateLocale)}</small>
                     </div>
                     {postcard.imageUrl ? (
                       <Image
@@ -1281,7 +1301,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
                         height={420}
                       />
                     ) : null}
-                    <small>{postcard.placeName || 'Unknown place'}</small>
+                    <small>{postcard.placeName || text.exploreUnknownPlace}</small>
                     {typeof postcard.latitude === 'number' && typeof postcard.longitude === 'number' ? (
                       <small>{postcard.latitude.toFixed(6)}, {postcard.longitude.toFixed(6)}</small>
                     ) : null}
@@ -1293,7 +1313,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
                         onClick={() => openCropEditor(postcard)}
                         disabled={savingCropPostcardId === postcard.id || deletingPostcardId === postcard.id}
                       >
-                        {editingCropPostcardId === postcard.id ? 'Editing Crop' : 'Edit Crop'}
+                        {editingCropPostcardId === postcard.id ? text.buttonEditingCrop : text.buttonEditCrop}
                       </button>
                       <button
                         type="button"
@@ -1301,13 +1321,13 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
                         onClick={() => void softDeletePostcard(postcard)}
                         disabled={deletingPostcardId === postcard.id || savingCropPostcardId === postcard.id}
                       >
-                        {deletingPostcardId === postcard.id ? 'Removing...' : 'Remove (Soft Delete)'}
+                        {deletingPostcardId === postcard.id ? text.buttonRemoving : text.buttonRemoveSoftDelete}
                       </button>
                     </div>
                     {editingCropPostcardId === postcard.id && editingCropOriginalUrl ? (
                       <div className="crop-editor">
-                        <strong>Crop Editor (Original Upload)</strong>
-                        <small>Drag and resize the rectangle directly on the original image.</small>
+                        <strong>{text.cropEditorTitle}</strong>
+                        <small>{text.cropEditorBody}</small>
                         <div className="crop-preview">
                           <ReactCrop
                             crop={cropDraft}
@@ -1317,12 +1337,15 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
                             className="crop-react"
                           >
                             {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={editingCropOriginalUrl} alt="Original upload for crop editing" className="crop-preview-image" />
+                            <img src={editingCropOriginalUrl} alt={text.cropEditorImageAlt} className="crop-preview-image" />
                           </ReactCrop>
                         </div>
-                        <small>
-                          Selection: x {Math.round(cropDraft.x ?? 0)}%, y {Math.round(cropDraft.y ?? 0)}%, w {Math.round(cropDraft.width ?? 0)}%, h {Math.round(cropDraft.height ?? 0)}%
-                        </small>
+                        <small>{text.cropSelection(
+                          Math.round(cropDraft.x ?? 0),
+                          Math.round(cropDraft.y ?? 0),
+                          Math.round(cropDraft.width ?? 0),
+                          Math.round(cropDraft.height ?? 0)
+                        )}</small>
                         <div className="chip-row">
                           <button
                             type="button"
@@ -1330,7 +1353,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
                             onClick={() => void saveCropEdit(postcard.id)}
                             disabled={savingCropPostcardId === postcard.id}
                           >
-                            {savingCropPostcardId === postcard.id ? 'Saving Crop...' : 'Save Crop'}
+                            {savingCropPostcardId === postcard.id ? text.buttonSavingCrop : text.buttonSaveCrop}
                           </button>
                           <button
                             type="button"
@@ -1338,7 +1361,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
                             onClick={closeCropEditor}
                             disabled={savingCropPostcardId === postcard.id}
                           >
-                            Cancel
+                            {text.buttonCancel}
                           </button>
                         </div>
                       </div>

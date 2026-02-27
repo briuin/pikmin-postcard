@@ -181,6 +181,39 @@ h3 {
   box-shadow: 0 4px 10px rgba(47, 158, 88, 0.16);
 }
 
+.locale-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.16rem;
+  padding: 0.16rem;
+  border-radius: 999px;
+  border: 1px solid #d7e8d7;
+  background: rgba(246, 255, 245, 0.92);
+}
+
+.locale-button {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.24rem 0.48rem;
+  min-width: 2.1rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #2f6542;
+  background: transparent;
+  box-shadow: none;
+}
+
+.locale-button:hover:enabled {
+  transform: none;
+  box-shadow: none;
+  background: rgba(89, 178, 109, 0.14);
+}
+
+.locale-button-active {
+  color: #ffffff;
+  background: linear-gradient(135deg, #56b36a, #359d59);
+}
+
 .workbench {
   display: grid;
   grid-template-columns: 1.28fr 0.86fr;
@@ -768,6 +801,16 @@ small {
   .topbar-session {
     grid-area: session;
     gap: 0.3rem;
+  }
+
+  .locale-switch {
+    padding: 0.14rem;
+  }
+
+  .locale-button {
+    min-width: 1.9rem;
+    font-size: 0.68rem;
+    padding: 0.2rem 0.4rem;
   }
 
   .session-pill {

@@ -1,0 +1,365 @@
+export const localeStorageKey = 'pikmin-postcard-locale';
+
+export const supportedLocales = ['en', 'zh-TW'] as const;
+export type Locale = (typeof supportedLocales)[number];
+
+function normalizeLocale(input: string | null | undefined): Locale {
+  if (!input) {
+    return 'en';
+  }
+
+  const normalized = input.toLowerCase();
+  if (normalized === 'zh-tw' || normalized === 'zh-hk' || normalized.startsWith('zh')) {
+    return 'zh-TW';
+  }
+
+  return 'en';
+}
+
+export function detectLocale(input: string | null | undefined): Locale {
+  return normalizeLocale(input);
+}
+
+const en = {
+  localeLabel: 'EN',
+  home: {
+    appTitle: 'Pikmin Postcards',
+    appSubtitle: 'Map + AI location',
+    goToExploreAriaLabel: 'Go to Explore',
+    navExplore: 'Explore',
+    navCreate: 'Create',
+    navDashboard: 'Dashboard',
+    signIn: 'Sign in',
+    signOut: 'Sign out',
+    localeSwitchAriaLabel: 'Language'
+  },
+  session: {
+    checking: 'Checking session...',
+    guest: 'Guest mode',
+    signedIn: 'Signed in'
+  },
+  workbench: {
+    parseLocationTwoNumbers:
+      'Location must be two numbers separated by comma. Example: 25.033, 121.565 or 121.565, 25.033',
+    parseLocationNumeric: 'Location values must be valid numbers.',
+    parseLocationRange: 'Location is out of range. Latitude must be within +/-90 and longitude within +/-180.',
+
+    authRequiredCreate: 'Sign in with Google to use AI detect and create postcards.',
+    geoUnsupported: 'Browser geolocation is not supported.',
+    geoLocateFailed: 'Could not get your location. You can still use map browse normally.',
+    geoLocated: 'Your location is now shown on the map.',
+
+    exploreLoadFailed: 'Failed to load postcards.',
+    exploreUnknownError: 'Unknown list error.',
+    feedbackRequireAuth: 'Sign in with Google to submit likes/dislikes/reports.',
+    feedbackFailed: 'Failed to submit feedback.',
+    feedbackUnknownError: 'Unknown feedback error.',
+    feedbackThanksLike: 'Thanks for the like.',
+    feedbackDislikeRecorded: 'Dislike recorded.',
+    feedbackWrongLocation: 'Wrong-location report submitted.',
+
+    dashboardLoadJobsFailed: 'Failed to load AI jobs.',
+    dashboardLoadMineFailed: 'Failed to load your postcards.',
+    dashboardUnknownError: 'Unknown dashboard error.',
+
+    aiNeedImage: 'Choose an image for AI detection first.',
+    aiSubmitting: 'Submitting AI detection job...',
+    aiUnauthorized: 'Unauthorized. Please sign in with Google.',
+    aiSubmitFailed: 'Failed to submit AI detection job.',
+    aiUnknownError: 'Unknown AI detection submit error.',
+    aiDetectionSubmitted: (id: string) => `Detection job submitted (id: ${id}). Redirecting to dashboard...`,
+
+    manualNameRequired: 'Name is required.',
+    manualImageRequired: 'Image is required for manual create.',
+    manualInvalidLocation: 'Invalid location input.',
+    manualUploadingImage: 'Uploading image...',
+    manualImageUploadFailed: 'Image upload failed.',
+    manualSaving: 'Saving postcard...',
+    manualCreateFailed: 'Failed to create postcard.',
+    manualCreated: 'Postcard created.',
+    manualUnknownError: 'Unknown create error.',
+
+    aiSaveOnlySuccess: 'Only successful AI jobs can be saved as postcards.',
+    aiSaveAlreadySaved: 'This AI result is already saved as a postcard.',
+    aiSaveNameRequired: 'Name is required before saving AI result.',
+    aiSaveInvalidLocation: 'Invalid location input.',
+    aiSaveSaving: 'Saving AI result as postcard...',
+    aiSaveFailed: 'Failed to save postcard from AI result.',
+    aiSaveDone: 'AI result saved as postcard. It is now visible in Explore map.',
+    aiSaveUnknownError: 'Unknown save error.',
+
+    cropNoImage: 'Image is not available for this postcard.',
+    cropFallbackNotice: 'Original upload not found. Recrop is based on current postcard image.',
+    cropSaving: 'Saving crop...',
+    cropSaveFailed: 'Failed to save crop.',
+    cropSaved: 'Crop updated successfully.',
+    cropUnknownError: 'Unknown crop edit error.',
+
+    removeConfirm: (title: string) => `Remove postcard "${title}" from dashboard and map?`,
+    removeRunning: 'Removing postcard...',
+    removeFailed: 'Failed to remove postcard.',
+    removeDone: 'Postcard removed (soft delete).',
+    removeUnknownError: 'Unknown remove error.',
+
+    chipLoaded: (count: number) => `${count} loaded`,
+    chipMarkers: (count: number) => `${count} markers`,
+    chipInArea: (count: number) => `${count} in area`,
+    chipLimitedTo: (limit: number) => `limited to ${limit}`,
+
+    exploreTitle: 'Explore',
+    exploreFiltersTitle: 'Search & Filters',
+    exploreSearchLabel: 'Search',
+    exploreSearchPlaceholder: 'Title, place, note, AI guess',
+    exploreSortLabel: 'Ranking',
+    exploreSortRanking: 'Top ranked',
+    exploreSortNewest: 'Newest',
+    exploreSortLikes: 'Most likes',
+    exploreSortReports: 'Most reported',
+    exploreMaxResultsLabel: 'Max results',
+    exploreLoadingArea: 'Loading map area...',
+    exploreLoadingPostcards: 'Loading postcards...',
+    exploreNoResults: 'No postcards found in this area.',
+    exploreVoteUp: 'Vote Up',
+    exploreVoteDown: 'Vote Down',
+    exploreFlag: 'Flag',
+    exploreUnknownPlace: 'Unknown place',
+    exploreUploaderBy: (value: string) => `by ${value}`,
+    exploreViewerLabel: 'Your current location',
+    exploreFocusOnMapAria: (title: string) => `Focus ${title} on map`,
+
+    createTitle: 'Create',
+    createSubtitle: 'Two upload options: async AI detect job or manual postcard create.',
+    loginRequiredTitle: 'Login Required',
+    loginRequiredCreateBody: 'Sign in with Google to submit AI jobs and create postcards.',
+    loginRequiredDashboardBody: 'Sign in to view your private dashboard.',
+    buttonSignInGoogle: 'Sign in with Google',
+    optionAiTitle: 'Option 1: AI Detect (Async)',
+    optionAiBody: 'Upload image and submit. You can leave this page and check result later in Dashboard.',
+    fieldImage: 'Image',
+    buttonSubmitAiJob: 'Submit AI Detect Job',
+    buttonSubmitting: 'Submitting...',
+    queuedBody: 'Queued. You can leave this page; processing continues in background.',
+    queuedJobId: (id: string) => `Job ID: ${id}`,
+    queuedImageLabel: 'Image',
+    queuedOpenUploadedImage: 'open uploaded image',
+    buttonOpenDashboard: 'Open Dashboard',
+
+    optionManualTitle: 'Option 2: Manual Create',
+    optionManualBody: 'Fill name, description, location (single field), and image.',
+    fieldName: 'Name',
+    fieldDescription: 'Description',
+    fieldLocation: 'Location (lat,lon or lon,lat)',
+    manualNamePlaceholder: 'Central Park bloom walk',
+    manualDescriptionPlaceholder: 'Spotted red Pikmin decor near the fountain',
+    manualLocationPlaceholder: '25.033, 121.565',
+    buttonCreatePostcard: 'Create Postcard',
+    buttonSaving: 'Saving...',
+    noActionYet: 'No action yet.',
+
+    dashboardTitle: 'Dashboard',
+    dashboardSubtitle: 'Your AI detection jobs and your own postcards.',
+    chipAiJobs: (count: number) => `AI Jobs: ${count}`,
+    chipMyPostcards: (count: number) => `My Postcards: ${count}`,
+    buttonGrid: 'Grid',
+    buttonList: 'List',
+    buttonRefresh: 'Refresh',
+    aiJobsTitle: 'AI Detection Jobs',
+    aiJobsLoading: 'Loading AI jobs...',
+    aiJobsEmpty: 'No AI jobs yet.',
+    aiJobNoGuess: 'No place guess yet',
+    aiConfidenceLabel: (percentage: number) => `confidence ${percentage}%`,
+    aiDetectedPostcardTitle: 'AI detected postcard',
+    aiResultAlreadySaved: 'Already saved as postcard.',
+    saveAsPostcard: 'Save as Postcard',
+    myPostcardsTitle: 'My Postcards',
+    myPostcardsLoading: 'Loading your postcards...',
+    myPostcardsEmpty: 'You have not created postcards yet.',
+    buttonEditCrop: 'Edit Crop',
+    buttonEditingCrop: 'Editing Crop',
+    buttonRemoveSoftDelete: 'Remove (Soft Delete)',
+    buttonRemoving: 'Removing...',
+    cropEditorTitle: 'Crop Editor (Original Upload)',
+    cropEditorBody: 'Drag and resize the rectangle directly on the original image.',
+    cropSelection: (x: number, y: number, w: number, h: number) => `Selection: x ${x}%, y ${y}%, w ${w}%, h ${h}%`,
+    buttonSaveCrop: 'Save Crop',
+    buttonSavingCrop: 'Saving Crop...',
+    buttonCancel: 'Cancel',
+    cropEditorImageAlt: 'Original upload for crop editing',
+    aiJobImageAlt: (id: string) => `AI job ${id}`,
+    dateLocale: 'en-US'
+  }
+};
+
+const zhTW: typeof en = {
+  localeLabel: '繁中',
+  home: {
+    appTitle: 'Pikmin 明信片',
+    appSubtitle: '地圖 + AI 定位',
+    goToExploreAriaLabel: '前往探索',
+    navExplore: '探索',
+    navCreate: '建立',
+    navDashboard: '儀表板',
+    signIn: '登入',
+    signOut: '登出',
+    localeSwitchAriaLabel: '語言'
+  },
+  session: {
+    checking: '正在檢查登入狀態...',
+    guest: '訪客模式',
+    signedIn: '已登入'
+  },
+  workbench: {
+    parseLocationTwoNumbers: '座標必須是兩個數字並用逗號分隔，例如：25.033, 121.565 或 121.565, 25.033',
+    parseLocationNumeric: '座標必須是有效數字。',
+    parseLocationRange: '座標超出範圍。緯度需在 +/-90，經度需在 +/-180。',
+
+    authRequiredCreate: '請先使用 Google 登入，才能使用 AI 偵測與建立明信片。',
+    geoUnsupported: '此瀏覽器不支援地理定位。',
+    geoLocateFailed: '無法取得你的位置，但仍可正常瀏覽地圖。',
+    geoLocated: '已在地圖上顯示你的目前位置。',
+
+    exploreLoadFailed: '載入明信片失敗。',
+    exploreUnknownError: '探索清單發生未知錯誤。',
+    feedbackRequireAuth: '請先使用 Google 登入，才能投票或回報。',
+    feedbackFailed: '送出回饋失敗。',
+    feedbackUnknownError: '回饋發生未知錯誤。',
+    feedbackThanksLike: '感謝你的支持。',
+    feedbackDislikeRecorded: '已記錄不喜歡。',
+    feedbackWrongLocation: '已回報座標有誤。',
+
+    dashboardLoadJobsFailed: '載入 AI 任務失敗。',
+    dashboardLoadMineFailed: '載入你的明信片失敗。',
+    dashboardUnknownError: '儀表板發生未知錯誤。',
+
+    aiNeedImage: '請先選擇要做 AI 偵測的圖片。',
+    aiSubmitting: '正在送出 AI 偵測任務...',
+    aiUnauthorized: '未授權，請先使用 Google 登入。',
+    aiSubmitFailed: '送出 AI 偵測任務失敗。',
+    aiUnknownError: 'AI 偵測送出發生未知錯誤。',
+    aiDetectionSubmitted: (id: string) => `已送出偵測任務（id: ${id}），即將前往儀表板...`,
+
+    manualNameRequired: '名稱為必填。',
+    manualImageRequired: '手動建立需要上傳圖片。',
+    manualInvalidLocation: '座標格式錯誤。',
+    manualUploadingImage: '正在上傳圖片...',
+    manualImageUploadFailed: '圖片上傳失敗。',
+    manualSaving: '正在儲存明信片...',
+    manualCreateFailed: '建立明信片失敗。',
+    manualCreated: '明信片已建立。',
+    manualUnknownError: '建立流程發生未知錯誤。',
+
+    aiSaveOnlySuccess: '只有成功的 AI 任務可以儲存為明信片。',
+    aiSaveAlreadySaved: '此 AI 任務已儲存為明信片。',
+    aiSaveNameRequired: '儲存 AI 結果前，名稱為必填。',
+    aiSaveInvalidLocation: '座標格式錯誤。',
+    aiSaveSaving: '正在儲存 AI 結果為明信片...',
+    aiSaveFailed: '儲存 AI 結果失敗。',
+    aiSaveDone: 'AI 結果已儲存為明信片，已可在探索地圖看到。',
+    aiSaveUnknownError: '儲存流程發生未知錯誤。',
+
+    cropNoImage: '此明信片目前沒有可裁切的圖片。',
+    cropFallbackNotice: '找不到原始上傳圖，將改用目前明信片圖片裁切。',
+    cropSaving: '正在儲存裁切...',
+    cropSaveFailed: '儲存裁切失敗。',
+    cropSaved: '裁切已更新。',
+    cropUnknownError: '裁切流程發生未知錯誤。',
+
+    removeConfirm: (title: string) => `要將「${title}」從儀表板與地圖中移除嗎？`,
+    removeRunning: '正在移除明信片...',
+    removeFailed: '移除明信片失敗。',
+    removeDone: '明信片已移除（軟刪除）。',
+    removeUnknownError: '移除流程發生未知錯誤。',
+
+    chipLoaded: (count: number) => `已載入 ${count} 筆`,
+    chipMarkers: (count: number) => `${count} 個地圖標記`,
+    chipInArea: (count: number) => `區域內 ${count} 筆`,
+    chipLimitedTo: (limit: number) => `上限 ${limit} 筆`,
+
+    exploreTitle: '探索',
+    exploreFiltersTitle: '搜尋與篩選',
+    exploreSearchLabel: '搜尋',
+    exploreSearchPlaceholder: '標題、地點、描述、AI 猜測',
+    exploreSortLabel: '排序',
+    exploreSortRanking: '熱門排名',
+    exploreSortNewest: '最新上傳',
+    exploreSortLikes: '最多喜歡',
+    exploreSortReports: '最多回報',
+    exploreMaxResultsLabel: '結果上限',
+    exploreLoadingArea: '正在讀取地圖範圍...',
+    exploreLoadingPostcards: '正在載入明信片...',
+    exploreNoResults: '目前範圍內找不到明信片。',
+    exploreVoteUp: '推',
+    exploreVoteDown: '踩',
+    exploreFlag: '回報',
+    exploreUnknownPlace: '未知地點',
+    exploreUploaderBy: (value: string) => `上傳者 ${value}`,
+    exploreViewerLabel: '你的目前位置',
+    exploreFocusOnMapAria: (title: string) => `將 ${title} 聚焦到地圖`,
+
+    createTitle: '建立',
+    createSubtitle: '提供兩種上傳方式：非同步 AI 偵測，或手動建立明信片。',
+    loginRequiredTitle: '需要登入',
+    loginRequiredCreateBody: '請先使用 Google 登入，才能送出 AI 任務與建立明信片。',
+    loginRequiredDashboardBody: '請先登入以檢視你的儀表板。',
+    buttonSignInGoogle: '使用 Google 登入',
+    optionAiTitle: '選項 1：AI 偵測（非同步）',
+    optionAiBody: '上傳後可離開此頁，稍後到儀表板查看結果。',
+    fieldImage: '圖片',
+    buttonSubmitAiJob: '送出 AI 偵測任務',
+    buttonSubmitting: '送出中...',
+    queuedBody: '已排隊處理中，你可以離開此頁，背景會持續處理。',
+    queuedJobId: (id: string) => `任務 ID：${id}`,
+    queuedImageLabel: '圖片',
+    queuedOpenUploadedImage: '開啟已上傳圖片',
+    buttonOpenDashboard: '前往儀表板',
+
+    optionManualTitle: '選項 2：手動建立',
+    optionManualBody: '填寫名稱、描述、座標（單一欄位）與圖片。',
+    fieldName: '名稱',
+    fieldDescription: '描述',
+    fieldLocation: '座標（lat,lon 或 lon,lat）',
+    manualNamePlaceholder: '例如：中央公園散步',
+    manualDescriptionPlaceholder: '例如：噴水池附近看到紅皮克敏裝飾',
+    manualLocationPlaceholder: '25.033, 121.565',
+    buttonCreatePostcard: '建立明信片',
+    buttonSaving: '儲存中...',
+    noActionYet: '尚無動作。',
+
+    dashboardTitle: '儀表板',
+    dashboardSubtitle: '查看你的 AI 偵測任務與已建立明信片。',
+    chipAiJobs: (count: number) => `AI 任務：${count}`,
+    chipMyPostcards: (count: number) => `我的明信片：${count}`,
+    buttonGrid: '格狀',
+    buttonList: '列表',
+    buttonRefresh: '重新整理',
+    aiJobsTitle: 'AI 偵測任務',
+    aiJobsLoading: '正在載入 AI 任務...',
+    aiJobsEmpty: '目前沒有 AI 任務。',
+    aiJobNoGuess: '尚無地點猜測',
+    aiConfidenceLabel: (percentage: number) => `信心度 ${percentage}%`,
+    aiDetectedPostcardTitle: 'AI 偵測明信片',
+    aiResultAlreadySaved: '已儲存為明信片。',
+    saveAsPostcard: '儲存為明信片',
+    myPostcardsTitle: '我的明信片',
+    myPostcardsLoading: '正在載入你的明信片...',
+    myPostcardsEmpty: '你尚未建立任何明信片。',
+    buttonEditCrop: '編輯裁切',
+    buttonEditingCrop: '編輯中',
+    buttonRemoveSoftDelete: '移除（軟刪除）',
+    buttonRemoving: '移除中...',
+    cropEditorTitle: '裁切編輯器（原始上傳）',
+    cropEditorBody: '直接拖曳並調整框線到正確明信片範圍。',
+    cropSelection: (x: number, y: number, w: number, h: number) => `選取範圍：x ${x}% 、y ${y}% 、寬 ${w}% 、高 ${h}%`,
+    buttonSaveCrop: '儲存裁切',
+    buttonSavingCrop: '儲存裁切中...',
+    buttonCancel: '取消',
+    cropEditorImageAlt: '用於裁切編輯的原始上傳圖片',
+    aiJobImageAlt: (id: string) => `AI 任務 ${id}`,
+    dateLocale: 'zh-TW'
+  }
+};
+
+export const messages = {
+  en,
+  'zh-TW': zhTW
+} as const;
