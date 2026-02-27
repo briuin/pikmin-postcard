@@ -735,21 +735,26 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
   }
 
   function openCropEditor(postcard: PostcardRecord) {
-    const originalUrl = postcard.originalImageUrl ?? deriveOriginalImageUrl(postcard.imageUrl);
-    if (!originalUrl) {
-      setDashboardStatus('Original upload image is not available for this postcard.');
+    const derivedOriginalUrl = deriveOriginalImageUrl(postcard.imageUrl);
+    const sourceUrl = postcard.originalImageUrl ?? derivedOriginalUrl ?? postcard.imageUrl;
+    if (!sourceUrl) {
+      setDashboardStatus('Image is not available for this postcard.');
       return;
     }
 
     setEditingCropPostcardId(postcard.id);
-    setEditingCropOriginalUrl(originalUrl);
+    setEditingCropOriginalUrl(sourceUrl);
     setCropDraft({
       x: 0.08,
       y: 0.1,
       width: 0.84,
       height: 0.54
     });
-    setDashboardStatus('');
+    if (!postcard.originalImageUrl && !derivedOriginalUrl) {
+      setDashboardStatus('Original upload not found. Using current postcard image for crop edit.');
+    } else {
+      setDashboardStatus('');
+    }
   }
 
   function closeCropEditor() {

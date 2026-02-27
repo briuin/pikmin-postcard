@@ -136,17 +136,18 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
 
     const originalImageUrl = postcard.originalImageUrl ?? deriveOriginalImageUrl(postcard.imageUrl);
-    if (!originalImageUrl) {
+    const sourceImageUrl = originalImageUrl ?? postcard.imageUrl;
+    if (!sourceImageUrl) {
       return NextResponse.json(
-        { error: 'Original image is not available for this postcard.' },
+        { error: 'No image source is available for this postcard.' },
         { status: 400 }
       );
     }
 
-    const originalResponse = await fetch(originalImageUrl, { cache: 'no-store' });
+    const originalResponse = await fetch(sourceImageUrl, { cache: 'no-store' });
     if (!originalResponse.ok) {
       return NextResponse.json(
-        { error: 'Failed to load original image for recrop.' },
+        { error: 'Failed to load source image for recrop.' },
         { status: 400 }
       );
     }
@@ -191,7 +192,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         where: { id: postcard.id },
         data: {
           imageUrl: postcardImageUrl,
-          originalImageUrl
+          originalImageUrl: originalImageUrl ?? sourceImageUrl
         }
       });
     } catch (error) {
@@ -210,7 +211,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       {
         ok: true,
         imageUrl: postcardImageUrl,
-        originalImageUrl
+        originalImageUrl: originalImageUrl ?? sourceImageUrl
       },
       { status: 200 }
     );
