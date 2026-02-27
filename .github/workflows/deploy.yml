@@ -11,6 +11,7 @@ permissions:
 
 env:
   AWS_REGION: us-east-1
+  SSM_DATABASE_URL_PARAM: /pikmin-postcard/DATABASE_URL
   ECR_REPOSITORY: pikmin-postcard
   ECS_CLUSTER: pikmin-postcard-cluster
   ECS_SERVICE: pikmin-postcard-service
@@ -45,6 +46,18 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Load DATABASE_URL from SSM
+        run: |
+          DATABASE_URL_VALUE=$(aws ssm get-parameter \
+            --name "$SSM_DATABASE_URL_PARAM" \
+            --with-decryption \
+            --query "Parameter.Value" \
+            --output text)
+          echo "DATABASE_URL=$DATABASE_URL_VALUE" >> $GITHUB_ENV
+
+      - name: Run Prisma migrations
+        run: npm run prisma:migrate
 
       - name: Login to Amazon ECR
         id: login-ecr
