@@ -206,7 +206,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
 
   const [deviceLocation, setDeviceLocation] = useState<DeviceLocation | null>(null);
   const [viewerFocusSignal, setViewerFocusSignal] = useState(0);
-  const [geoPermission, setGeoPermission] = useState<GeoPermissionState>('prompt');
+  const [, setGeoPermission] = useState<GeoPermissionState>('prompt');
   const [isRequestingLocation, setIsRequestingLocation] = useState(false);
 
   const [aiFile, setAiFile] = useState<File | null>(null);
@@ -782,16 +782,20 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
 
   function openCropEditor(postcard: PostcardRecord) {
     const derivedOriginalUrl = deriveOriginalImageUrl(postcard.imageUrl);
-    const sourceUrl = postcard.originalImageUrl ?? derivedOriginalUrl;
+    const sourceUrl = postcard.originalImageUrl ?? derivedOriginalUrl ?? postcard.imageUrl;
     if (!sourceUrl) {
-      setDashboardStatus('Original upload is not available for this postcard. Crop edit requires original image.');
+      setDashboardStatus('Image is not available for this postcard.');
       return;
     }
 
     setEditingCropPostcardId(postcard.id);
     setEditingCropOriginalUrl(sourceUrl);
     setCropDraft({ ...DEFAULT_CROP_DRAFT });
-    setDashboardStatus('');
+    if (!postcard.originalImageUrl && !derivedOriginalUrl) {
+      setDashboardStatus('Original upload not found. Recrop is based on current postcard image.');
+    } else {
+      setDashboardStatus('');
+    }
   }
 
   function closeCropEditor() {
@@ -864,16 +868,6 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
     }
   }
 
-  const permissionCompactText = geoPermission === 'granted'
-    ? 'Locate control ready'
-    : geoPermission === 'checking'
-      ? 'Checking locate permission'
-      : geoPermission === 'denied'
-        ? 'Location permission denied'
-        : geoPermission === 'unsupported'
-          ? 'Geolocation unsupported'
-          : 'Location permission optional';
-
   const isExploreOnlyPage = mode === 'explore';
   const workbenchClassName = showExplore && showCreate
     ? 'workbench'
@@ -926,12 +920,6 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
             </details>
 
             <div className="explore-status-stack">
-              <small className="list-note">Locate: {permissionCompactText}</small>
-              {deviceLocation ? (
-                <small className="list-note">
-                  You: {deviceLocation.latitude.toFixed(5)}, {deviceLocation.longitude.toFixed(5)} (+/-{Math.round(deviceLocation.accuracy)}m)
-                </small>
-              ) : null}
               {!mapBounds ? <small className="list-note">Loading map area...</small> : null}
               {isLoadingPublic ? <small className="list-note">Loading postcards...</small> : null}
               {!isLoadingPublic && mapBounds && visiblePostcards.length === 0 ? (
@@ -941,63 +929,95 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
             </div>
 
             <div className="explore-results">
-              {visiblePostcards.map((postcard) => (
-                <article key={postcard.id} className={focusedMarkerId === postcard.id ? 'postcard-item postcard-focused' : 'postcard-item'}>
-                  {postcard.imageUrl ? (
-                    <Image
-                      className="postcard-thumb explore-card-thumb"
-                      src={postcard.imageUrl}
-                      alt={postcard.title}
-                      width={640}
-                      height={420}
-                    />
-                  ) : null}
-                  <div className="postcard-item-head">
-                    <strong>{postcard.title}</strong>
-                    <small>{new Date(postcard.createdAt).toLocaleDateString()}</small>
-                  </div>
-                  <small>{postcard.placeName || 'Unknown place'}</small>
-                  {postcard.uploaderMasked ? <small>by {postcard.uploaderMasked}</small> : null}
-                  <small>
-                    👍 {postcard.likeCount} · 👎 {postcard.dislikeCount} · ⚠️ {postcard.wrongLocationReports}
-                  </small>
-                  {postcard.notes ? <p className="explore-note">{postcard.notes}</p> : null}
-                  <div className="chip-row">
-                    <button
-                      type="button"
-                      className="action-button"
-                      onClick={() => setFocusedMarkerId(postcard.id)}
-                      disabled={typeof postcard.latitude !== 'number' || typeof postcard.longitude !== 'number'}
-                    >
-                      Focus on map
-                    </button>
-                    <button
-                      type="button"
-                      className="action-button"
-                      onClick={() => void submitExploreFeedback(postcard.id, 'like')}
-                      disabled={feedbackPendingKey === `${postcard.id}:like`}
-                    >
-                      {feedbackPendingKey === `${postcard.id}:like` ? '...' : 'Like'}
-                    </button>
-                    <button
-                      type="button"
-                      className="action-button"
-                      onClick={() => void submitExploreFeedback(postcard.id, 'dislike')}
-                      disabled={feedbackPendingKey === `${postcard.id}:dislike`}
-                    >
-                      {feedbackPendingKey === `${postcard.id}:dislike` ? '...' : 'Dislike'}
-                    </button>
-                    <button
-                      type="button"
-                      className="action-button"
-                      onClick={() => void submitExploreFeedback(postcard.id, 'report_wrong_location')}
-                      disabled={feedbackPendingKey === `${postcard.id}:report_wrong_location`}
-                    >
-                      {feedbackPendingKey === `${postcard.id}:report_wrong_location` ? '...' : 'Report Wrong Location'}
-                    </button>
-                  </div>
-                </article>
-              ))}
+              {visiblePostcards.map((postcard) => {
+                const hasMapPoint = typeof postcard.latitude === 'number' && typeof postcard.longitude === 'number';
+                const cardClassName = [
+                  'postcard-item',
+                  focusedMarkerId === postcard.id ? 'postcard-focused' : '',
+                  hasMapPoint ? 'explore-card-clickable' : ''
+                ]
+                  .filter(Boolean)
+                  .join(' ');
+
+                return (
+                  <article
+                    key={postcard.id}
+                    className={cardClassName}
+                    onClick={() => {
+                      if (hasMapPoint) {
+                        setFocusedMarkerId(postcard.id);
+                      }
+                    }}
+                    onKeyDown={(event) => {
+                      if (!hasMapPoint) {
+                        return;
+                      }
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        setFocusedMarkerId(postcard.id);
+                      }
+                    }}
+                    role={hasMapPoint ? 'button' : undefined}
+                    tabIndex={hasMapPoint ? 0 : undefined}
+                    aria-label={hasMapPoint ? `Focus ${postcard.title} on map` : undefined}
+                  >
+                    {postcard.imageUrl ? (
+                      <Image
+                        className="postcard-thumb explore-card-thumb"
+                        src={postcard.imageUrl}
+                        alt={postcard.title}
+                        width={640}
+                        height={420}
+                      />
+                    ) : null}
+                    <div className="postcard-item-head">
+                      <strong>{postcard.title}</strong>
+                      <small>{new Date(postcard.createdAt).toLocaleDateString()}</small>
+                    </div>
+                    <small>{postcard.placeName || 'Unknown place'}</small>
+                    {postcard.uploaderMasked ? <small>by {postcard.uploaderMasked}</small> : null}
+                    <small>
+                      👍 {postcard.likeCount} · 👎 {postcard.dislikeCount} · ⚠️ {postcard.wrongLocationReports}
+                    </small>
+                    {postcard.notes ? <p className="explore-note">{postcard.notes}</p> : null}
+                    <div className="chip-row explore-action-row">
+                      <button
+                        type="button"
+                        className="action-button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void submitExploreFeedback(postcard.id, 'like');
+                        }}
+                        disabled={feedbackPendingKey === `${postcard.id}:like`}
+                      >
+                        {feedbackPendingKey === `${postcard.id}:like` ? '...' : 'Vote Up'}
+                      </button>
+                      <button
+                        type="button"
+                        className="action-button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void submitExploreFeedback(postcard.id, 'dislike');
+                        }}
+                        disabled={feedbackPendingKey === `${postcard.id}:dislike`}
+                      >
+                        {feedbackPendingKey === `${postcard.id}:dislike` ? '...' : 'Vote Down'}
+                      </button>
+                      <button
+                        type="button"
+                        className="action-button action-button-warn"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void submitExploreFeedback(postcard.id, 'report_wrong_location');
+                        }}
+                        disabled={feedbackPendingKey === `${postcard.id}:report_wrong_location`}
+                      >
+                        {feedbackPendingKey === `${postcard.id}:report_wrong_location` ? '...' : 'Flag'}
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
             </div>
           </aside>
 
@@ -1246,7 +1266,6 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
               {!isLoadingMine && myPostcards.length === 0 ? <small>You have not created postcards yet.</small> : null}
               <div className={dashboardViewMode === 'grid' ? 'postcard-list dashboard-grid' : 'postcard-list dashboard-list'}>
                 {myPostcards.slice(0, 20).map((postcard) => {
-                  const hasOriginalImage = Boolean(postcard.originalImageUrl ?? deriveOriginalImageUrl(postcard.imageUrl));
                   return (
                     <article key={postcard.id} className="postcard-item">
                     <div className="postcard-item-head">
@@ -1272,8 +1291,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
                         type="button"
                         className="action-button"
                         onClick={() => openCropEditor(postcard)}
-                        disabled={!hasOriginalImage || savingCropPostcardId === postcard.id || deletingPostcardId === postcard.id}
-                        title={hasOriginalImage ? undefined : 'Original upload image is required for crop edit.'}
+                        disabled={savingCropPostcardId === postcard.id || deletingPostcardId === postcard.id}
                       >
                         {editingCropPostcardId === postcard.id ? 'Editing Crop' : 'Edit Crop'}
                       </button>

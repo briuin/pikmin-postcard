@@ -363,6 +363,20 @@ h3 {
   box-shadow: 0 0 0 2px rgba(86, 179, 106, 0.2);
 }
 
+.explore-card-clickable {
+  cursor: pointer;
+}
+
+.explore-card-clickable:hover {
+  border-color: #95d7a7;
+  box-shadow: 0 0 0 2px rgba(86, 179, 106, 0.16);
+}
+
+.explore-card-clickable:focus-visible {
+  outline: 2px solid rgba(86, 179, 106, 0.45);
+  outline-offset: 2px;
+}
+
 .crop-editor {
   display: grid;
   gap: 0.5rem;
@@ -568,6 +582,16 @@ button:disabled {
   border-radius: 10px;
   font-size: 0.83rem;
   box-shadow: 0 4px 10px rgba(47, 158, 88, 0.18);
+}
+
+.action-button-warn {
+  background: linear-gradient(135deg, #f4c742, #e5a634);
+  color: #25361f;
+  box-shadow: 0 4px 10px rgba(229, 166, 52, 0.25);
+}
+
+.explore-action-row {
+  gap: 0.32rem;
 }
 
 small {
