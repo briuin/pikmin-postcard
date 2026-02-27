@@ -32,7 +32,7 @@ export function HomeShell({ page }: HomeShellProps) {
   const sessionText = formatSessionText(session?.user?.email ?? null, isLoading);
 
   return (
-    <div className="home-shell">
+    <div className={`home-shell home-shell-${page}`}>
       <header className="topbar">
         <div className="topbar-brand">
           <Link href="/" className="brand-mark" aria-label="Go to Explore">

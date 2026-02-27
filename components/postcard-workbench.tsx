@@ -202,7 +202,6 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
   const [visibleTotal, setVisibleTotal] = useState(0);
   const [visibleHasMore, setVisibleHasMore] = useState(false);
   const [mapBounds, setMapBounds] = useState<MapViewportBounds | null>(null);
-  const [mapZoom, setMapZoom] = useState<number>(3);
   const [feedbackPendingKey, setFeedbackPendingKey] = useState<string | null>(null);
 
   const [deviceLocation, setDeviceLocation] = useState<DeviceLocation | null>(null);
@@ -325,8 +324,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
     }
   }, []);
 
-  const handleViewportChange = useCallback((bounds: MapViewportBounds, zoom: number) => {
-    setMapZoom(zoom);
+  const handleViewportChange = useCallback((bounds: MapViewportBounds) => {
     setMapBounds((current) => {
       if (!current) {
         return bounds;
@@ -866,79 +864,78 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
     }
   }
 
-  const permissionText = geoPermission === 'checking'
-    ? 'Checking map location permission...'
-    : geoPermission === 'granted'
-      ? 'Location access granted. You can show your current position on map.'
-      : geoPermission === 'prompt'
-        ? 'Location permission is optional and only used for Find Me on map.'
-        : geoPermission === 'denied'
-          ? 'Location permission denied. Map browsing still works.'
-          : 'Geolocation unsupported in this browser.';
+  const permissionCompactText = geoPermission === 'granted'
+    ? 'Locate control ready'
+    : geoPermission === 'checking'
+      ? 'Checking locate permission'
+      : geoPermission === 'denied'
+        ? 'Location permission denied'
+        : geoPermission === 'unsupported'
+          ? 'Geolocation unsupported'
+          : 'Location permission optional';
+
+  const isExploreOnlyPage = mode === 'explore';
+  const workbenchClassName = showExplore && showCreate
+    ? 'workbench'
+    : `workbench workbench-single${isExploreOnlyPage ? ' explore-only-shell' : ''}`;
 
   return (
-    <section className={showExplore && showCreate ? 'workbench' : 'workbench workbench-single'}>
+    <section className={workbenchClassName}>
       {showExplore ? (
         <article className="panel explore-panel explore-map-layout">
           <aside className="explore-sidebar">
             <div className="section-head">
-              <div>
-                <h2>Explore Postcards</h2>
-                <small>Google Maps style: list on left, map on right. Pan map to reload this list.</small>
-              </div>
+              <h2>Explore</h2>
               <div className="chip-row">
                 <span className="chip">{visiblePostcards.length} loaded</span>
                 <span className="chip">{publicMarkers.length} markers</span>
-                <span className="chip">Zoom {mapZoom}</span>
                 <span className="chip">{visibleTotal} in area</span>
                 {visibleHasMore ? <span className="chip">limited to {exploreLimit}</span> : null}
               </div>
             </div>
 
-            <div className="explore-filter-stack">
-              <label className="inline-field">
-                Search
-                <input
-                  value={searchText}
-                  onChange={(event) => setSearchText(event.target.value)}
-                  placeholder="Title, place, note, AI guess"
-                />
-              </label>
-              <label className="inline-field">
-                Ranking
-                <select value={exploreSort} onChange={(event) => setExploreSort(event.target.value as ExploreSort)}>
-                  <option value="ranking">Top ranked</option>
-                  <option value="newest">Newest</option>
-                  <option value="likes">Most likes</option>
-                  <option value="reports">Most reported</option>
-                </select>
-              </label>
-              <label className="inline-field">
-                Max results
-                <select value={exploreLimit} onChange={(event) => setExploreLimit(Number(event.target.value))}>
-                  <option value={60}>60</option>
-                  <option value={120}>120</option>
-                  <option value={200}>200</option>
-                </select>
-              </label>
-            </div>
-
-            <div className="auth-callout">
-              <strong>My Location</strong>
-              <small>{permissionText}</small>
-              {deviceLocation ? (
-                <small>
-                  Current location: {deviceLocation.latitude.toFixed(6)}, {deviceLocation.longitude.toFixed(6)} (+/-{Math.round(deviceLocation.accuracy)}m)
-                </small>
-              ) : null}
-              <small>Use the target icon on the map controls to locate/recenter.</small>
-            </div>
+            <details className="explore-filter-collapse">
+              <summary>Search & Filters</summary>
+              <div className="explore-filter-stack">
+                <label className="inline-field">
+                  Search
+                  <input
+                    value={searchText}
+                    onChange={(event) => setSearchText(event.target.value)}
+                    placeholder="Title, place, note, AI guess"
+                  />
+                </label>
+                <label className="inline-field">
+                  Ranking
+                  <select value={exploreSort} onChange={(event) => setExploreSort(event.target.value as ExploreSort)}>
+                    <option value="ranking">Top ranked</option>
+                    <option value="newest">Newest</option>
+                    <option value="likes">Most likes</option>
+                    <option value="reports">Most reported</option>
+                  </select>
+                </label>
+                <label className="inline-field">
+                  Max results
+                  <select value={exploreLimit} onChange={(event) => setExploreLimit(Number(event.target.value))}>
+                    <option value={60}>60</option>
+                    <option value={120}>120</option>
+                    <option value={200}>200</option>
+                  </select>
+                </label>
+              </div>
+            </details>
 
             <div className="explore-status-stack">
-              {!mapBounds ? <small className="list-note">Loading visible map area...</small> : null}
+              <small className="list-note">Locate: {permissionCompactText}</small>
+              {deviceLocation ? (
+                <small className="list-note">
+                  You: {deviceLocation.latitude.toFixed(5)}, {deviceLocation.longitude.toFixed(5)} (+/-{Math.round(deviceLocation.accuracy)}m)
+                </small>
+              ) : null}
+              {!mapBounds ? <small className="list-note">Loading map area...</small> : null}
               {isLoadingPublic ? <small className="list-note">Loading postcards...</small> : null}
               {!isLoadingPublic && mapBounds && visiblePostcards.length === 0 ? (
-                <small className="list-note">No postcards found in the current map area/filter.</small>
+                <small className="list-note">No postcards found in this area.</small>
               ) : null}
               {exploreStatus ? <small className="list-note">{exploreStatus}</small> : null}
             </div>
@@ -946,6 +943,15 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
             <div className="explore-results">
               {visiblePostcards.map((postcard) => (
                 <article key={postcard.id} className={focusedMarkerId === postcard.id ? 'postcard-item postcard-focused' : 'postcard-item'}>
+                  {postcard.imageUrl ? (
+                    <Image
+                      className="postcard-thumb explore-card-thumb"
+                      src={postcard.imageUrl}
+                      alt={postcard.title}
+                      width={640}
+                      height={420}
+                    />
+                  ) : null}
                   <div className="postcard-item-head">
                     <strong>{postcard.title}</strong>
                     <small>{new Date(postcard.createdAt).toLocaleDateString()}</small>
@@ -955,7 +961,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
                   <small>
                     👍 {postcard.likeCount} · 👎 {postcard.dislikeCount} · ⚠️ {postcard.wrongLocationReports}
                   </small>
-                  {postcard.notes ? <p>{postcard.notes}</p> : null}
+                  {postcard.notes ? <p className="explore-note">{postcard.notes}</p> : null}
                   <div className="chip-row">
                     <button
                       type="button"
