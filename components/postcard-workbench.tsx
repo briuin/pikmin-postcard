@@ -745,135 +745,141 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
   return (
     <section className={showExplore && showCreate ? 'workbench' : 'workbench workbench-single'}>
       {showExplore ? (
-        <article className="panel explore-panel">
-          <div className="section-head">
-            <div>
-              <h2>Explore Postcards</h2>
-              <small>Pan/zoom the map to load postcards inside the current visible area.</small>
+        <article className="panel explore-panel explore-map-layout">
+          <aside className="explore-sidebar">
+            <div className="section-head">
+              <div>
+                <h2>Explore Postcards</h2>
+                <small>Google Maps style: list on left, map on right. Pan map to reload this list.</small>
+              </div>
+              <div className="chip-row">
+                <span className="chip">{visiblePostcards.length} loaded</span>
+                <span className="chip">{publicMarkers.length} markers</span>
+                <span className="chip">Zoom {mapZoom}</span>
+                <span className="chip">{visibleTotal} in area</span>
+                {visibleHasMore ? <span className="chip">limited to {exploreLimit}</span> : null}
+              </div>
             </div>
-            <div className="chip-row">
-              <span className="chip">{visiblePostcards.length} loaded</span>
-              <span className="chip">{publicMarkers.length} markers</span>
-              <span className="chip">Zoom {mapZoom}</span>
-              <span className="chip">{visibleTotal} in area</span>
-              {visibleHasMore ? <span className="chip">limited to {exploreLimit}</span> : null}
+
+            <div className="explore-filter-stack">
+              <label className="inline-field">
+                Search
+                <input
+                  value={searchText}
+                  onChange={(event) => setSearchText(event.target.value)}
+                  placeholder="Title, place, note, AI guess"
+                />
+              </label>
+              <label className="inline-field">
+                Ranking
+                <select value={exploreSort} onChange={(event) => setExploreSort(event.target.value as ExploreSort)}>
+                  <option value="ranking">Top ranked</option>
+                  <option value="newest">Newest</option>
+                  <option value="likes">Most likes</option>
+                  <option value="reports">Most reported</option>
+                </select>
+              </label>
+              <label className="inline-field">
+                Max results
+                <select value={exploreLimit} onChange={(event) => setExploreLimit(Number(event.target.value))}>
+                  <option value={60}>60</option>
+                  <option value={120}>120</option>
+                  <option value={200}>200</option>
+                </select>
+              </label>
             </div>
-          </div>
 
-          <div className="explore-filter-row">
-            <label className="inline-field">
-              Search
-              <input
-                value={searchText}
-                onChange={(event) => setSearchText(event.target.value)}
-                placeholder="Title, place, note, AI guess"
-              />
-            </label>
-            <label className="inline-field">
-              Ranking
-              <select value={exploreSort} onChange={(event) => setExploreSort(event.target.value as ExploreSort)}>
-                <option value="ranking">Top ranked</option>
-                <option value="newest">Newest</option>
-                <option value="likes">Most likes</option>
-                <option value="reports">Most reported</option>
-              </select>
-            </label>
-            <label className="inline-field">
-              Max results
-              <select value={exploreLimit} onChange={(event) => setExploreLimit(Number(event.target.value))}>
-                <option value={60}>60</option>
-                <option value={120}>120</option>
-                <option value={200}>200</option>
-              </select>
-            </label>
-          </div>
-
-          <div className="auth-callout" style={{ marginBottom: '0.8rem' }}>
-            <strong>Find Me On Map</strong>
-            <small>{permissionText}</small>
-            {deviceLocation ? (
-              <small>
-                Current location: {deviceLocation.latitude.toFixed(6)}, {deviceLocation.longitude.toFixed(6)} (+/-{Math.round(deviceLocation.accuracy)}m)
-              </small>
-            ) : null}
-            <button type="button" onClick={() => void requestDeviceLocation(false)} disabled={isRequestingLocation}>
-              {isRequestingLocation ? 'Finding...' : 'Find my location on map'}
-            </button>
-          </div>
-
-          <OpenMap
-            className="map-shell-large"
-            markers={publicMarkers}
-            focusedMarkerId={focusedMarkerId}
-            viewerFocusSignal={viewerFocusSignal}
-            onViewportChange={handleViewportChange}
-            viewerPoint={
-              deviceLocation
-                ? {
-                    latitude: deviceLocation.latitude,
-                    longitude: deviceLocation.longitude,
-                    label: 'Your current location'
-                  }
-                : undefined
-            }
-          />
-
-          {!mapBounds ? <small className="list-note">Loading visible map area...</small> : null}
-          {isLoadingPublic ? <small className="list-note">Loading postcards...</small> : null}
-          {!isLoadingPublic && mapBounds && visiblePostcards.length === 0 ? (
-            <small className="list-note">No postcards found in the current map area/filter.</small>
-          ) : null}
-          {exploreStatus ? <small className="list-note">{exploreStatus}</small> : null}
-
-          <div className="postcard-list">
-            {visiblePostcards.map((postcard) => (
-              <article key={postcard.id} className="postcard-item">
-                <div className="postcard-item-head">
-                  <strong>{postcard.title}</strong>
-                  <small>{new Date(postcard.createdAt).toLocaleDateString()}</small>
-                </div>
-                <small>{postcard.placeName || 'Unknown place'}</small>
-                {postcard.uploaderMasked ? <small>by {postcard.uploaderMasked}</small> : null}
+            <div className="auth-callout">
+              <strong>Find Me On Map</strong>
+              <small>{permissionText}</small>
+              {deviceLocation ? (
                 <small>
-                  👍 {postcard.likeCount} · 👎 {postcard.dislikeCount} · ⚠️ {postcard.wrongLocationReports}
+                  Current location: {deviceLocation.latitude.toFixed(6)}, {deviceLocation.longitude.toFixed(6)} (+/-{Math.round(deviceLocation.accuracy)}m)
                 </small>
-                {postcard.notes ? <p>{postcard.notes}</p> : null}
-                <div className="chip-row">
-                  <button
-                    type="button"
-                    className="action-button"
-                    onClick={() => setFocusedMarkerId(postcard.id)}
-                    disabled={typeof postcard.latitude !== 'number' || typeof postcard.longitude !== 'number'}
-                  >
-                    Focus on map
-                  </button>
-                  <button
-                    type="button"
-                    className="action-button"
-                    onClick={() => void submitExploreFeedback(postcard.id, 'like')}
-                    disabled={feedbackPendingKey === `${postcard.id}:like`}
-                  >
-                    {feedbackPendingKey === `${postcard.id}:like` ? '...' : 'Like'}
-                  </button>
-                  <button
-                    type="button"
-                    className="action-button"
-                    onClick={() => void submitExploreFeedback(postcard.id, 'dislike')}
-                    disabled={feedbackPendingKey === `${postcard.id}:dislike`}
-                  >
-                    {feedbackPendingKey === `${postcard.id}:dislike` ? '...' : 'Dislike'}
-                  </button>
-                  <button
-                    type="button"
-                    className="action-button"
-                    onClick={() => void submitExploreFeedback(postcard.id, 'report_wrong_location')}
-                    disabled={feedbackPendingKey === `${postcard.id}:report_wrong_location`}
-                  >
-                    {feedbackPendingKey === `${postcard.id}:report_wrong_location` ? '...' : 'Report Wrong Location'}
-                  </button>
-                </div>
-              </article>
-            ))}
+              ) : null}
+              <button type="button" onClick={() => void requestDeviceLocation(false)} disabled={isRequestingLocation}>
+                {isRequestingLocation ? 'Finding...' : 'Find my location on map'}
+              </button>
+            </div>
+
+            <div className="explore-status-stack">
+              {!mapBounds ? <small className="list-note">Loading visible map area...</small> : null}
+              {isLoadingPublic ? <small className="list-note">Loading postcards...</small> : null}
+              {!isLoadingPublic && mapBounds && visiblePostcards.length === 0 ? (
+                <small className="list-note">No postcards found in the current map area/filter.</small>
+              ) : null}
+              {exploreStatus ? <small className="list-note">{exploreStatus}</small> : null}
+            </div>
+
+            <div className="explore-results">
+              {visiblePostcards.map((postcard) => (
+                <article key={postcard.id} className={focusedMarkerId === postcard.id ? 'postcard-item postcard-focused' : 'postcard-item'}>
+                  <div className="postcard-item-head">
+                    <strong>{postcard.title}</strong>
+                    <small>{new Date(postcard.createdAt).toLocaleDateString()}</small>
+                  </div>
+                  <small>{postcard.placeName || 'Unknown place'}</small>
+                  {postcard.uploaderMasked ? <small>by {postcard.uploaderMasked}</small> : null}
+                  <small>
+                    👍 {postcard.likeCount} · 👎 {postcard.dislikeCount} · ⚠️ {postcard.wrongLocationReports}
+                  </small>
+                  {postcard.notes ? <p>{postcard.notes}</p> : null}
+                  <div className="chip-row">
+                    <button
+                      type="button"
+                      className="action-button"
+                      onClick={() => setFocusedMarkerId(postcard.id)}
+                      disabled={typeof postcard.latitude !== 'number' || typeof postcard.longitude !== 'number'}
+                    >
+                      Focus on map
+                    </button>
+                    <button
+                      type="button"
+                      className="action-button"
+                      onClick={() => void submitExploreFeedback(postcard.id, 'like')}
+                      disabled={feedbackPendingKey === `${postcard.id}:like`}
+                    >
+                      {feedbackPendingKey === `${postcard.id}:like` ? '...' : 'Like'}
+                    </button>
+                    <button
+                      type="button"
+                      className="action-button"
+                      onClick={() => void submitExploreFeedback(postcard.id, 'dislike')}
+                      disabled={feedbackPendingKey === `${postcard.id}:dislike`}
+                    >
+                      {feedbackPendingKey === `${postcard.id}:dislike` ? '...' : 'Dislike'}
+                    </button>
+                    <button
+                      type="button"
+                      className="action-button"
+                      onClick={() => void submitExploreFeedback(postcard.id, 'report_wrong_location')}
+                      disabled={feedbackPendingKey === `${postcard.id}:report_wrong_location`}
+                    >
+                      {feedbackPendingKey === `${postcard.id}:report_wrong_location` ? '...' : 'Report Wrong Location'}
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </aside>
+
+          <div className="explore-map-pane">
+            <OpenMap
+              className="map-shell-large map-shell-google"
+              markers={publicMarkers}
+              focusedMarkerId={focusedMarkerId}
+              viewerFocusSignal={viewerFocusSignal}
+              onViewportChange={handleViewportChange}
+              viewerPoint={
+                deviceLocation
+                  ? {
+                      latitude: deviceLocation.latitude,
+                      longitude: deviceLocation.longitude,
+                      label: 'Your current location'
+                    }
+                  : undefined
+              }
+            />
           </div>
         </article>
       ) : null}
