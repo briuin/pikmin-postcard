@@ -905,16 +905,14 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
             </div>
 
             <div className="auth-callout">
-              <strong>Find Me On Map</strong>
+              <strong>My Location</strong>
               <small>{permissionText}</small>
               {deviceLocation ? (
                 <small>
                   Current location: {deviceLocation.latitude.toFixed(6)}, {deviceLocation.longitude.toFixed(6)} (+/-{Math.round(deviceLocation.accuracy)}m)
                 </small>
               ) : null}
-              <button type="button" onClick={() => void requestDeviceLocation(false)} disabled={isRequestingLocation}>
-                {isRequestingLocation ? 'Finding...' : 'Find my location on map'}
-              </button>
+              <small>Use the target icon on the map controls to locate/recenter.</small>
             </div>
 
             <div className="explore-status-stack">
@@ -983,17 +981,20 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
               className="map-shell-large map-shell-google"
               markers={publicMarkers}
               focusedMarkerId={focusedMarkerId}
-              viewerFocusSignal={viewerFocusSignal}
-              onViewportChange={handleViewportChange}
-              viewerPoint={
-                deviceLocation
-                  ? {
-                      latitude: deviceLocation.latitude,
-                      longitude: deviceLocation.longitude,
-                      label: 'Your current location'
-                    }
-                  : undefined
-              }
+            viewerFocusSignal={viewerFocusSignal}
+            onLocateRequest={() => requestDeviceLocation(false)}
+            isLocating={isRequestingLocation}
+            onViewportChange={handleViewportChange}
+            viewerPoint={
+              deviceLocation
+                ? {
+                    latitude: deviceLocation.latitude,
+                    longitude: deviceLocation.longitude,
+                    label: 'Your current location',
+                    accuracy: deviceLocation.accuracy
+                  }
+                : undefined
+            }
             />
           </div>
         </article>

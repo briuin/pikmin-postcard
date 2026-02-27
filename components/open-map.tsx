@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import L from 'leaflet';
 import Image from 'next/image';
-import { MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet';
+import { Circle, CircleMarker, MapContainer, Marker, Popup, TileLayer, ZoomControl, useMap, useMapEvents } from 'react-leaflet';
 
 export type SavedMapMarker = {
   id: string;
@@ -41,6 +41,7 @@ type ViewerPoint = {
   latitude: number;
   longitude: number;
   label?: string;
+  accuracy?: number;
 };
 
 type OpenMapProps = {
@@ -49,6 +50,8 @@ type OpenMapProps = {
   markers?: SavedMapMarker[];
   focusedMarkerId?: string | null;
   viewerFocusSignal?: number;
+  onLocateRequest?: () => Promise<boolean> | boolean;
+  isLocating?: boolean;
   onViewportChange?: (bounds: MapViewportBounds, zoom: number) => void;
   onPick?: (lat: number, lng: number) => void;
   className?: string;
@@ -223,6 +226,93 @@ function MapViewportEvents({
   return null;
 }
 
+function MapLocateControl({
+  viewerPoint,
+  onLocateRequest,
+  isLocating
+}: {
+  viewerPoint?: ViewerPoint;
+  onLocateRequest?: () => Promise<boolean> | boolean;
+  isLocating?: boolean;
+}) {
+  const map = useMap();
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const viewerRef = useRef<ViewerPoint | undefined>(viewerPoint);
+  const requestRef = useRef<(() => Promise<boolean> | boolean) | undefined>(onLocateRequest);
+
+  useEffect(() => {
+    viewerRef.current = viewerPoint;
+  }, [viewerPoint]);
+
+  useEffect(() => {
+    requestRef.current = onLocateRequest;
+  }, [onLocateRequest]);
+
+  useEffect(() => {
+    if (!buttonRef.current) {
+      return;
+    }
+    buttonRef.current.disabled = Boolean(isLocating);
+    if (isLocating) {
+      buttonRef.current.classList.add('locate-control-button-loading');
+    } else {
+      buttonRef.current.classList.remove('locate-control-button-loading');
+    }
+  }, [isLocating]);
+
+  useEffect(() => {
+    const control = new L.Control({ position: 'topright' });
+
+    control.onAdd = () => {
+      const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control locate-control');
+      const button = L.DomUtil.create('button', 'locate-control-button', container) as HTMLButtonElement;
+      button.type = 'button';
+      button.title = 'Find my location';
+      button.ariaLabel = 'Find my location';
+      button.innerHTML = '<span class="locate-target-icon" aria-hidden="true"></span>';
+      buttonRef.current = button;
+      button.disabled = Boolean(isLocating);
+
+      L.DomEvent.disableClickPropagation(container);
+      L.DomEvent.disableScrollPropagation(container);
+      L.DomEvent.on(button, 'click', async (event) => {
+        L.DomEvent.preventDefault(event);
+
+        const currentViewer = viewerRef.current;
+        if (currentViewer) {
+          map.setView([currentViewer.latitude, currentViewer.longitude], Math.max(map.getZoom(), 14));
+          return;
+        }
+
+        if (!requestRef.current) {
+          return;
+        }
+
+        const granted = await requestRef.current();
+        if (!granted) {
+          return;
+        }
+
+        const updatedViewer = viewerRef.current;
+        if (updatedViewer) {
+          map.setView([updatedViewer.latitude, updatedViewer.longitude], Math.max(map.getZoom(), 14));
+        }
+      });
+
+      return container;
+    };
+
+    control.addTo(map);
+
+    return () => {
+      buttonRef.current = null;
+      control.remove();
+    };
+  }, [map, isLocating]);
+
+  return null;
+}
+
 type MarkerCluster = {
   id: string;
   latitude: number;
@@ -283,7 +373,18 @@ function getLocationMethodText(marker: SavedMapMarker): string {
   return 'Location: unknown method';
 }
 
-export function OpenMap({ draftPoint, viewerPoint, markers = [], focusedMarkerId, viewerFocusSignal, onViewportChange, onPick, className }: OpenMapProps) {
+export function OpenMap({
+  draftPoint,
+  viewerPoint,
+  markers = [],
+  focusedMarkerId,
+  viewerFocusSignal,
+  onLocateRequest,
+  isLocating,
+  onViewportChange,
+  onPick,
+  className
+}: OpenMapProps) {
   const clusters = useMemo(() => clusterByDistance(markers), [markers]);
   const focusedMarker = useMemo(
     () => (focusedMarkerId ? markers.find((marker) => marker.id === focusedMarkerId) : undefined),
@@ -292,12 +393,14 @@ export function OpenMap({ draftPoint, viewerPoint, markers = [], focusedMarkerId
 
   return (
     <div className={className ? `map-shell ${className}` : 'map-shell'}>
-      <MapContainer center={[35.6812, 139.7671]} zoom={3} style={{ height: '100%', width: '100%' }}>
+      <MapContainer center={[35.6812, 139.7671]} zoom={3} zoomControl={false} style={{ height: '100%', width: '100%' }}>
         <TileLayer
           attribution='&copy; OpenStreetMap contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <MapClickHandler onPick={onPick} />
+        <MapLocateControl viewerPoint={viewerPoint} onLocateRequest={onLocateRequest} isLocating={isLocating} />
+        <ZoomControl position="topright" />
         <MapViewportEvents onViewportChange={onViewportChange} />
         <MapViewportManager
           draftPoint={draftPoint}
@@ -394,13 +497,40 @@ export function OpenMap({ draftPoint, viewerPoint, markers = [], focusedMarkerId
         ) : null}
 
         {viewerPoint ? (
-          <Marker icon={markerIcon} position={[viewerPoint.latitude, viewerPoint.longitude]}>
-            <Popup>
-              {viewerPoint.label ?? 'Your current location'}
-              <br />
-              {viewerPoint.latitude.toFixed(6)}, {viewerPoint.longitude.toFixed(6)}
-            </Popup>
-          </Marker>
+          <>
+            <Circle
+              center={[viewerPoint.latitude, viewerPoint.longitude]}
+              radius={Math.max(12, viewerPoint.accuracy ?? 0)}
+              pathOptions={{
+                color: '#3e89ff',
+                weight: 1,
+                fillColor: '#69a9ff',
+                fillOpacity: 0.18
+              }}
+            />
+            <CircleMarker
+              center={[viewerPoint.latitude, viewerPoint.longitude]}
+              radius={9}
+              pathOptions={{
+                color: '#ffffff',
+                weight: 2,
+                fillColor: '#2f7dff',
+                fillOpacity: 0.95
+              }}
+            >
+              <Popup>
+                {viewerPoint.label ?? 'Your current location'}
+                <br />
+                {viewerPoint.latitude.toFixed(6)}, {viewerPoint.longitude.toFixed(6)}
+                {typeof viewerPoint.accuracy === 'number' ? (
+                  <>
+                    <br />
+                    Accuracy: +/-{Math.round(viewerPoint.accuracy)}m
+                  </>
+                ) : null}
+              </Popup>
+            </CircleMarker>
+          </>
         ) : null}
       </MapContainer>
     </div>
