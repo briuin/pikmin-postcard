@@ -35,6 +35,7 @@ model Postcard {
   title                String
   notes                String?
   imageUrl             String?
+  originalImageUrl     String?
   capturedAt           DateTime?
   city                 String?
   country              String?

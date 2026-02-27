@@ -8,6 +8,7 @@ const postcardCreateSchema = z.object({
   title: z.string().min(1),
   notes: z.string().max(2000).optional(),
   imageUrl: z.string().url().optional(),
+  originalImageUrl: z.string().url().optional(),
   city: z.string().max(120).optional(),
   country: z.string().max(120).optional(),
   placeName: z.string().max(180).optional(),
@@ -46,12 +47,15 @@ function serializePostcards(
   postcards: Array<{
     user?: { email: string } | null;
     [key: string]: unknown;
-  }>
+  }>,
+  options: { includeOriginalImageUrl?: boolean } = {}
 ) {
+  const includeOriginalImageUrl = options.includeOriginalImageUrl ?? false;
   return postcards.map((postcard) => {
-    const { user, ...rest } = postcard;
+    const { user, originalImageUrl, ...rest } = postcard;
     return {
       ...rest,
+      ...(includeOriginalImageUrl ? { originalImageUrl } : {}),
       uploaderMasked: maskEmail(user?.email)
     };
   });
@@ -151,7 +155,7 @@ export async function GET(request: Request) {
       take: 200
     });
 
-    return NextResponse.json(serializePostcards(postcards), { status: 200 });
+    return NextResponse.json(serializePostcards(postcards, { includeOriginalImageUrl: true }), { status: 200 });
   }
 
   const queryParse = publicQuerySchema.safeParse({
@@ -317,6 +321,7 @@ export async function POST(request: Request) {
         title: body.title,
         notes: body.notes,
         imageUrl: body.imageUrl,
+        originalImageUrl: body.originalImageUrl,
         city: body.city,
         country: body.country,
         placeName: body.placeName,

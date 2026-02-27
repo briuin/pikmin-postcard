@@ -211,11 +211,11 @@ function clamp(value: number, min: number, max: number): number {
 
 function getFallbackCropBox(): CropBoxResult {
   return {
-    x: 0.05,
-    y: 0.04,
-    width: 0.9,
-    height: 0.72,
-    confidence: 0.2
+    x: 0.08,
+    y: 0.1,
+    width: 0.84,
+    height: 0.54,
+    confidence: 0.15
   };
 }
 
@@ -256,16 +256,73 @@ function normalizeCropBox(input: CropBoxResult): CropBoxResult {
   };
 }
 
+function isLikelyPostcardPhotoBox(input: CropBoxResult): boolean {
+  const area = input.width * input.height;
+  const aspect = input.width / input.height;
+  const centerY = input.y + input.height / 2;
+
+  if (aspect < 0.9 || aspect > 2.7) {
+    return false;
+  }
+
+  if (area < 0.035) {
+    return false;
+  }
+
+  if (centerY > 0.82) {
+    return false;
+  }
+
+  return true;
+}
+
 function derivePhotoFromCard(card: CropBoxResult): CropBoxResult {
+  const targetAspect = 1.35;
+  const maxWidth = card.width * 0.92;
+  const maxHeight = card.height * 0.66;
+
+  let width = maxWidth;
+  let height = width / targetAspect;
+  if (height > maxHeight) {
+    height = maxHeight;
+    width = height * targetAspect;
+  }
+
+  const x = card.x + (card.width - width) / 2;
+  const y = card.y + card.height * 0.07;
   const candidate = {
-    x: card.x + card.width * 0.04,
-    y: card.y + card.height * 0.03,
-    width: card.width * 0.92,
-    height: card.height * 0.64,
-    confidence: clamp(card.confidence - 0.08, 0.1, 0.95)
+    x,
+    y,
+    width,
+    height,
+    confidence: clamp(card.confidence - 0.1, 0.12, 0.92)
   };
 
   return normalizeCropBox(candidate);
+}
+
+async function detectLandscapePhotoOnlyCrop(mimeType: string, fileBytes: Buffer): Promise<CropBoxResult> {
+  const prompt = [
+    'Find ONLY the postcard photo artwork rectangle.',
+    'Do NOT include phone bezel, status bar, app background gradient, title text, distance text, or any UI.',
+    'If a phone screenshot is shown, choose only the inner landscape image region inside the postcard card.',
+    'The final box must be landscape (width > height).',
+    'Return strict JSON only with schema:',
+    '{ "x": number, "y": number, "width": number, "height": number, "confidence": number }',
+    'x,y are top-left corner in normalized [0,1].',
+    'No markdown and no explanation.'
+  ].join('\n');
+
+  const result = await generateGeminiText({
+    mimeType,
+    fileBytes,
+    prompt,
+    responseMimeType: 'application/json'
+  });
+
+  const parsedJsonText = extractJsonObject(result.text);
+  const parsed = postcardCropSchema.parse(JSON.parse(parsedJsonText));
+  return normalizeCropBox(parsed);
 }
 
 async function detectPostcardCropBox(mimeType: string, fileBytes: Buffer): Promise<CropBoxResult> {
@@ -294,17 +351,28 @@ async function detectPostcardCropBox(mimeType: string, fileBytes: Buffer): Promi
   const parsedJsonText = extractJsonObject(result.text);
   const parsed = postcardCropPairSchema.parse(JSON.parse(parsedJsonText));
   const photo = normalizeCropBox(parsed.photo);
-  const photoArea = photo.width * photo.height;
 
-  if (photo.confidence >= 0.55 && photoArea >= 0.12) {
+  if (photo.confidence >= 0.45 && isLikelyPostcardPhotoBox(photo)) {
     return photo;
   }
 
   if (parsed.card) {
-    return derivePhotoFromCard(parsed.card);
+    const derived = derivePhotoFromCard(normalizeCropBox(parsed.card));
+    if (isLikelyPostcardPhotoBox(derived)) {
+      return derived;
+    }
   }
 
-  return photo;
+  try {
+    const strictPhotoOnly = await detectLandscapePhotoOnlyCrop(mimeType, fileBytes);
+    if (strictPhotoOnly.confidence >= 0.35 && isLikelyPostcardPhotoBox(strictPhotoOnly)) {
+      return strictPhotoOnly;
+    }
+  } catch (error) {
+    console.warn('Secondary landscape-only crop detection failed.', { error });
+  }
+
+  return getFallbackCropBox();
 }
 
 async function buildCroppedPostcardImage(params: {
@@ -415,6 +483,7 @@ async function processDetectionJob(params: {
           title: detection.location.place_guess?.trim() ? `AI: ${detection.location.place_guess}` : 'AI detected postcard',
           notes: 'Auto-created from AI detection upload.',
           imageUrl: postcardImageUrl,
+          originalImageUrl: params.originalImageUrl,
           placeName: detection.location.place_guess,
           latitude: detection.location.latitude,
           longitude: detection.location.longitude,

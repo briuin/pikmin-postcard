@@ -14,6 +14,7 @@ type PostcardRecord = {
   notes: string | null;
   placeName: string | null;
   imageUrl: string | null;
+  originalImageUrl?: string | null;
   latitude: number | null;
   longitude: number | null;
   aiConfidence: number | null;
@@ -64,6 +65,13 @@ type DetectionDraft = {
   locationInput: string;
 };
 
+type CropDraft = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
 type PostcardWorkbenchProps = {
   mode?: 'explore' | 'create' | 'dashboard' | 'full';
 };
@@ -104,6 +112,22 @@ function parseLocationInput(input: string): { latitude: number; longitude: numbe
   }
 
   throw new Error('Location is out of range. Latitude must be within +/-90 and longitude within +/-180.');
+}
+
+function deriveOriginalImageUrl(imageUrl: string | null | undefined): string | null {
+  if (!imageUrl) {
+    return null;
+  }
+
+  if (imageUrl.includes('/uploads/original/')) {
+    return imageUrl;
+  }
+
+  if (imageUrl.includes('/uploads/postcard/')) {
+    return imageUrl.replace('/uploads/postcard/', '/uploads/original/');
+  }
+
+  return null;
 }
 
 export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
@@ -151,6 +175,15 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
   const [jobDrafts, setJobDrafts] = useState<Record<string, DetectionDraft>>({});
   const [savingJobId, setSavingJobId] = useState<string | null>(null);
   const [deletingPostcardId, setDeletingPostcardId] = useState<string | null>(null);
+  const [editingCropPostcardId, setEditingCropPostcardId] = useState<string | null>(null);
+  const [editingCropOriginalUrl, setEditingCropOriginalUrl] = useState<string | null>(null);
+  const [cropDraft, setCropDraft] = useState<CropDraft>({
+    x: 0.08,
+    y: 0.1,
+    width: 0.84,
+    height: 0.54
+  });
+  const [savingCropPostcardId, setSavingCropPostcardId] = useState<string | null>(null);
   const [isLoadingJobs, setIsLoadingJobs] = useState(false);
   const [isLoadingMine, setIsLoadingMine] = useState(false);
   const [dashboardStatus, setDashboardStatus] = useState('');
@@ -674,6 +707,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
           title: draft.title.trim(),
           notes: draft.notes.trim() ? draft.notes.trim() : undefined,
           imageUrl: job.imageUrl,
+          originalImageUrl: deriveOriginalImageUrl(job.imageUrl) ?? undefined,
           placeName: job.placeGuess ?? undefined,
           latitude: coords.latitude,
           longitude: coords.longitude,
@@ -700,6 +734,84 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
     }
   }
 
+  function openCropEditor(postcard: PostcardRecord) {
+    const originalUrl = postcard.originalImageUrl ?? deriveOriginalImageUrl(postcard.imageUrl);
+    if (!originalUrl) {
+      setDashboardStatus('Original upload image is not available for this postcard.');
+      return;
+    }
+
+    setEditingCropPostcardId(postcard.id);
+    setEditingCropOriginalUrl(originalUrl);
+    setCropDraft({
+      x: 0.08,
+      y: 0.1,
+      width: 0.84,
+      height: 0.54
+    });
+    setDashboardStatus('');
+  }
+
+  function closeCropEditor() {
+    setEditingCropPostcardId(null);
+    setEditingCropOriginalUrl(null);
+  }
+
+  function updateCropDraftValue(field: keyof CropDraft, value: number) {
+    setCropDraft((current) => {
+      const next = { ...current, [field]: value };
+
+      if (field === 'x') {
+        next.x = Math.min(next.x, 1 - next.width);
+      }
+      if (field === 'y') {
+        next.y = Math.min(next.y, 1 - next.height);
+      }
+      if (field === 'width') {
+        next.width = Math.min(next.width, 1 - next.x);
+      }
+      if (field === 'height') {
+        next.height = Math.min(next.height, 1 - next.y);
+      }
+
+      next.x = Math.max(0, next.x);
+      next.y = Math.max(0, next.y);
+      next.width = Math.max(0.05, next.width);
+      next.height = Math.max(0.05, next.height);
+      return next;
+    });
+  }
+
+  async function saveCropEdit(postcardId: string) {
+    if (!ensureAuthenticated()) {
+      return;
+    }
+
+    setSavingCropPostcardId(postcardId);
+    setDashboardStatus('Saving crop...');
+
+    try {
+      const response = await fetch(`/api/postcards/${postcardId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ crop: cropDraft })
+      });
+
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error ?? 'Failed to save crop.');
+      }
+
+      await Promise.all([loadDashboardData(), loadPublicPostcards()]);
+      closeCropEditor();
+      setDashboardStatus('Crop updated successfully.');
+    } catch (error) {
+      setDashboardStatus(error instanceof Error ? error.message : 'Unknown crop edit error.');
+    } finally {
+      setSavingCropPostcardId(null);
+    }
+  }
+
   async function softDeletePostcard(postcard: PostcardRecord) {
     if (!ensureAuthenticated()) {
       return;
@@ -723,6 +835,9 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
         throw new Error(payload.error ?? 'Failed to remove postcard.');
       }
 
+      if (editingCropPostcardId === postcard.id) {
+        closeCropEditor();
+      }
       setDashboardStatus('Postcard removed (soft delete).');
       await Promise.all([loadDashboardData(), loadPublicPostcards()]);
     } catch (error) {
@@ -1124,14 +1239,107 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
                       <small>{postcard.latitude.toFixed(6)}, {postcard.longitude.toFixed(6)}</small>
                     ) : null}
                     {postcard.notes ? <p>{postcard.notes}</p> : null}
-                    <button
-                      type="button"
-                      className="action-button"
-                      onClick={() => void softDeletePostcard(postcard)}
-                      disabled={deletingPostcardId === postcard.id}
-                    >
-                      {deletingPostcardId === postcard.id ? 'Removing...' : 'Remove (Soft Delete)'}
-                    </button>
+                    <div className="chip-row">
+                      <button
+                        type="button"
+                        className="action-button"
+                        onClick={() => openCropEditor(postcard)}
+                        disabled={savingCropPostcardId === postcard.id || deletingPostcardId === postcard.id}
+                      >
+                        {editingCropPostcardId === postcard.id ? 'Editing Crop' : 'Edit Crop'}
+                      </button>
+                      <button
+                        type="button"
+                        className="action-button"
+                        onClick={() => void softDeletePostcard(postcard)}
+                        disabled={deletingPostcardId === postcard.id || savingCropPostcardId === postcard.id}
+                      >
+                        {deletingPostcardId === postcard.id ? 'Removing...' : 'Remove (Soft Delete)'}
+                      </button>
+                    </div>
+                    {editingCropPostcardId === postcard.id && editingCropOriginalUrl ? (
+                      <div className="crop-editor">
+                        <strong>Crop Editor (Original Upload)</strong>
+                        <small>Adjust the box to match the postcard photo area, then save.</small>
+                        <div className="crop-preview">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={editingCropOriginalUrl} alt="Original upload for crop editing" className="crop-preview-image" />
+                          <div
+                            className="crop-preview-box"
+                            style={{
+                              left: `${cropDraft.x * 100}%`,
+                              top: `${cropDraft.y * 100}%`,
+                              width: `${cropDraft.width * 100}%`,
+                              height: `${cropDraft.height * 100}%`
+                            }}
+                          />
+                        </div>
+                        <div className="crop-slider-grid">
+                          <label>
+                            Left ({Math.round(cropDraft.x * 100)}%)
+                            <input
+                              type="range"
+                              min={0}
+                              max={Math.max(0, 1 - cropDraft.width)}
+                              step={0.005}
+                              value={cropDraft.x}
+                              onChange={(event) => updateCropDraftValue('x', Number(event.target.value))}
+                            />
+                          </label>
+                          <label>
+                            Top ({Math.round(cropDraft.y * 100)}%)
+                            <input
+                              type="range"
+                              min={0}
+                              max={Math.max(0, 1 - cropDraft.height)}
+                              step={0.005}
+                              value={cropDraft.y}
+                              onChange={(event) => updateCropDraftValue('y', Number(event.target.value))}
+                            />
+                          </label>
+                          <label>
+                            Width ({Math.round(cropDraft.width * 100)}%)
+                            <input
+                              type="range"
+                              min={0.05}
+                              max={Math.max(0.05, 1 - cropDraft.x)}
+                              step={0.005}
+                              value={cropDraft.width}
+                              onChange={(event) => updateCropDraftValue('width', Number(event.target.value))}
+                            />
+                          </label>
+                          <label>
+                            Height ({Math.round(cropDraft.height * 100)}%)
+                            <input
+                              type="range"
+                              min={0.05}
+                              max={Math.max(0.05, 1 - cropDraft.y)}
+                              step={0.005}
+                              value={cropDraft.height}
+                              onChange={(event) => updateCropDraftValue('height', Number(event.target.value))}
+                            />
+                          </label>
+                        </div>
+                        <div className="chip-row">
+                          <button
+                            type="button"
+                            className="action-button"
+                            onClick={() => void saveCropEdit(postcard.id)}
+                            disabled={savingCropPostcardId === postcard.id}
+                          >
+                            {savingCropPostcardId === postcard.id ? 'Saving Crop...' : 'Save Crop'}
+                          </button>
+                          <button
+                            type="button"
+                            className="action-button"
+                            onClick={closeCropEditor}
+                            disabled={savingCropPostcardId === postcard.id}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
                   </article>
                 ))}
               </div>
