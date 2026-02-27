@@ -1,5 +1,6 @@
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import sharp from 'sharp';
 import { z } from 'zod';
 import { auth } from '@/auth';
@@ -37,6 +38,18 @@ function deriveOriginalImageUrl(imageUrl: string | null | undefined): string | n
   }
 
   return null;
+}
+
+function hasMissingOriginalImageColumnError(error: unknown): boolean {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) {
+    return false;
+  }
+  if (error.code !== 'P2022') {
+    return false;
+  }
+
+  const column = String((error.meta as { column?: string } | undefined)?.column ?? '');
+  return column.includes('originalImageUrl');
 }
 
 async function uploadJpegToS3(bytes: Uint8Array, key: string): Promise<string> {
@@ -85,18 +98,38 @@ export async function PATCH(request: Request, context: RouteContext) {
   try {
     const payload = cropUpdateSchema.parse(await request.json());
 
-    const postcard = await prisma.postcard.findFirst({
-      where: {
-        id,
-        userId,
-        deletedAt: null
-      },
-      select: {
-        id: true,
-        imageUrl: true,
-        originalImageUrl: true
+    let postcard: { id: string; imageUrl: string | null; originalImageUrl: string | null } | null = null;
+    try {
+      postcard = await prisma.postcard.findFirst({
+        where: {
+          id,
+          userId,
+          deletedAt: null
+        },
+        select: {
+          id: true,
+          imageUrl: true,
+          originalImageUrl: true
+        }
+      });
+    } catch (error) {
+      if (!hasMissingOriginalImageColumnError(error)) {
+        throw error;
       }
-    });
+
+      const fallback = await prisma.postcard.findFirst({
+        where: {
+          id,
+          userId,
+          deletedAt: null
+        },
+        select: {
+          id: true,
+          imageUrl: true
+        }
+      });
+      postcard = fallback ? { ...fallback, originalImageUrl: null } : null;
+    }
 
     if (!postcard) {
       return NextResponse.json({ error: 'Postcard not found.' }, { status: 404 });
@@ -153,13 +186,25 @@ export async function PATCH(request: Request, context: RouteContext) {
     const postcardObjectKey = buildObjectKey(`recrop-${id}.jpg`).replace(/^postcards\//, 'uploads/postcard/');
     const postcardImageUrl = await uploadJpegToS3(new Uint8Array(croppedBytes), postcardObjectKey);
 
-    await prisma.postcard.update({
-      where: { id: postcard.id },
-      data: {
-        imageUrl: postcardImageUrl,
-        originalImageUrl
+    try {
+      await prisma.postcard.update({
+        where: { id: postcard.id },
+        data: {
+          imageUrl: postcardImageUrl,
+          originalImageUrl
+        }
+      });
+    } catch (error) {
+      if (!hasMissingOriginalImageColumnError(error)) {
+        throw error;
       }
-    });
+      await prisma.postcard.update({
+        where: { id: postcard.id },
+        data: {
+          imageUrl: postcardImageUrl
+        }
+      });
+    }
 
     return NextResponse.json(
       {

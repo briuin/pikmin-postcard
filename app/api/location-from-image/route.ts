@@ -1,4 +1,4 @@
-import { DetectionJobStatus } from '@prisma/client';
+import { DetectionJobStatus, Prisma } from '@prisma/client';
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { NextResponse } from 'next/server';
 import sharp from 'sharp';
@@ -375,6 +375,18 @@ async function detectPostcardCropBox(mimeType: string, fileBytes: Buffer): Promi
   return getFallbackCropBox();
 }
 
+function hasMissingOriginalImageColumnError(error: unknown): boolean {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) {
+    return false;
+  }
+  if (error.code !== 'P2022') {
+    return false;
+  }
+
+  const column = String((error.meta as { column?: string } | undefined)?.column ?? '');
+  return column.includes('originalImageUrl');
+}
+
 async function buildCroppedPostcardImage(params: {
   mimeType: string;
   fileBytes: Buffer;
@@ -477,24 +489,48 @@ async function processDetectionJob(params: {
     });
 
     if (!existingPostcard) {
-      await prisma.postcard.create({
-        data: {
-          userId: params.userId,
-          title: detection.location.place_guess?.trim() ? `AI: ${detection.location.place_guess}` : 'AI detected postcard',
-          notes: 'Auto-created from AI detection upload.',
-          imageUrl: postcardImageUrl,
-          originalImageUrl: params.originalImageUrl,
-          placeName: detection.location.place_guess,
-          latitude: detection.location.latitude,
-          longitude: detection.location.longitude,
-          aiLatitude: detection.location.latitude,
-          aiLongitude: detection.location.longitude,
-          aiConfidence: detection.location.confidence,
-          aiPlaceGuess: detection.location.place_guess,
-          locationStatus: 'AUTO',
-          locationModelVersion: detection.modelVersion
+      try {
+        await prisma.postcard.create({
+          data: {
+            userId: params.userId,
+            title: detection.location.place_guess?.trim() ? `AI: ${detection.location.place_guess}` : 'AI detected postcard',
+            notes: 'Auto-created from AI detection upload.',
+            imageUrl: postcardImageUrl,
+            originalImageUrl: params.originalImageUrl,
+            placeName: detection.location.place_guess,
+            latitude: detection.location.latitude,
+            longitude: detection.location.longitude,
+            aiLatitude: detection.location.latitude,
+            aiLongitude: detection.location.longitude,
+            aiConfidence: detection.location.confidence,
+            aiPlaceGuess: detection.location.place_guess,
+            locationStatus: 'AUTO',
+            locationModelVersion: detection.modelVersion
+          }
+        });
+      } catch (error) {
+        if (!hasMissingOriginalImageColumnError(error)) {
+          throw error;
         }
-      });
+
+        await prisma.postcard.create({
+          data: {
+            userId: params.userId,
+            title: detection.location.place_guess?.trim() ? `AI: ${detection.location.place_guess}` : 'AI detected postcard',
+            notes: 'Auto-created from AI detection upload.',
+            imageUrl: postcardImageUrl,
+            placeName: detection.location.place_guess,
+            latitude: detection.location.latitude,
+            longitude: detection.location.longitude,
+            aiLatitude: detection.location.latitude,
+            aiLongitude: detection.location.longitude,
+            aiConfidence: detection.location.confidence,
+            aiPlaceGuess: detection.location.place_guess,
+            locationStatus: 'AUTO',
+            locationModelVersion: detection.modelVersion
+          }
+        });
+      }
     }
   } catch (error) {
     console.error('Detection job failed', { jobId: params.jobId, error });

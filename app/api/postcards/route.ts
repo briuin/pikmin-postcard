@@ -43,9 +43,73 @@ function maskEmail(email: string | null | undefined): string | null {
   return `${maskedLocal}@${maskedRoot}.${tld}`;
 }
 
+function deriveOriginalImageUrl(imageUrl: string | null | undefined): string | null {
+  if (!imageUrl) {
+    return null;
+  }
+
+  if (imageUrl.includes('/uploads/original/')) {
+    return imageUrl;
+  }
+
+  if (imageUrl.includes('/uploads/postcard/')) {
+    return imageUrl.replace('/uploads/postcard/', '/uploads/original/');
+  }
+
+  return null;
+}
+
+function hasMissingOriginalImageColumnError(error: unknown): boolean {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) {
+    return false;
+  }
+  if (error.code !== 'P2022') {
+    return false;
+  }
+
+  const column = String((error.meta as { column?: string } | undefined)?.column ?? '');
+  return column.includes('originalImageUrl');
+}
+
+const postcardListSelect = {
+  id: true,
+  userId: true,
+  title: true,
+  notes: true,
+  imageUrl: true,
+  capturedAt: true,
+  city: true,
+  country: true,
+  placeName: true,
+  latitude: true,
+  longitude: true,
+  aiLatitude: true,
+  aiLongitude: true,
+  aiConfidence: true,
+  aiPlaceGuess: true,
+  likeCount: true,
+  dislikeCount: true,
+  wrongLocationReports: true,
+  locationStatus: true,
+  locationModelVersion: true,
+  deletedAt: true,
+  createdAt: true,
+  updatedAt: true,
+  user: {
+    select: { email: true }
+  },
+  tags: {
+    include: {
+      tag: true
+    }
+  }
+} satisfies Prisma.PostcardSelect;
+
 function serializePostcards(
   postcards: Array<{
     user?: { email: string } | null;
+    imageUrl?: string | null;
+    originalImageUrl?: string | null;
     [key: string]: unknown;
   }>,
   options: { includeOriginalImageUrl?: boolean } = {}
@@ -55,7 +119,7 @@ function serializePostcards(
     const { user, originalImageUrl, ...rest } = postcard;
     return {
       ...rest,
-      ...(includeOriginalImageUrl ? { originalImageUrl } : {}),
+      ...(includeOriginalImageUrl ? { originalImageUrl: originalImageUrl ?? deriveOriginalImageUrl(postcard.imageUrl) } : {}),
       uploaderMasked: maskEmail(user?.email)
     };
   });
@@ -138,22 +202,31 @@ export async function GET(request: Request) {
       return NextResponse.json([], { status: 200 });
     }
 
-    const postcards = await prisma.postcard.findMany({
-      where: {
-        userId: user.id,
-        deletedAt: null
-      },
-      orderBy: { createdAt: 'desc' },
-      include: {
-        user: {
-          select: { email: true }
+    let postcards;
+    try {
+      postcards = await prisma.postcard.findMany({
+        where: {
+          userId: user.id,
+          deletedAt: null
         },
-        tags: {
-          include: { tag: true }
-        }
-      },
-      take: 200
-    });
+        orderBy: { createdAt: 'desc' },
+        select: postcardListSelect,
+        take: 200
+      });
+    } catch (error) {
+      if (!hasMissingOriginalImageColumnError(error)) {
+        throw error;
+      }
+      postcards = await prisma.postcard.findMany({
+        where: {
+          userId: user.id,
+          deletedAt: null
+        },
+        orderBy: { createdAt: 'desc' },
+        select: postcardListSelect,
+        take: 200
+      });
+    }
 
     return NextResponse.json(serializePostcards(postcards, { includeOriginalImageUrl: true }), { status: 200 });
   }
@@ -265,24 +338,33 @@ export async function GET(request: Request) {
             ];
 
   const where = { AND: whereAnd };
-  const [postcards, total] = await Promise.all([
-    prisma.postcard.findMany({
-      where,
-      orderBy,
-      include: {
-        user: {
-          select: { email: true }
-        },
-        tags: {
-          include: {
-            tag: true
-          }
-        }
-      },
-      take: query.limit + 1
-    }),
-    prisma.postcard.count({ where })
-  ]);
+  let postcards;
+  let total;
+  try {
+    [postcards, total] = await Promise.all([
+      prisma.postcard.findMany({
+        where,
+        orderBy,
+        select: postcardListSelect,
+        take: query.limit + 1
+      }),
+      prisma.postcard.count({ where })
+    ]);
+  } catch (error) {
+    if (!hasMissingOriginalImageColumnError(error)) {
+      throw error;
+    }
+
+    [postcards, total] = await Promise.all([
+      prisma.postcard.findMany({
+        where,
+        orderBy,
+        select: postcardListSelect,
+        take: query.limit + 1
+      }),
+      prisma.postcard.count({ where })
+    ]);
+  }
 
   const hasMore = postcards.length > query.limit;
   const items = hasMore ? postcards.slice(0, query.limit) : postcards;
