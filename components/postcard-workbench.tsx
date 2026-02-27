@@ -764,6 +764,7 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
       {showExplore ? (
         <ExploreSection
           text={text}
+          isAuthenticated={isAuthenticated}
           visiblePostcards={visiblePostcards}
           publicMarkerCount={publicMarkers.length}
           visibleTotal={visibleTotal}
@@ -780,6 +781,7 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
           onSortChange={setExploreSort}
           onLimitChange={setExploreLimit}
           onSubmitFeedback={(postcardId, action) => void submitExploreFeedback(postcardId, action)}
+          onSignIn={() => signIn('google')}
           mapNode={
             <OpenMap
               className={exploreMapClassName}

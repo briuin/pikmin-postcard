@@ -44,8 +44,9 @@ export async function PATCH(request: Request, context: RouteContext) {
       return NextResponse.json({ error: 'Postcard not found.' }, { status: 404 });
     }
 
-    const originalImageUrl = postcard.originalImageUrl ?? deriveOriginalImageUrl(postcard.imageUrl);
-    const sourceImageUrl = originalImageUrl ?? postcard.imageUrl;
+    const resolvedOriginalImageUrl =
+      postcard.originalImageUrl ?? deriveOriginalImageUrl(postcard.imageUrl);
+    const sourceImageUrl = resolvedOriginalImageUrl ?? postcard.imageUrl;
     if (!sourceImageUrl) {
       return NextResponse.json(
         { error: 'No image source is available for crop edit.' },
@@ -67,14 +68,14 @@ export async function PATCH(request: Request, context: RouteContext) {
     await updatePostcardImageWithOriginalFallback({
       postcardId: postcard.id,
       postcardImageUrl,
-      originalImageUrl: originalImageUrl ?? sourceImageUrl
+      originalImageUrl: resolvedOriginalImageUrl
     });
 
     return NextResponse.json(
       {
         ok: true,
         imageUrl: postcardImageUrl,
-        originalImageUrl: originalImageUrl ?? sourceImageUrl
+        originalImageUrl: resolvedOriginalImageUrl ?? null
       },
       { status: 200 }
     );

@@ -111,15 +111,21 @@ export async function recropPostcardAndUpload(params: {
 export async function updatePostcardImageWithOriginalFallback(params: {
   postcardId: string;
   postcardImageUrl: string;
-  originalImageUrl: string;
+  originalImageUrl?: string | null;
 }): Promise<void> {
-  try {
-    await prisma.postcard.update({
-      where: { id: params.postcardId },
-      data: {
+  const dataWithOriginal = params.originalImageUrl
+    ? {
         imageUrl: params.postcardImageUrl,
         originalImageUrl: params.originalImageUrl
       }
+    : {
+        imageUrl: params.postcardImageUrl
+      };
+
+  try {
+    await prisma.postcard.update({
+      where: { id: params.postcardId },
+      data: dataWithOriginal
     });
   } catch (error) {
     if (!hasMissingOriginalImageColumnError(error)) {

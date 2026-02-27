@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
+import { FeedbackAction, Prisma } from '@prisma/client';
 import { z } from 'zod';
-import { getAuthenticatedUserEmail } from '@/lib/api-auth';
+import { getAuthenticatedUserId } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 
 const feedbackSchema = z.object({
@@ -12,8 +13,8 @@ type RouteContext = {
 };
 
 export async function POST(request: Request, context: RouteContext) {
-  const userEmail = await getAuthenticatedUserEmail();
-  if (!userEmail) {
+  const userId = await getAuthenticatedUserId({ createIfMissing: true });
+  if (!userId) {
     return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   }
 
@@ -25,6 +26,13 @@ export async function POST(request: Request, context: RouteContext) {
   try {
     const body = feedbackSchema.parse(await request.json());
 
+    const action =
+      body.action === 'like'
+        ? FeedbackAction.LIKE
+        : body.action === 'dislike'
+          ? FeedbackAction.DISLIKE
+          : FeedbackAction.REPORT_WRONG_LOCATION;
+
     const updateData =
       body.action === 'like'
         ? { likeCount: { increment: 1 } }
@@ -32,30 +40,54 @@ export async function POST(request: Request, context: RouteContext) {
           ? { dislikeCount: { increment: 1 } }
           : { wrongLocationReports: { increment: 1 } };
 
-    const result = await prisma.postcard.updateMany({
-      where: {
-        id,
-        deletedAt: null
-      },
-      data: updateData
+    const postcard = await prisma.$transaction(async (tx) => {
+      const exists = await tx.postcard.findFirst({
+        where: {
+          id,
+          deletedAt: null
+        },
+        select: { id: true }
+      });
+
+      if (!exists) {
+        return null;
+      }
+
+      await tx.postcardFeedback.create({
+        data: {
+          postcardId: id,
+          userId,
+          action
+        }
+      });
+
+      return tx.postcard.update({
+        where: { id },
+        data: updateData,
+        select: {
+          id: true,
+          likeCount: true,
+          dislikeCount: true,
+          wrongLocationReports: true
+        }
+      });
     });
 
-    if (result.count === 0) {
+    if (!postcard) {
       return NextResponse.json({ error: 'Postcard not found.' }, { status: 404 });
     }
 
-    const postcard = await prisma.postcard.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        likeCount: true,
-        dislikeCount: true,
-        wrongLocationReports: true
-      }
-    });
-
     return NextResponse.json(postcard, { status: 200 });
   } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return NextResponse.json(
+        {
+          error: 'You have already submitted this feedback action for this postcard.'
+        },
+        { status: 409 }
+      );
+    }
+
     return NextResponse.json(
       {
         error: 'Failed to submit feedback.',

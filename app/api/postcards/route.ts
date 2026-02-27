@@ -1,4 +1,4 @@
-import { LocationStatus } from '@prisma/client';
+import { FeedbackAction, LocationStatus } from '@prisma/client';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import {
@@ -30,9 +30,46 @@ const postcardCreateSchema = z.object({
   locationModelVersion: z.string().max(100).optional()
 });
 
+function attachViewerFeedback(
+  postcards: Array<{ id: string; [key: string]: unknown }>,
+  feedbackRows: Array<{ postcardId: string; action: FeedbackAction }>
+) {
+  if (postcards.length === 0 || feedbackRows.length === 0) {
+    return postcards.map((postcard) => ({
+      ...postcard,
+      viewerFeedback: {
+        liked: false,
+        disliked: false,
+        reportedWrongLocation: false
+      }
+    }));
+  }
+
+  const feedbackMap = new Map<string, Set<FeedbackAction>>();
+  for (const row of feedbackRows) {
+    if (!feedbackMap.has(row.postcardId)) {
+      feedbackMap.set(row.postcardId, new Set());
+    }
+    feedbackMap.get(row.postcardId)?.add(row.action);
+  }
+
+  return postcards.map((postcard) => {
+    const actions = feedbackMap.get(postcard.id) ?? new Set<FeedbackAction>();
+    return {
+      ...postcard,
+      viewerFeedback: {
+        liked: actions.has(FeedbackAction.LIKE),
+        disliked: actions.has(FeedbackAction.DISLIKE),
+        reportedWrongLocation: actions.has(FeedbackAction.REPORT_WRONG_LOCATION)
+      }
+    };
+  });
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const mineOnly = url.searchParams.get('mine') === '1';
+  const viewerUserId = await getAuthenticatedUserId();
 
   if (mineOnly) {
     const userEmail = await getAuthenticatedUserEmail();
@@ -55,7 +92,24 @@ export async function GET(request: Request) {
       take: 200
     });
 
-    return NextResponse.json(serializePostcards(postcards, { includeOriginalImageUrl: true }), { status: 200 });
+    const serialized = serializePostcards(postcards, { includeOriginalImageUrl: true });
+    const feedbackRows =
+      viewerUserId && serialized.length > 0
+        ? await prisma.postcardFeedback.findMany({
+            where: {
+              userId: viewerUserId,
+              postcardId: {
+                in: serialized.map((item) => String(item.id))
+              }
+            },
+            select: {
+              postcardId: true,
+              action: true
+            }
+          })
+        : [];
+
+    return NextResponse.json(attachViewerFeedback(serialized, feedbackRows), { status: 200 });
   }
 
   const queryParse = parsePublicQuery(url);
@@ -84,10 +138,26 @@ export async function GET(request: Request) {
 
   const hasMore = postcards.length > query.limit;
   const items = hasMore ? postcards.slice(0, query.limit) : postcards;
+  const serialized = serializePostcards(items);
+  const feedbackRows =
+    viewerUserId && serialized.length > 0
+      ? await prisma.postcardFeedback.findMany({
+          where: {
+            userId: viewerUserId,
+            postcardId: {
+              in: serialized.map((item) => String(item.id))
+            }
+          },
+          select: {
+            postcardId: true,
+            action: true
+          }
+        })
+      : [];
 
   return NextResponse.json(
     {
-      items: serializePostcards(items),
+      items: attachViewerFeedback(serialized, feedbackRows),
       total,
       hasMore,
       limit: query.limit,

@@ -43,6 +43,7 @@ export const postcardListSelectWithOriginalImageUrl = {
 export const postcardListSelectWithoutOriginalImageUrl = postcardListSelectBase satisfies Prisma.PostcardSelect;
 
 type SerializablePostcard = {
+  id: string;
   user?: { email: string } | null;
   imageUrl?: string | null;
   originalImageUrl?: string | null;

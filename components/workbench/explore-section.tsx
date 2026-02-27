@@ -7,6 +7,7 @@ import type { ExploreSort, PostcardRecord } from '@/components/workbench/types';
 
 type ExploreSectionProps = {
   text: WorkbenchText;
+  isAuthenticated: boolean;
   visiblePostcards: PostcardRecord[];
   publicMarkerCount: number;
   visibleTotal: number;
@@ -23,11 +24,13 @@ type ExploreSectionProps = {
   onSortChange: (value: ExploreSort) => void;
   onLimitChange: (value: number) => void;
   onSubmitFeedback: (postcardId: string, action: 'like' | 'dislike' | 'report_wrong_location') => void;
+  onSignIn: () => void;
   mapNode: ReactNode;
 };
 
 export function ExploreSection({
   text,
+  isAuthenticated,
   visiblePostcards,
   publicMarkerCount,
   visibleTotal,
@@ -44,6 +47,7 @@ export function ExploreSection({
   onSortChange,
   onLimitChange,
   onSubmitFeedback,
+  onSignIn,
   mapNode
 }: ExploreSectionProps) {
   const [selectedPostcardId, setSelectedPostcardId] = useState<string | null>(null);
@@ -289,29 +293,68 @@ export function ExploreSection({
             ) : null}
 
             <div className="flex flex-wrap gap-1.5">
+              {!isAuthenticated ? (
+                <button
+                  type="button"
+                  className={actionButtonClassName}
+                  onClick={onSignIn}
+                >
+                  {text.buttonSignInGoogle}
+                </button>
+              ) : null}
               <button
                 type="button"
                 className={actionButtonClassName}
                 onClick={() => onSubmitFeedback(selectedPostcard.id, 'like')}
-                disabled={feedbackPendingKey === `${selectedPostcard.id}:like`}
+                disabled={
+                  !isAuthenticated ||
+                  selectedPostcard.viewerFeedback?.liked === true ||
+                  feedbackPendingKey === `${selectedPostcard.id}:like`
+                }
               >
-                {feedbackPendingKey === `${selectedPostcard.id}:like` ? '...' : text.exploreVoteUp}
+                {!isAuthenticated
+                  ? text.exploreVoteUp
+                  : selectedPostcard.viewerFeedback?.liked
+                    ? text.exploreVoteDone
+                    : feedbackPendingKey === `${selectedPostcard.id}:like`
+                      ? '...'
+                      : text.exploreVoteUp}
               </button>
               <button
                 type="button"
                 className={actionButtonClassName}
                 onClick={() => onSubmitFeedback(selectedPostcard.id, 'dislike')}
-                disabled={feedbackPendingKey === `${selectedPostcard.id}:dislike`}
+                disabled={
+                  !isAuthenticated ||
+                  selectedPostcard.viewerFeedback?.disliked === true ||
+                  feedbackPendingKey === `${selectedPostcard.id}:dislike`
+                }
               >
-                {feedbackPendingKey === `${selectedPostcard.id}:dislike` ? '...' : text.exploreVoteDown}
+                {!isAuthenticated
+                  ? text.exploreVoteDown
+                  : selectedPostcard.viewerFeedback?.disliked
+                    ? text.exploreVoteDone
+                    : feedbackPendingKey === `${selectedPostcard.id}:dislike`
+                      ? '...'
+                      : text.exploreVoteDown}
               </button>
               <button
                 type="button"
                 className={actionButtonWarnClassName}
                 onClick={() => onSubmitFeedback(selectedPostcard.id, 'report_wrong_location')}
-                disabled={feedbackPendingKey === `${selectedPostcard.id}:report_wrong_location`}
+                disabled={
+                  !isAuthenticated ||
+                  selectedPostcard.viewerFeedback?.reportedWrongLocation === true ||
+                  feedbackPendingKey === `${selectedPostcard.id}:report_wrong_location`
+                }
               >
-                {feedbackPendingKey === `${selectedPostcard.id}:report_wrong_location` ? '...' : text.exploreFlag}
+                {!isAuthenticated
+                  ? text.exploreFlag
+                  : selectedPostcard.viewerFeedback?.reportedWrongLocation
+                    ? text.exploreVoteDone
+                    : feedbackPendingKey === `${selectedPostcard.id}:report_wrong_location`
+                      ? '...'
+                      : text.exploreFlag}
               </button>
             </div>
           </article>

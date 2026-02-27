@@ -17,6 +17,11 @@ export type PostcardRecord = {
   locationStatus: 'AUTO' | 'USER_CONFIRMED' | 'MANUAL';
   locationModelVersion: string | null;
   uploaderMasked?: string | null;
+  viewerFeedback?: {
+    liked: boolean;
+    disliked: boolean;
+    reportedWrongLocation: boolean;
+  };
   createdAt: string;
 };
 
