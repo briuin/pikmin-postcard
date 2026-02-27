@@ -1,7 +1,11 @@
 import { LocationStatus } from '@prisma/client';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { auth } from '@/auth';
+import {
+  getAuthenticatedUserEmail,
+  getAuthenticatedUserId,
+  getUserIdByEmail
+} from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { serializePostcards } from '@/lib/postcards/list';
 import { buildPublicOrderBy, buildPublicWhere, parsePublicQuery } from '@/lib/postcards/query';
@@ -31,24 +35,20 @@ export async function GET(request: Request) {
   const mineOnly = url.searchParams.get('mine') === '1';
 
   if (mineOnly) {
-    const session = await auth();
-    const userEmail = session?.user?.email;
+    const userEmail = await getAuthenticatedUserEmail();
     if (!userEmail) {
       return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: userEmail },
-      select: { id: true }
-    });
+    const userId = await getUserIdByEmail(userEmail);
 
-    if (!user) {
+    if (!userId) {
       return NextResponse.json([], { status: 200 });
     }
 
     const postcards = await findPostcardsForList({
       where: {
-        userId: user.id,
+        userId,
         deletedAt: null
       },
       orderBy: { createdAt: 'desc' },
@@ -99,22 +99,15 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const session = await auth();
-    const userEmail = session?.user?.email;
-    if (!userEmail) {
+    const userId = await getAuthenticatedUserId({ createIfMissing: true });
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
     }
 
     const body = postcardCreateSchema.parse(await request.json());
 
-    const user = await prisma.user.upsert({
-      where: { email: userEmail },
-      update: {},
-      create: { email: userEmail }
-    });
-
     const baseData = {
-      userId: user.id,
+      userId,
       title: body.title,
       notes: body.notes,
       imageUrl: body.imageUrl,

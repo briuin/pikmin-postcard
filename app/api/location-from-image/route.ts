@@ -1,6 +1,10 @@
 import { DetectionJobStatus } from '@prisma/client';
 import { NextResponse } from 'next/server';
-import { auth } from '@/auth';
+import {
+  getAuthenticatedUserEmail,
+  getAuthenticatedUserId,
+  getUserIdByEmail
+} from '@/lib/api-auth';
 import { buildCroppedPostcardImage } from '@/lib/location-detection/crop';
 import { detectWithGemini } from '@/lib/location-detection/gemini';
 import { hasMissingOriginalImageColumnError } from '@/lib/postcards/shared';
@@ -154,23 +158,19 @@ async function processDetectionJob(params: {
 }
 
 export async function GET() {
-  const session = await auth();
-  const userEmail = session?.user?.email;
+  const userEmail = await getAuthenticatedUserEmail();
   if (!userEmail) {
     return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   }
 
-  const user = await prisma.user.findUnique({
-    where: { email: userEmail },
-    select: { id: true }
-  });
+  const userId = await getUserIdByEmail(userEmail);
 
-  if (!user) {
+  if (!userId) {
     return NextResponse.json([], { status: 200 });
   }
 
   const jobs = await prisma.detectionJob.findMany({
-    where: { userId: user.id },
+    where: { userId },
     orderBy: { createdAt: 'desc' },
     take: 200
   });
@@ -179,9 +179,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const session = await auth();
-  const userEmail = session?.user?.email;
-  if (!userEmail) {
+  const userId = await getAuthenticatedUserId({ createIfMissing: true });
+  if (!userId) {
     return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   }
 
@@ -194,12 +193,6 @@ export async function POST(request: Request) {
     }
 
     assertSupportedImage(file);
-
-    const user = await prisma.user.upsert({
-      where: { email: userEmail },
-      update: {},
-      create: { email: userEmail }
-    });
 
     const fileBytes = Buffer.from(await file.arrayBuffer());
     const baseKey = buildObjectKey(file.name);
@@ -214,7 +207,7 @@ export async function POST(request: Request) {
 
     const job = await prisma.detectionJob.create({
       data: {
-        userId: user.id,
+        userId,
         imageUrl: originalImageUrl,
         status: DetectionJobStatus.QUEUED
       }
@@ -222,7 +215,7 @@ export async function POST(request: Request) {
 
     void processDetectionJob({
       jobId: job.id,
-      userId: user.id,
+      userId,
       mimeType: file.type,
       fileBytes,
       originalImageUrl,

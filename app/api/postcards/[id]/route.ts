@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { auth } from '@/auth';
+import { getAuthenticatedUserId } from '@/lib/api-auth';
 import {
   findPostcardCropSource,
   recropPostcardAndUpload,
@@ -21,21 +21,6 @@ const cropUpdateSchema = z.object({
     height: z.number().min(0.01).max(1)
   })
 });
-
-async function getAuthenticatedUserId(): Promise<string | null> {
-  const session = await auth();
-  const userEmail = session?.user?.email;
-  if (!userEmail) {
-    return null;
-  }
-
-  const user = await prisma.user.findUnique({
-    where: { email: userEmail },
-    select: { id: true }
-  });
-
-  return user?.id ?? null;
-}
 
 export async function PATCH(request: Request, context: RouteContext) {
   const userId = await getAuthenticatedUserId();

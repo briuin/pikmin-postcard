@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
-import { auth } from '@/auth';
+import { getAuthenticatedUserEmail } from '@/lib/api-auth';
 import { assertSupportedImage, buildObjectKey, uploadBytesToStorage } from '@/lib/storage';
 
 export const runtime = 'nodejs';
 
 export async function POST(request: Request) {
   try {
-    const session = await auth();
-    if (!session?.user?.email) {
+    const userEmail = await getAuthenticatedUserEmail();
+    if (!userEmail) {
       return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
     }
 

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { auth } from '@/auth';
+import { getAuthenticatedUserEmail } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 
 const feedbackSchema = z.object({
@@ -12,8 +12,7 @@ type RouteContext = {
 };
 
 export async function POST(request: Request, context: RouteContext) {
-  const session = await auth();
-  const userEmail = session?.user?.email;
+  const userEmail = await getAuthenticatedUserEmail();
   if (!userEmail) {
     return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   }
