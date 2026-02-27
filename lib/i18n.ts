@@ -363,3 +363,7 @@ export const messages = {
   en,
   'zh-TW': zhTW
 } as const;
+
+export type HomeText = typeof messages.en.home;
+export type SessionText = typeof messages.en.session;
+export type WorkbenchText = typeof messages.en.workbench;

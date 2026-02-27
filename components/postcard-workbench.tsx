@@ -1,81 +1,37 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import Image from 'next/image';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { signIn, useSession } from 'next-auth/react';
-import ReactCrop, { type PercentCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MapViewportBounds, SavedMapMarker } from '@/components/open-map';
 import { messages, type Locale } from '@/lib/i18n';
-
-type PostcardRecord = {
-  id: string;
-  title: string;
-  notes: string | null;
-  placeName: string | null;
-  imageUrl: string | null;
-  originalImageUrl?: string | null;
-  latitude: number | null;
-  longitude: number | null;
-  aiConfidence: number | null;
-  aiPlaceGuess: string | null;
-  likeCount: number;
-  dislikeCount: number;
-  wrongLocationReports: number;
-  locationStatus: 'AUTO' | 'USER_CONFIRMED' | 'MANUAL';
-  locationModelVersion: string | null;
-  uploaderMasked?: string | null;
-  createdAt: string;
-};
-
-type PublicPostcardsPayload = {
-  items: PostcardRecord[];
-  total: number;
-  hasMore: boolean;
-  limit: number;
-  sort: 'ranking' | 'newest' | 'likes' | 'reports';
-};
-
-type DetectionJobRecord = {
-  id: string;
-  imageUrl: string;
-  status: 'QUEUED' | 'PROCESSING' | 'SUCCEEDED' | 'FAILED';
-  latitude: number | null;
-  longitude: number | null;
-  confidence: number | null;
-  placeGuess: string | null;
-  modelVersion: string | null;
-  errorMessage: string | null;
-  createdAt: string;
-  updatedAt: string;
-  completedAt: string | null;
-};
-
-type GeoPermissionState = 'checking' | 'prompt' | 'granted' | 'denied' | 'unsupported';
-
-type DeviceLocation = {
-  latitude: number;
-  longitude: number;
-  accuracy: number;
-};
-
-type DetectionDraft = {
-  title: string;
-  notes: string;
-  locationInput: string;
-};
-
-type CropDraft = PercentCrop;
+import { ExploreSection } from '@/components/workbench/explore-section';
+import { CreateSection } from '@/components/workbench/create-section';
+import { DashboardSection } from '@/components/workbench/dashboard-section';
+import type {
+  DashboardViewMode,
+  DetectionDraft,
+  DetectionJobRecord,
+  DeviceLocation,
+  ExploreSort,
+  GeoPermissionState,
+  PostcardRecord,
+  PublicPostcardsPayload
+} from '@/components/workbench/types';
+import {
+  type CropDraft,
+  deriveOriginalImageUrl,
+  parseLocationInput,
+  sanitizePercentCrop,
+  toNormalizedCrop
+} from '@/components/workbench/utils';
 
 type PostcardWorkbenchProps = {
   mode?: 'explore' | 'create' | 'dashboard' | 'full';
   locale?: Locale;
 };
-
-type ExploreSort = 'ranking' | 'newest' | 'likes' | 'reports';
 
 const DEFAULT_CROP_DRAFT: CropDraft = {
   unit: '%',
@@ -92,105 +48,6 @@ const OpenMap = dynamic(
   },
   { ssr: false }
 );
-
-function parseLocationInput(
-  input: string,
-  text: {
-    parseLocationTwoNumbers: string;
-    parseLocationNumeric: string;
-    parseLocationRange: string;
-  }
-): { latitude: number; longitude: number } {
-  const parts = input
-    .split(',')
-    .map((part) => part.trim())
-    .filter(Boolean);
-
-  if (parts.length !== 2) {
-    throw new Error(text.parseLocationTwoNumbers);
-  }
-
-  const first = Number(parts[0]);
-  const second = Number(parts[1]);
-
-  if (!Number.isFinite(first) || !Number.isFinite(second)) {
-    throw new Error(text.parseLocationNumeric);
-  }
-
-  if (Math.abs(first) <= 90 && Math.abs(second) <= 180) {
-    return { latitude: first, longitude: second };
-  }
-
-  if (Math.abs(first) <= 180 && Math.abs(second) <= 90) {
-    return { latitude: second, longitude: first };
-  }
-
-  throw new Error(text.parseLocationRange);
-}
-
-function deriveOriginalImageUrl(imageUrl: string | null | undefined): string | null {
-  if (!imageUrl) {
-    return null;
-  }
-
-  if (imageUrl.includes('/uploads/original/')) {
-    return imageUrl;
-  }
-
-  if (imageUrl.includes('/uploads/postcard/')) {
-    const fileName = imageUrl.split('/').pop()?.toLowerCase() ?? '';
-    if (fileName.includes('recrop-')) {
-      return null;
-    }
-    return imageUrl.replace('/uploads/postcard/', '/uploads/original/');
-  }
-
-  return null;
-}
-
-function clampNumber(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
-
-function sanitizePercentCrop(crop: Partial<PercentCrop>, fallback: CropDraft = DEFAULT_CROP_DRAFT): CropDraft {
-  const x = clampNumber(crop.x ?? fallback.x ?? DEFAULT_CROP_DRAFT.x ?? 0, 0, 99);
-  const y = clampNumber(crop.y ?? fallback.y ?? DEFAULT_CROP_DRAFT.y ?? 0, 0, 99);
-
-  let width = clampNumber(crop.width ?? fallback.width ?? DEFAULT_CROP_DRAFT.width ?? 50, 1, 100);
-  let height = clampNumber(crop.height ?? fallback.height ?? DEFAULT_CROP_DRAFT.height ?? 50, 1, 100);
-
-  if (x + width > 100) {
-    width = Math.max(1, 100 - x);
-  }
-  if (y + height > 100) {
-    height = Math.max(1, 100 - y);
-  }
-
-  return {
-    unit: '%',
-    x,
-    y,
-    width,
-    height
-  };
-}
-
-function toNormalizedCrop(crop: CropDraft): { x: number; y: number; width: number; height: number } {
-  const sanitized = sanitizePercentCrop(crop);
-  const x = clampNumber(sanitized.x ?? 0, 0, 95);
-  const y = clampNumber(sanitized.y ?? 0, 0, 95);
-  const maxWidth = Math.max(5, 100 - x);
-  const maxHeight = Math.max(5, 100 - y);
-  const width = clampNumber(sanitized.width ?? 84, 5, maxWidth);
-  const height = clampNumber(sanitized.height ?? 54, 5, maxHeight);
-
-  return {
-    x: Number((x / 100).toFixed(6)),
-    y: Number((y / 100).toFixed(6)),
-    width: Number((width / 100).toFixed(6)),
-    height: Number((height / 100).toFixed(6))
-  };
-}
 
 export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWorkbenchProps) {
   const router = useRouter();
@@ -244,7 +101,7 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
   const [isLoadingJobs, setIsLoadingJobs] = useState(false);
   const [isLoadingMine, setIsLoadingMine] = useState(false);
   const [dashboardStatus, setDashboardStatus] = useState('');
-  const [dashboardViewMode, setDashboardViewMode] = useState<'grid' | 'list'>('grid');
+  const [dashboardViewMode, setDashboardViewMode] = useState<DashboardViewMode>('grid');
 
   const visiblePostcards = postcards;
 
@@ -889,34 +746,6 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
   }
 
   const isExploreOnlyPage = mode === 'explore';
-  const panelClassName =
-    'relative rounded-[22px] border border-white/60 bg-[linear-gradient(165deg,rgba(255,255,255,0.96),rgba(245,255,246,0.92))] p-[0.88rem] shadow-[0_16px_34px_rgba(57,78,66,0.1),inset_0_1px_0_rgba(255,255,255,0.9)] max-[780px]:rounded-2xl max-[780px]:p-3';
-  const sectionHeadClassName = 'mb-2 grid gap-1.5';
-  const chipRowClassName = 'flex flex-wrap gap-1.5';
-  const chipClassName =
-    'inline-flex items-center rounded-full border border-[#d6e8d4] bg-[#f4fff4] px-2.5 py-1 text-[0.78rem] font-bold text-[#2b6442]';
-  const inlineFieldClassName = 'mb-0 grid gap-1.5 text-[0.91rem] font-bold text-[#39604f]';
-  const postcardItemClassName = 'grid gap-1.5 rounded-[14px] border border-[#e2eee0] bg-[#f8fffc] px-3 py-2.5';
-  const postcardItemHeadClassName = 'flex items-center justify-between gap-2';
-  const exploreResultsClassName =
-    'grid min-h-0 gap-2 overflow-auto pr-1 max-[1080px]:max-h-none max-[1080px]:overflow-visible max-[1080px]:pr-0';
-  const smallMutedClassName = 'text-[0.82rem] text-[#5f736c]';
-  const actionButtonClassName =
-    'rounded-[10px] bg-[linear-gradient(135deg,#56b36a,#2f9e58)] px-2.5 py-1.5 text-[0.83rem] font-bold text-white shadow-[0_4px_10px_rgba(47,158,88,0.18)] disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none';
-  const actionButtonWarnClassName =
-    'rounded-[10px] bg-[linear-gradient(135deg,#f4c742,#e5a634)] px-2.5 py-1.5 text-[0.83rem] font-bold text-[#25361f] shadow-[0_4px_10px_rgba(229,166,52,0.25)] disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none';
-  const cardThumbClassName = 'h-auto max-h-[160px] w-full rounded-[10px] border border-[#deeadb] object-cover';
-  const formStackClassName = 'grid gap-0.5';
-  const authCalloutClassName =
-    'grid gap-2 rounded-[14px] border border-[#dce8d7] bg-[linear-gradient(145deg,rgba(243,251,226,0.8),rgba(241,255,251,0.8))] p-3';
-  const statusBoxClassName = 'grid gap-1 rounded-[14px] border border-[#e3eddc] bg-[#fbfffa] p-3';
-  const statusSuccessClassName =
-    'grid gap-1 rounded-[14px] border border-[#b9e3c3] bg-[linear-gradient(145deg,rgba(230,255,236,0.92),rgba(243,255,250,0.95))] p-3';
-  const dashboardToolbarClassName =
-    'flex flex-wrap items-center justify-between gap-2 rounded-[14px] border border-[#deead9] bg-[linear-gradient(140deg,rgba(244,255,245,0.95),rgba(247,254,255,0.92))] px-2.5 py-2';
-  const cropEditorClassName = 'grid gap-2 rounded-xl border border-dashed border-[#c9dfc7] bg-[#f6fff6] p-2.5';
-  const cropPreviewClassName = 'w-full overflow-hidden rounded-[10px] border border-[#d8e7d8] bg-[#edf4ed]';
-  const cropImageClassName = 'block h-auto max-h-[420px] w-full bg-[#edf4ed] object-contain';
 
   const workbenchClassName = [
     'grid gap-3',
@@ -926,512 +755,111 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
     .filter(Boolean)
     .join(' ');
 
-  const explorePanelClassName = `${panelClassName} grid min-h-0 grid-cols-[minmax(320px,390px)_minmax(0,1fr)] items-stretch gap-2 max-[1080px]:grid-cols-1`;
-  const exploreSidebarClassName =
-    'grid min-h-0 content-stretch grid-rows-[auto_auto_auto_minmax(0,1fr)] gap-2 max-[1080px]:order-2 max-[1080px]:grid-rows-[auto_auto_auto_auto]';
-  const exploreMapPaneClassName = 'min-w-0 max-[1080px]:order-1';
   const exploreMapClassName = isExploreOnlyPage
     ? 'h-full min-h-0 max-[1080px]:h-[460px] max-[1080px]:min-h-[460px] max-[780px]:h-[380px] max-[780px]:min-h-[380px]'
     : 'h-[540px] min-h-[560px] max-[1080px]:h-[460px] max-[1080px]:min-h-[460px] max-[780px]:h-[380px] max-[780px]:min-h-[380px]';
-  const dashboardListClassName =
-    dashboardViewMode === 'grid'
-      ? 'mt-2 grid grid-cols-2 gap-2 max-[780px]:grid-cols-1'
-      : 'mt-2 grid grid-cols-1 gap-2';
-  const inputClassName =
-    'w-full rounded-[13px] border border-[#d8e6d5] bg-[#fdfffc] px-3 py-2 text-[#1f2e29] outline-none transition focus:border-[#72b485] focus:ring-4 focus:ring-[rgba(86,179,106,0.18)] disabled:opacity-60';
-  const primaryButtonClassName =
-    'rounded-[13px] bg-[linear-gradient(135deg,#56b36a,#2f9e58)] px-4 py-2.5 font-bold text-white shadow-[0_8px_16px_rgba(47,158,88,0.23)] transition hover:enabled:-translate-y-px hover:enabled:shadow-[0_11px_18px_rgba(47,158,88,0.27)] disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none';
 
   return (
     <section className={workbenchClassName}>
       {showExplore ? (
-        <article className={explorePanelClassName}>
-          <aside className={exploreSidebarClassName}>
-            <div className={sectionHeadClassName}>
-              <h2>{text.exploreTitle}</h2>
-              <div className={chipRowClassName}>
-                <span className={chipClassName}>{text.chipLoaded(visiblePostcards.length)}</span>
-                <span className={chipClassName}>{text.chipMarkers(publicMarkers.length)}</span>
-                <span className={chipClassName}>{text.chipInArea(visibleTotal)}</span>
-                {visibleHasMore ? <span className={chipClassName}>{text.chipLimitedTo(exploreLimit)}</span> : null}
-              </div>
-            </div>
-
-            <details className="rounded-xl border border-[#dce9d8] bg-[#fbfffa] px-2.5 pb-2.5 pt-1">
-              <summary className="cursor-pointer py-2 font-bold text-[#2b6442] marker:text-[#5a7b67]">{text.exploreFiltersTitle}</summary>
-              <div className="grid gap-2 pt-1">
-                <label className={inlineFieldClassName}>
-                  {text.exploreSearchLabel}
-                  <input
-                    className={inputClassName}
-                    value={searchText}
-                    onChange={(event) => setSearchText(event.target.value)}
-                    placeholder={text.exploreSearchPlaceholder}
-                  />
-                </label>
-                <label className={inlineFieldClassName}>
-                  {text.exploreSortLabel}
-                  <select className={inputClassName} value={exploreSort} onChange={(event) => setExploreSort(event.target.value as ExploreSort)}>
-                    <option value="ranking">{text.exploreSortRanking}</option>
-                    <option value="newest">{text.exploreSortNewest}</option>
-                    <option value="likes">{text.exploreSortLikes}</option>
-                    <option value="reports">{text.exploreSortReports}</option>
-                  </select>
-                </label>
-                <label className={inlineFieldClassName}>
-                  {text.exploreMaxResultsLabel}
-                  <select className={inputClassName} value={exploreLimit} onChange={(event) => setExploreLimit(Number(event.target.value))}>
-                    <option value={60}>60</option>
-                    <option value={120}>120</option>
-                    <option value={200}>200</option>
-                  </select>
-                </label>
-              </div>
-            </details>
-
-            <div className="grid gap-0.5 border-y border-[#e1ece0] px-0.5 py-1">
-              {!mapBounds ? <small className={smallMutedClassName}>{text.exploreLoadingArea}</small> : null}
-              {isLoadingPublic ? <small className={smallMutedClassName}>{text.exploreLoadingPostcards}</small> : null}
-              {!isLoadingPublic && mapBounds && visiblePostcards.length === 0 ? (
-                <small className={smallMutedClassName}>{text.exploreNoResults}</small>
-              ) : null}
-              {exploreStatus ? <small className={smallMutedClassName}>{exploreStatus}</small> : null}
-            </div>
-
-            <div className={exploreResultsClassName}>
-              {visiblePostcards.map((postcard) => {
-                const hasMapPoint = typeof postcard.latitude === 'number' && typeof postcard.longitude === 'number';
-                const cardClassName = [
-                  postcardItemClassName,
-                  focusedMarkerId === postcard.id ? 'border-[#7ecb95] ring-2 ring-[rgba(86,179,106,0.2)]' : '',
-                  hasMapPoint ? 'cursor-pointer hover:border-[#95d7a7] hover:ring-2 hover:ring-[rgba(86,179,106,0.16)] focus-visible:outline-2 focus-visible:outline-[rgba(86,179,106,0.45)] focus-visible:outline-offset-2' : ''
-                ]
-                  .filter(Boolean)
-                  .join(' ');
-
-                return (
-                  <article
-                    key={postcard.id}
-                    className={cardClassName}
-                    onClick={() => {
-                      if (hasMapPoint) {
-                        setFocusedMarkerId(postcard.id);
-                      }
-                    }}
-                    onKeyDown={(event) => {
-                      if (!hasMapPoint) {
-                        return;
-                      }
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        setFocusedMarkerId(postcard.id);
-                      }
-                    }}
-                    role={hasMapPoint ? 'button' : undefined}
-                    tabIndex={hasMapPoint ? 0 : undefined}
-                    aria-label={hasMapPoint ? text.exploreFocusOnMapAria(postcard.title) : undefined}
-                  >
-                    {postcard.imageUrl ? (
-                      <Image
-                        className={cardThumbClassName}
-                        src={postcard.imageUrl}
-                        alt={postcard.title}
-                        width={640}
-                        height={420}
-                      />
-                    ) : null}
-                    <div className={postcardItemHeadClassName}>
-                      <strong>{postcard.title}</strong>
-                      <small className={smallMutedClassName}>{new Date(postcard.createdAt).toLocaleDateString(text.dateLocale)}</small>
-                    </div>
-                    <small className={smallMutedClassName}>{postcard.placeName || text.exploreUnknownPlace}</small>
-                    {postcard.uploaderMasked ? <small className={smallMutedClassName}>{text.exploreUploaderBy(postcard.uploaderMasked)}</small> : null}
-                    <small className={smallMutedClassName}>
-                      👍 {postcard.likeCount} · 👎 {postcard.dislikeCount} · ⚠️ {postcard.wrongLocationReports}
-                    </small>
-                    {postcard.notes ? <p className="m-0 line-clamp-2 text-[0.9rem] text-[#436054]">{postcard.notes}</p> : null}
-                    <div className="flex flex-wrap gap-1.5">
-                      <button
-                        type="button"
-                        className={actionButtonClassName}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          void submitExploreFeedback(postcard.id, 'like');
-                        }}
-                        disabled={feedbackPendingKey === `${postcard.id}:like`}
-                      >
-                        {feedbackPendingKey === `${postcard.id}:like` ? '...' : text.exploreVoteUp}
-                      </button>
-                      <button
-                        type="button"
-                        className={actionButtonClassName}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          void submitExploreFeedback(postcard.id, 'dislike');
-                        }}
-                        disabled={feedbackPendingKey === `${postcard.id}:dislike`}
-                      >
-                        {feedbackPendingKey === `${postcard.id}:dislike` ? '...' : text.exploreVoteDown}
-                      </button>
-                      <button
-                        type="button"
-                        className={actionButtonWarnClassName}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          void submitExploreFeedback(postcard.id, 'report_wrong_location');
-                        }}
-                        disabled={feedbackPendingKey === `${postcard.id}:report_wrong_location`}
-                      >
-                        {feedbackPendingKey === `${postcard.id}:report_wrong_location` ? '...' : text.exploreFlag}
-                      </button>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          </aside>
-
-          <div className={exploreMapPaneClassName}>
+        <ExploreSection
+          text={text}
+          visiblePostcards={visiblePostcards}
+          publicMarkerCount={publicMarkers.length}
+          visibleTotal={visibleTotal}
+          visibleHasMore={visibleHasMore}
+          exploreLimit={exploreLimit}
+          exploreSort={exploreSort}
+          searchText={searchText}
+          mapBoundsLoaded={Boolean(mapBounds)}
+          isLoadingPublic={isLoadingPublic}
+          exploreStatus={exploreStatus}
+          focusedMarkerId={focusedMarkerId}
+          feedbackPendingKey={feedbackPendingKey}
+          onSearchChange={setSearchText}
+          onSortChange={setExploreSort}
+          onLimitChange={setExploreLimit}
+          onFocusMarker={setFocusedMarkerId}
+          onSubmitFeedback={(postcardId, action) => void submitExploreFeedback(postcardId, action)}
+          mapNode={
             <OpenMap
               className={exploreMapClassName}
               markers={publicMarkers}
               focusedMarkerId={focusedMarkerId}
-            viewerFocusSignal={viewerFocusSignal}
-            onLocateRequest={() => requestDeviceLocation(false)}
-            isLocating={isRequestingLocation}
-            onViewportChange={handleViewportChange}
-            viewerPoint={
-              deviceLocation
-                ? {
-                    latitude: deviceLocation.latitude,
-                    longitude: deviceLocation.longitude,
-                    label: text.exploreViewerLabel,
-                    accuracy: deviceLocation.accuracy
-                  }
-                : undefined
-            }
+              viewerFocusSignal={viewerFocusSignal}
+              onLocateRequest={() => requestDeviceLocation(false)}
+              isLocating={isRequestingLocation}
+              onViewportChange={handleViewportChange}
+              viewerPoint={
+                deviceLocation
+                  ? {
+                      latitude: deviceLocation.latitude,
+                      longitude: deviceLocation.longitude,
+                      label: text.exploreViewerLabel,
+                      accuracy: deviceLocation.accuracy
+                    }
+                  : undefined
+              }
             />
-          </div>
-        </article>
+          }
+        />
       ) : null}
 
       {showCreate ? (
-        <article className={`${panelClassName} grid content-start gap-3`}>
-          <div className={sectionHeadClassName}>
-            <div>
-              <h2>{text.createTitle}</h2>
-              <small className={smallMutedClassName}>{text.createSubtitle}</small>
-            </div>
-          </div>
-
-          {!isAuthenticated ? (
-            <div className={authCalloutClassName}>
-              <strong>{text.loginRequiredTitle}</strong>
-              <small className={smallMutedClassName}>{text.loginRequiredCreateBody}</small>
-              <button type="button" className={primaryButtonClassName} onClick={() => signIn('google')}>
-                {text.buttonSignInGoogle}
-              </button>
-            </div>
-          ) : null}
-
-          <form onSubmit={submitAiDetectJob} className={formStackClassName}>
-            <h3>{text.optionAiTitle}</h3>
-            <small className={smallMutedClassName}>{text.optionAiBody}</small>
-            <label className={inlineFieldClassName}>
-              {text.fieldImage}
-              <input
-                className={inputClassName}
-                key={aiInputVersion}
-                type="file"
-                accept="image/*"
-                onChange={(event) => setAiFile(event.target.files?.[0] ?? null)}
-                disabled={!isAuthenticated || isSubmittingAi || isSavingManual}
-              />
-            </label>
-            <button type="submit" className={primaryButtonClassName} disabled={!isAuthenticated || !aiFile || isSubmittingAi || isSavingManual}>
-              {isSubmittingAi ? text.buttonSubmitting : text.buttonSubmitAiJob}
-            </button>
-          </form>
-
-          {queuedAiJobId ? (
-            <div className={statusSuccessClassName}>
-              <small className={smallMutedClassName}>{text.queuedBody}</small>
-              <small className={smallMutedClassName}>{text.queuedJobId(queuedAiJobId)}</small>
-              {queuedAiImageUrl ? (
-                <small className={smallMutedClassName}>
-                  {text.queuedImageLabel}: <Link href={queuedAiImageUrl} target="_blank" rel="noreferrer">{text.queuedOpenUploadedImage}</Link>
-                </small>
-              ) : null}
-              <button type="button" className={primaryButtonClassName} onClick={() => router.push('/dashboard')}>
-                {text.buttonOpenDashboard}
-              </button>
-            </div>
-          ) : null}
-
-          <div className={formStackClassName}>
-            <h3>{text.optionManualTitle}</h3>
-            <small className={smallMutedClassName}>{text.optionManualBody}</small>
-            <label className={inlineFieldClassName}>
-              {text.fieldName}
-              <input
-                className={inputClassName}
-                value={manualTitle}
-                onChange={(event) => setManualTitle(event.target.value)}
-                placeholder={text.manualNamePlaceholder}
-                disabled={!isAuthenticated || isSavingManual || isSubmittingAi}
-              />
-            </label>
-            <label className={inlineFieldClassName}>
-              {text.fieldDescription}
-              <textarea
-                className={inputClassName}
-                rows={4}
-                value={manualNotes}
-                onChange={(event) => setManualNotes(event.target.value)}
-                placeholder={text.manualDescriptionPlaceholder}
-                disabled={!isAuthenticated || isSavingManual || isSubmittingAi}
-              />
-            </label>
-            <label className={inlineFieldClassName}>
-              {text.fieldLocation}
-              <input
-                className={inputClassName}
-                value={manualLocationInput}
-                onChange={(event) => setManualLocationInput(event.target.value)}
-                placeholder={text.manualLocationPlaceholder}
-                disabled={!isAuthenticated || isSavingManual || isSubmittingAi}
-              />
-            </label>
-            <label className={inlineFieldClassName}>
-              {text.fieldImage}
-              <input
-                className={inputClassName}
-                type="file"
-                accept="image/*"
-                onChange={(event) => setManualFile(event.target.files?.[0] ?? null)}
-                disabled={!isAuthenticated || isSavingManual || isSubmittingAi}
-              />
-            </label>
-            <button type="button" className={primaryButtonClassName} disabled={!isAuthenticated || isSavingManual || isSubmittingAi} onClick={saveManualPostcard}>
-              {isSavingManual ? text.buttonSaving : text.buttonCreatePostcard}
-            </button>
-          </div>
-
-          <div className={statusBoxClassName}>
-            <small className={smallMutedClassName}>{createStatus || text.noActionYet}</small>
-          </div>
-        </article>
+        <CreateSection
+          text={text}
+          isAuthenticated={isAuthenticated}
+          isSubmittingAi={isSubmittingAi}
+          isSavingManual={isSavingManual}
+          aiFile={aiFile}
+          manualTitle={manualTitle}
+          manualNotes={manualNotes}
+          manualLocationInput={manualLocationInput}
+          aiInputVersion={aiInputVersion}
+          createStatus={createStatus}
+          queuedAiJobId={queuedAiJobId}
+          queuedAiImageUrl={queuedAiImageUrl}
+          onSignIn={() => signIn('google')}
+          onSubmitAi={submitAiDetectJob}
+          onAiFileChange={setAiFile}
+          onOpenDashboard={() => router.push('/dashboard')}
+          onManualTitleChange={setManualTitle}
+          onManualNotesChange={setManualNotes}
+          onManualLocationInputChange={setManualLocationInput}
+          onManualFileChange={setManualFile}
+          onSaveManual={() => void saveManualPostcard()}
+        />
       ) : null}
 
       {showDashboard ? (
-        <article className={`${panelClassName} grid content-start gap-3`}>
-          <div className={sectionHeadClassName}>
-            <div>
-              <h2>{text.dashboardTitle}</h2>
-              <small className={smallMutedClassName}>{text.dashboardSubtitle}</small>
-            </div>
-          </div>
-
-          {!isAuthenticated ? (
-            <div className={authCalloutClassName}>
-              <strong>{text.loginRequiredTitle}</strong>
-              <small className={smallMutedClassName}>{text.loginRequiredDashboardBody}</small>
-              <button type="button" className={primaryButtonClassName} onClick={() => signIn('google')}>
-                {text.buttonSignInGoogle}
-              </button>
-            </div>
-          ) : (
-            <>
-              <div className={dashboardToolbarClassName}>
-                <div className={chipRowClassName}>
-                  <span className={chipClassName}>{text.chipAiJobs(jobs.length)}</span>
-                  <span className={chipClassName}>{text.chipMyPostcards(myPostcards.length)}</span>
-                </div>
-                <div className={chipRowClassName}>
-                  <button type="button" className={actionButtonClassName} onClick={() => setDashboardViewMode('grid')} disabled={dashboardViewMode === 'grid'}>
-                    {text.buttonGrid}
-                  </button>
-                  <button type="button" className={actionButtonClassName} onClick={() => setDashboardViewMode('list')} disabled={dashboardViewMode === 'list'}>
-                    {text.buttonList}
-                  </button>
-                  <button type="button" className={actionButtonClassName} onClick={() => void loadDashboardData()} disabled={isLoadingJobs || isLoadingMine}>
-                    {text.buttonRefresh}
-                  </button>
-                </div>
-              </div>
-
-              {dashboardStatus ? <small className={smallMutedClassName}>{dashboardStatus}</small> : null}
-
-              <h3 style={{ marginTop: '0.5rem' }}>{text.aiJobsTitle}</h3>
-              {isLoadingJobs ? <small className={smallMutedClassName}>{text.aiJobsLoading}</small> : null}
-              {!isLoadingJobs && jobs.length === 0 ? <small className={smallMutedClassName}>{text.aiJobsEmpty}</small> : null}
-              <div className={dashboardListClassName}>
-                {jobs.slice(0, 20).map((job) => (
-                  <article key={job.id} className={postcardItemClassName}>
-                    <div className={postcardItemHeadClassName}>
-                      <strong>{job.status}</strong>
-                      <small className={smallMutedClassName}>{new Date(job.createdAt).toLocaleString(text.dateLocale)}</small>
-                    </div>
-                    {job.imageUrl ? (
-                      <Image
-                        className="h-auto max-h-[180px] w-full rounded-[10px] border border-[#deeadb] object-contain bg-[#edf6ef]"
-                        src={job.imageUrl}
-                        alt={text.aiJobImageAlt(job.id)}
-                        width={640}
-                        height={420}
-                      />
-                    ) : null}
-                    <small className={smallMutedClassName}>{job.placeGuess ?? text.aiJobNoGuess}</small>
-                    {job.status === 'SUCCEEDED' && job.latitude !== null && job.longitude !== null ? (
-                      <small className={smallMutedClassName}>
-                        {job.latitude.toFixed(6)}, {job.longitude.toFixed(6)}
-                        {job.confidence !== null ? ` (${text.aiConfidenceLabel(Math.round(job.confidence * 100))})` : ''}
-                      </small>
-                    ) : null}
-                    {job.status === 'SUCCEEDED' && job.latitude !== null && job.longitude !== null ? (
-                      <>
-                        <label className={inlineFieldClassName}>
-                          {text.fieldName}
-                          <input
-                            className={inputClassName}
-                            value={jobDrafts[job.id]?.title ?? ''}
-                            onChange={(event) => updateJobDraft(job.id, { title: event.target.value })}
-                            placeholder={text.fieldName}
-                            disabled={savingJobId === job.id}
-                          />
-                        </label>
-                        <label className={inlineFieldClassName}>
-                          {text.fieldDescription}
-                          <textarea
-                            className={inputClassName}
-                            rows={3}
-                            value={jobDrafts[job.id]?.notes ?? ''}
-                            onChange={(event) => updateJobDraft(job.id, { notes: event.target.value })}
-                            placeholder={text.fieldDescription}
-                            disabled={savingJobId === job.id}
-                          />
-                        </label>
-                        <label className={inlineFieldClassName}>
-                          {text.fieldLocation}
-                          <input
-                            className={inputClassName}
-                            value={jobDrafts[job.id]?.locationInput ?? ''}
-                            onChange={(event) => updateJobDraft(job.id, { locationInput: event.target.value })}
-                            placeholder={text.manualLocationPlaceholder}
-                            disabled={savingJobId === job.id}
-                          />
-                        </label>
-                        {isJobAlreadySaved(job) ? (
-                          <small className={smallMutedClassName}>{text.aiResultAlreadySaved}</small>
-                        ) : (
-                          <button
-                            type="button"
-                            className={primaryButtonClassName}
-                            onClick={() => void saveDetectedJobAsPostcard(job)}
-                            disabled={savingJobId === job.id}
-                          >
-                            {savingJobId === job.id ? text.buttonSaving : text.saveAsPostcard}
-                          </button>
-                        )}
-                      </>
-                    ) : null}
-                    {job.status === 'FAILED' && job.errorMessage ? <small className={smallMutedClassName}>{job.errorMessage}</small> : null}
-                  </article>
-                ))}
-              </div>
-
-              <h3 style={{ marginTop: '0.5rem' }}>{text.myPostcardsTitle}</h3>
-              {isLoadingMine ? <small className={smallMutedClassName}>{text.myPostcardsLoading}</small> : null}
-              {!isLoadingMine && myPostcards.length === 0 ? <small className={smallMutedClassName}>{text.myPostcardsEmpty}</small> : null}
-              <div className={dashboardListClassName}>
-                {myPostcards.slice(0, 20).map((postcard) => {
-                  return (
-                    <article key={postcard.id} className={postcardItemClassName}>
-                    <div className={postcardItemHeadClassName}>
-                      <strong>{postcard.title}</strong>
-                      <small className={smallMutedClassName}>{new Date(postcard.createdAt).toLocaleDateString(text.dateLocale)}</small>
-                    </div>
-                    {postcard.imageUrl ? (
-                      <Image
-                        className="h-auto max-h-[180px] w-full rounded-[10px] border border-[#deeadb] object-cover"
-                        src={postcard.imageUrl}
-                        alt={postcard.title}
-                        width={640}
-                        height={420}
-                      />
-                    ) : null}
-                    <small className={smallMutedClassName}>{postcard.placeName || text.exploreUnknownPlace}</small>
-                    {typeof postcard.latitude === 'number' && typeof postcard.longitude === 'number' ? (
-                      <small className={smallMutedClassName}>{postcard.latitude.toFixed(6)}, {postcard.longitude.toFixed(6)}</small>
-                    ) : null}
-                    {postcard.notes ? <p className="m-0 text-[0.9rem] text-[#436054]">{postcard.notes}</p> : null}
-                    <div className={chipRowClassName}>
-                      <button
-                        type="button"
-                        className={actionButtonClassName}
-                        onClick={() => openCropEditor(postcard)}
-                        disabled={savingCropPostcardId === postcard.id || deletingPostcardId === postcard.id}
-                      >
-                        {editingCropPostcardId === postcard.id ? text.buttonEditingCrop : text.buttonEditCrop}
-                      </button>
-                      <button
-                        type="button"
-                        className={actionButtonClassName}
-                        onClick={() => void softDeletePostcard(postcard)}
-                        disabled={deletingPostcardId === postcard.id || savingCropPostcardId === postcard.id}
-                      >
-                        {deletingPostcardId === postcard.id ? text.buttonRemoving : text.buttonRemoveSoftDelete}
-                      </button>
-                    </div>
-                    {editingCropPostcardId === postcard.id && editingCropOriginalUrl ? (
-                      <div className={cropEditorClassName}>
-                        <strong>{text.cropEditorTitle}</strong>
-                        <small className={smallMutedClassName}>{text.cropEditorBody}</small>
-                        <div className={cropPreviewClassName}>
-                          <ReactCrop
-                            crop={cropDraft}
-                            onChange={(_, percentCrop) => setCropDraft((current) => sanitizePercentCrop(percentCrop, current))}
-                            ruleOfThirds
-                            keepSelection
-                            className="block w-full"
-                          >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={editingCropOriginalUrl} alt={text.cropEditorImageAlt} className={cropImageClassName} />
-                          </ReactCrop>
-                        </div>
-                        <small className={smallMutedClassName}>{text.cropSelection(
-                          Math.round(cropDraft.x ?? 0),
-                          Math.round(cropDraft.y ?? 0),
-                          Math.round(cropDraft.width ?? 0),
-                          Math.round(cropDraft.height ?? 0)
-                        )}</small>
-                        <div className={chipRowClassName}>
-                          <button
-                            type="button"
-                            className={actionButtonClassName}
-                            onClick={() => void saveCropEdit(postcard.id)}
-                            disabled={savingCropPostcardId === postcard.id}
-                          >
-                            {savingCropPostcardId === postcard.id ? text.buttonSavingCrop : text.buttonSaveCrop}
-                          </button>
-                          <button
-                            type="button"
-                            className={actionButtonClassName}
-                            onClick={closeCropEditor}
-                            disabled={savingCropPostcardId === postcard.id}
-                          >
-                            {text.buttonCancel}
-                          </button>
-                        </div>
-                      </div>
-                    ) : null}
-                    </article>
-                  );
-                })}
-              </div>
-            </>
-          )}
-        </article>
+        <DashboardSection
+          text={text}
+          isAuthenticated={isAuthenticated}
+          jobs={jobs}
+          myPostcards={myPostcards}
+          jobDrafts={jobDrafts}
+          savingJobId={savingJobId}
+          deletingPostcardId={deletingPostcardId}
+          editingCropPostcardId={editingCropPostcardId}
+          editingCropOriginalUrl={editingCropOriginalUrl}
+          cropDraft={cropDraft}
+          savingCropPostcardId={savingCropPostcardId}
+          isLoadingJobs={isLoadingJobs}
+          isLoadingMine={isLoadingMine}
+          dashboardStatus={dashboardStatus}
+          dashboardViewMode={dashboardViewMode}
+          onSignIn={() => signIn('google')}
+          onSetDashboardViewMode={setDashboardViewMode}
+          onRefresh={() => void loadDashboardData()}
+          onUpdateJobDraft={updateJobDraft}
+          onSaveDetectedJob={(job) => void saveDetectedJobAsPostcard(job)}
+          isJobAlreadySaved={isJobAlreadySaved}
+          onOpenCropEditor={openCropEditor}
+          onSaveCrop={(postcardId) => void saveCropEdit(postcardId)}
+          onCloseCropEditor={closeCropEditor}
+          onSoftDelete={(postcard) => void softDeletePostcard(postcard)}
+          onCropChange={(percentCrop) => setCropDraft((current) => sanitizePercentCrop(percentCrop, current))}
+        />
       ) : null}
     </section>
   );
