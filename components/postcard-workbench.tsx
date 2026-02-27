@@ -1032,7 +1032,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
                     </div>
                     {job.imageUrl ? (
                       <Image
-                        className="postcard-thumb"
+                        className="postcard-thumb postcard-thumb-contain"
                         src={job.imageUrl}
                         alt={`AI job ${job.id}`}
                         width={640}

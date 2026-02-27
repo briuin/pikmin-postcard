@@ -44,6 +44,11 @@ const postcardCropSchema = z.object({
   confidence: z.number().min(0).max(1)
 });
 
+const postcardCropPairSchema = z.object({
+  photo: postcardCropSchema,
+  card: postcardCropSchema.optional()
+});
+
 function extractJsonObject(rawText: string): string {
   const fenced = rawText.match(/```json\s*([\s\S]*?)```/i);
   if (fenced?.[1]) {
@@ -214,20 +219,68 @@ function getFallbackCropBox(): CropBoxResult {
   };
 }
 
+function normalizeCropBox(input: CropBoxResult): CropBoxResult {
+  const centerX = input.x + input.width / 2;
+  const centerY = input.y + input.height / 2;
+
+  let width = clamp(input.width, 0.2, 1);
+  let height = clamp(input.height, 0.2, 1);
+
+  const minArea = 0.14;
+  if (width * height < minArea) {
+    const scale = Math.sqrt(minArea / (width * height));
+    width = clamp(width * scale, 0.2, 1);
+    height = clamp(height * scale, 0.2, 1);
+  }
+
+  const aspect = width / height;
+  if (aspect > 2.2) {
+    height = clamp(width / 1.35, 0.22, 1);
+  } else if (aspect < 0.55) {
+    width = clamp(height * 0.9, 0.22, 1);
+  }
+
+  if (centerY < 0.25 && height < 0.28) {
+    height = clamp(Math.max(height, 0.38), 0.22, 1);
+  }
+
+  const x = clamp(centerX - width / 2, 0, 1 - width);
+  const y = clamp(centerY - height / 2, 0, 1 - height);
+
+  return {
+    x,
+    y,
+    width,
+    height,
+    confidence: clamp(input.confidence, 0, 1)
+  };
+}
+
+function derivePhotoFromCard(card: CropBoxResult): CropBoxResult {
+  const candidate = {
+    x: card.x + card.width * 0.04,
+    y: card.y + card.height * 0.03,
+    width: card.width * 0.92,
+    height: card.height * 0.64,
+    confidence: clamp(card.confidence - 0.08, 0.1, 0.95)
+  };
+
+  return normalizeCropBox(candidate);
+}
+
 async function detectPostcardCropBox(mimeType: string, fileBytes: Buffer): Promise<CropBoxResult> {
   const prompt = [
-    'Detect the postcard panel area inside this screenshot/photo.',
-    'Return strict JSON with normalized coordinates in [0,1].',
+    'Detect the real postcard image area (the scenic photo artwork) in this screenshot/photo.',
+    'Important: exclude status bar, app UI, title text, description text, and buttons.',
+    'If there is a postcard card with image+text, choose ONLY the image area at the top.',
+    'Return strict JSON with normalized coordinates in [0,1] using this schema:',
     'Schema:',
     '{',
-    '  "x": number,',
-    '  "y": number,',
-    '  "width": number,',
-    '  "height": number,',
-    '  "confidence": number',
+    '  "photo": { "x": number, "y": number, "width": number, "height": number, "confidence": number },',
+    '  "card": { "x": number, "y": number, "width": number, "height": number, "confidence": number }',
     '}',
-    'x,y are top-left corner. width,height are box size.',
-    'If unsure, still return your best guess for postcard panel area.',
+    'All x,y are top-left corners. width,height are box sizes.',
+    'If card is unknown, still return best "photo" and omit "card".',
     'No markdown, no explanation.'
   ].join('\n');
 
@@ -239,7 +292,19 @@ async function detectPostcardCropBox(mimeType: string, fileBytes: Buffer): Promi
   });
 
   const parsedJsonText = extractJsonObject(result.text);
-  return postcardCropSchema.parse(JSON.parse(parsedJsonText));
+  const parsed = postcardCropPairSchema.parse(JSON.parse(parsedJsonText));
+  const photo = normalizeCropBox(parsed.photo);
+  const photoArea = photo.width * photo.height;
+
+  if (photo.confidence >= 0.55 && photoArea >= 0.12) {
+    return photo;
+  }
+
+  if (parsed.card) {
+    return derivePhotoFromCard(parsed.card);
+  }
+
+  return photo;
 }
 
 async function buildCroppedPostcardImage(params: {
@@ -261,6 +326,8 @@ async function buildCroppedPostcardImage(params: {
   } catch (error) {
     console.warn('Postcard crop detection failed, using fallback crop.', { error });
   }
+
+  cropBox = normalizeCropBox(cropBox);
 
   const left = clamp(Math.round(cropBox.x * imageWidth), 0, imageWidth - 1);
   const top = clamp(Math.round(cropBox.y * imageHeight), 0, imageHeight - 1);

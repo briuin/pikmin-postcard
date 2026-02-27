@@ -261,6 +261,11 @@ h3 {
   border: 1px solid #deeadb;
 }
 
+.postcard-thumb-contain {
+  object-fit: contain;
+  background: #edf6ef;
+}
+
 .postcard-item-head {
   display: flex;
   align-items: center;
