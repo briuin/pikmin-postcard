@@ -779,7 +779,6 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
           onSearchChange={setSearchText}
           onSortChange={setExploreSort}
           onLimitChange={setExploreLimit}
-          onFocusMarker={setFocusedMarkerId}
           onSubmitFeedback={(postcardId, action) => void submitExploreFeedback(postcardId, action)}
           mapNode={
             <OpenMap

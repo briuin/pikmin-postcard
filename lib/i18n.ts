@@ -126,6 +126,11 @@ const en = {
     exploreUploaderBy: (value: string) => `by ${value}`,
     exploreViewerLabel: 'Your current location',
     exploreFocusOnMapAria: (title: string) => `Focus ${title} on map`,
+    exploreOpenDetailsAria: (title: string) => `Open details for ${title}`,
+    exploreCopyCoordinates: 'Copy Coordinates',
+    exploreCopyCoordinatesDone: 'Coordinates copied.',
+    exploreCopyCoordinatesFailed: 'Failed to copy coordinates.',
+    exploreNoCoordinates: 'No coordinates available.',
 
     createTitle: 'Create',
     createSubtitle: 'Two upload options: async AI detect job or manual postcard create.',
@@ -295,6 +300,11 @@ const zhTW: typeof en = {
     exploreUploaderBy: (value: string) => `上傳者 ${value}`,
     exploreViewerLabel: '你的目前位置',
     exploreFocusOnMapAria: (title: string) => `將 ${title} 聚焦到地圖`,
+    exploreOpenDetailsAria: (title: string) => `開啟「${title}」詳細資訊`,
+    exploreCopyCoordinates: '複製座標',
+    exploreCopyCoordinatesDone: '已複製座標。',
+    exploreCopyCoordinatesFailed: '複製座標失敗。',
+    exploreNoCoordinates: '沒有可用座標。',
 
     createTitle: '建立',
     createSubtitle: '提供兩種上傳方式：非同步 AI 偵測，或手動建立明信片。',

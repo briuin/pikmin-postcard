@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { type ReactNode } from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import type { WorkbenchText } from '@/lib/i18n';
 import type { ExploreSort, PostcardRecord } from '@/components/workbench/types';
 
@@ -22,7 +22,6 @@ type ExploreSectionProps = {
   onSearchChange: (value: string) => void;
   onSortChange: (value: ExploreSort) => void;
   onLimitChange: (value: number) => void;
-  onFocusMarker: (id: string) => void;
   onSubmitFeedback: (postcardId: string, action: 'like' | 'dislike' | 'report_wrong_location') => void;
   mapNode: ReactNode;
 };
@@ -44,10 +43,36 @@ export function ExploreSection({
   onSearchChange,
   onSortChange,
   onLimitChange,
-  onFocusMarker,
   onSubmitFeedback,
   mapNode
 }: ExploreSectionProps) {
+  const [selectedPostcardId, setSelectedPostcardId] = useState<string | null>(null);
+  const [copyStatus, setCopyStatus] = useState('');
+
+  const selectedPostcard = useMemo(
+    () => visiblePostcards.find((postcard) => postcard.id === selectedPostcardId) ?? null,
+    [selectedPostcardId, visiblePostcards]
+  );
+
+  useEffect(() => {
+    if (selectedPostcardId && !selectedPostcard) {
+      setSelectedPostcardId(null);
+      setCopyStatus('');
+    }
+  }, [selectedPostcardId, selectedPostcard]);
+
+  useEffect(() => {
+    if (!selectedPostcard) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [selectedPostcard]);
+
   const panelClassName =
     'relative rounded-[22px] border border-white/60 bg-[linear-gradient(165deg,rgba(255,255,255,0.96),rgba(245,255,246,0.92))] p-[0.88rem] shadow-[0_16px_34px_rgba(57,78,66,0.1),inset_0_1px_0_rgba(255,255,255,0.9)] max-[780px]:rounded-2xl max-[780px]:p-3';
   const sectionHeadClassName = 'mb-2 grid gap-1.5';
@@ -65,6 +90,22 @@ export function ExploreSection({
   const actionButtonWarnClassName =
     'rounded-[10px] bg-[linear-gradient(135deg,#f4c742,#e5a634)] px-2.5 py-1.5 text-[0.83rem] font-bold text-[#25361f] shadow-[0_4px_10px_rgba(229,166,52,0.25)] disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none';
   const cardThumbClassName = 'h-auto max-h-[160px] w-full rounded-[10px] border border-[#deeadb] object-cover';
+
+  async function copyCoordinates(postcard: PostcardRecord) {
+    if (typeof postcard.latitude !== 'number' || typeof postcard.longitude !== 'number') {
+      setCopyStatus(text.exploreNoCoordinates);
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(
+        `${postcard.latitude.toFixed(6)}, ${postcard.longitude.toFixed(6)}`
+      );
+      setCopyStatus(text.exploreCopyCoordinatesDone);
+    } catch {
+      setCopyStatus(text.exploreCopyCoordinatesFailed);
+    }
+  }
 
   return (
     <article className={`${panelClassName} grid min-h-0 grid-cols-[minmax(320px,390px)_minmax(0,1fr)] items-stretch gap-2 max-[1080px]:grid-cols-1`}>
@@ -130,11 +171,10 @@ export function ExploreSection({
 
         <div className={exploreResultsClassName}>
           {visiblePostcards.map((postcard) => {
-            const hasMapPoint = typeof postcard.latitude === 'number' && typeof postcard.longitude === 'number';
             const cardClassName = [
               postcardItemClassName,
               focusedMarkerId === postcard.id ? 'border-[#7ecb95] ring-2 ring-[rgba(86,179,106,0.2)]' : '',
-              hasMapPoint ? 'cursor-pointer hover:border-[#95d7a7] hover:ring-2 hover:ring-[rgba(86,179,106,0.16)] focus-visible:outline-2 focus-visible:outline-[rgba(86,179,106,0.45)] focus-visible:outline-offset-2' : ''
+              'cursor-pointer hover:border-[#95d7a7] hover:ring-2 hover:ring-[rgba(86,179,106,0.16)] focus-visible:outline-2 focus-visible:outline-[rgba(86,179,106,0.45)] focus-visible:outline-offset-2'
             ]
               .filter(Boolean)
               .join(' ');
@@ -143,77 +183,33 @@ export function ExploreSection({
               <article
                 key={postcard.id}
                 className={cardClassName}
-                onClick={() => {
-                  if (hasMapPoint) {
-                    onFocusMarker(postcard.id);
-                  }
-                }}
+                onClick={() => setSelectedPostcardId(postcard.id)}
                 onKeyDown={(event) => {
-                  if (!hasMapPoint) {
-                    return;
-                  }
                   if (event.key === 'Enter' || event.key === ' ') {
                     event.preventDefault();
-                    onFocusMarker(postcard.id);
+                    setSelectedPostcardId(postcard.id);
                   }
                 }}
-                role={hasMapPoint ? 'button' : undefined}
-                tabIndex={hasMapPoint ? 0 : undefined}
-                aria-label={hasMapPoint ? text.exploreFocusOnMapAria(postcard.title) : undefined}
+                role="button"
+                tabIndex={0}
+                aria-label={text.exploreOpenDetailsAria(postcard.title)}
               >
-                {postcard.imageUrl ? (
-                  <Image
-                    className={cardThumbClassName}
-                    src={postcard.imageUrl}
-                    alt={postcard.title}
-                    width={640}
-                    height={420}
-                  />
-                ) : null}
-                <div className={postcardItemHeadClassName}>
-                  <strong>{postcard.title}</strong>
-                  <small className={smallMutedClassName}>{new Date(postcard.createdAt).toLocaleDateString(text.dateLocale)}</small>
-                </div>
-                <small className={smallMutedClassName}>{postcard.placeName || text.exploreUnknownPlace}</small>
-                {postcard.uploaderMasked ? <small className={smallMutedClassName}>{text.exploreUploaderBy(postcard.uploaderMasked)}</small> : null}
-                <small className={smallMutedClassName}>
-                  👍 {postcard.likeCount} · 👎 {postcard.dislikeCount} · ⚠️ {postcard.wrongLocationReports}
-                </small>
-                {postcard.notes ? <p className="m-0 line-clamp-2 text-[0.9rem] text-[#436054]">{postcard.notes}</p> : null}
-                <div className="flex flex-wrap gap-1.5">
-                  <button
-                    type="button"
-                    className={actionButtonClassName}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onSubmitFeedback(postcard.id, 'like');
-                    }}
-                    disabled={feedbackPendingKey === `${postcard.id}:like`}
-                  >
-                    {feedbackPendingKey === `${postcard.id}:like` ? '...' : text.exploreVoteUp}
-                  </button>
-                  <button
-                    type="button"
-                    className={actionButtonClassName}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onSubmitFeedback(postcard.id, 'dislike');
-                    }}
-                    disabled={feedbackPendingKey === `${postcard.id}:dislike`}
-                  >
-                    {feedbackPendingKey === `${postcard.id}:dislike` ? '...' : text.exploreVoteDown}
-                  </button>
-                  <button
-                    type="button"
-                    className={actionButtonWarnClassName}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onSubmitFeedback(postcard.id, 'report_wrong_location');
-                    }}
-                    disabled={feedbackPendingKey === `${postcard.id}:report_wrong_location`}
-                  >
-                    {feedbackPendingKey === `${postcard.id}:report_wrong_location` ? '...' : text.exploreFlag}
-                  </button>
+                <div className="flex items-center gap-2">
+                  {postcard.imageUrl ? (
+                    <Image
+                      className="h-12 w-16 shrink-0 rounded-[8px] border border-[#deeadb] object-cover"
+                      src={postcard.imageUrl}
+                      alt={postcard.title}
+                      width={160}
+                      height={120}
+                    />
+                  ) : null}
+                  <div className="min-w-0 flex-1 grid gap-0.5">
+                    <strong className="truncate">{postcard.title}</strong>
+                    <small className={smallMutedClassName}>
+                      {new Date(postcard.createdAt).toLocaleDateString(text.dateLocale)}
+                    </small>
+                  </div>
                 </div>
               </article>
             );
@@ -222,6 +218,105 @@ export function ExploreSection({
       </aside>
 
       <div className="min-w-0 max-[1080px]:order-1">{mapNode}</div>
+
+      {selectedPostcard ? (
+        <div
+          className="fixed inset-0 z-[1200] grid place-items-center bg-[rgba(18,34,27,0.46)] p-3"
+          onClick={() => {
+            setSelectedPostcardId(null);
+            setCopyStatus('');
+          }}
+        >
+          <article
+            className="grid max-h-[92vh] w-full max-w-[640px] gap-2 overflow-auto rounded-2xl border border-[#d9ead6] bg-[#fafffa] p-3 shadow-[0_16px_34px_rgba(31,52,42,0.28)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className={postcardItemHeadClassName}>
+              <strong>{selectedPostcard.title}</strong>
+              <button
+                type="button"
+                className="rounded-lg border border-[#d2e3d0] bg-white px-2 py-1 text-[0.8rem] font-bold text-[#345447]"
+                onClick={() => {
+                  setSelectedPostcardId(null);
+                  setCopyStatus('');
+                }}
+              >
+                {text.buttonCancel}
+              </button>
+            </div>
+
+            {selectedPostcard.imageUrl ? (
+              <Image
+                className={cardThumbClassName}
+                src={selectedPostcard.imageUrl}
+                alt={selectedPostcard.title}
+                width={960}
+                height={680}
+              />
+            ) : null}
+
+            <small className={smallMutedClassName}>{selectedPostcard.placeName || text.exploreUnknownPlace}</small>
+            {selectedPostcard.uploaderMasked ? <small className={smallMutedClassName}>{text.exploreUploaderBy(selectedPostcard.uploaderMasked)}</small> : null}
+            <small className={smallMutedClassName}>
+              {new Date(selectedPostcard.createdAt).toLocaleString(text.dateLocale)}
+            </small>
+            <small className={smallMutedClassName}>
+              👍 {selectedPostcard.likeCount} · 👎 {selectedPostcard.dislikeCount} · ⚠️ {selectedPostcard.wrongLocationReports}
+            </small>
+
+            <div className="grid gap-1 rounded-xl border border-[#e0ebe0] bg-[#f4fbf5] p-2">
+              <small className={smallMutedClassName}>
+                {typeof selectedPostcard.latitude === 'number' && typeof selectedPostcard.longitude === 'number'
+                  ? `${selectedPostcard.latitude.toFixed(6)}, ${selectedPostcard.longitude.toFixed(6)}`
+                  : text.exploreNoCoordinates}
+              </small>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  className={actionButtonClassName}
+                  onClick={() => void copyCoordinates(selectedPostcard)}
+                >
+                  {text.exploreCopyCoordinates}
+                </button>
+                {copyStatus ? <small className={smallMutedClassName}>{copyStatus}</small> : null}
+              </div>
+            </div>
+
+            {selectedPostcard.notes ? (
+              <p className="m-0 rounded-xl border border-[#e2ece1] bg-[#f7fff8] px-2.5 py-2 text-[0.91rem] text-[#365247]">
+                {selectedPostcard.notes}
+              </p>
+            ) : null}
+
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                className={actionButtonClassName}
+                onClick={() => onSubmitFeedback(selectedPostcard.id, 'like')}
+                disabled={feedbackPendingKey === `${selectedPostcard.id}:like`}
+              >
+                {feedbackPendingKey === `${selectedPostcard.id}:like` ? '...' : text.exploreVoteUp}
+              </button>
+              <button
+                type="button"
+                className={actionButtonClassName}
+                onClick={() => onSubmitFeedback(selectedPostcard.id, 'dislike')}
+                disabled={feedbackPendingKey === `${selectedPostcard.id}:dislike`}
+              >
+                {feedbackPendingKey === `${selectedPostcard.id}:dislike` ? '...' : text.exploreVoteDown}
+              </button>
+              <button
+                type="button"
+                className={actionButtonWarnClassName}
+                onClick={() => onSubmitFeedback(selectedPostcard.id, 'report_wrong_location')}
+                disabled={feedbackPendingKey === `${selectedPostcard.id}:report_wrong_location`}
+              >
+                {feedbackPendingKey === `${selectedPostcard.id}:report_wrong_location` ? '...' : text.exploreFlag}
+              </button>
+            </div>
+          </article>
+        </div>
+      ) : null}
     </article>
   );
 }

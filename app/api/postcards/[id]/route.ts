@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server';
-import sharp from 'sharp';
 import { z } from 'zod';
 import { auth } from '@/auth';
-import { deriveOriginalImageUrl, hasMissingOriginalImageColumnError } from '@/lib/postcards/shared';
+import {
+  findPostcardCropSource,
+  recropPostcardAndUpload,
+  updatePostcardImageWithOriginalFallback
+} from '@/lib/postcards/crop-service';
+import { deriveOriginalImageUrl } from '@/lib/postcards/shared';
 import { prisma } from '@/lib/prisma';
-import { buildObjectKey, buildVariantObjectKey, uploadBytesToStorage } from '@/lib/storage';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -18,10 +21,6 @@ const cropUpdateSchema = z.object({
     height: z.number().min(0.01).max(1)
   })
 });
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
 
 async function getAuthenticatedUserId(): Promise<string | null> {
   const session = await auth();
@@ -51,39 +50,10 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   try {
     const payload = cropUpdateSchema.parse(await request.json());
-
-    let postcard: { id: string; imageUrl: string | null; originalImageUrl: string | null } | null = null;
-    try {
-      postcard = await prisma.postcard.findFirst({
-        where: {
-          id,
-          userId,
-          deletedAt: null
-        },
-        select: {
-          id: true,
-          imageUrl: true,
-          originalImageUrl: true
-        }
-      });
-    } catch (error) {
-      if (!hasMissingOriginalImageColumnError(error)) {
-        throw error;
-      }
-
-      const fallback = await prisma.postcard.findFirst({
-        where: {
-          id,
-          userId,
-          deletedAt: null
-        },
-        select: {
-          id: true,
-          imageUrl: true
-        }
-      });
-      postcard = fallback ? { ...fallback, originalImageUrl: null } : null;
-    }
+    const postcard = await findPostcardCropSource({
+      postcardId: id,
+      userId
+    });
 
     if (!postcard) {
       return NextResponse.json({ error: 'Postcard not found.' }, { status: 404 });
@@ -98,72 +68,22 @@ export async function PATCH(request: Request, context: RouteContext) {
       );
     }
 
-    const originalResponse = await fetch(sourceImageUrl, { cache: 'no-store' });
-    if (!originalResponse.ok) {
-      return NextResponse.json(
-        { error: 'Failed to load source image for recrop.' },
-        { status: 400 }
-      );
-    }
-
-    const originalBytes = Buffer.from(await originalResponse.arrayBuffer());
-    const metadata = await sharp(originalBytes).metadata();
-    const imageWidth = metadata.width ?? 0;
-    const imageHeight = metadata.height ?? 0;
-
-    if (imageWidth <= 0 || imageHeight <= 0) {
-      return NextResponse.json({ error: 'Invalid original image size.' }, { status: 400 });
-    }
-
-    const normalizedX = clamp(payload.crop.x, 0, 1);
-    const normalizedY = clamp(payload.crop.y, 0, 1);
-    const normalizedWidth = clamp(payload.crop.width, 0.05, 1 - normalizedX);
-    const normalizedHeight = clamp(payload.crop.height, 0.05, 1 - normalizedY);
-
-    const left = Math.round(normalizedX * imageWidth);
-    const top = Math.round(normalizedY * imageHeight);
-    const width = Math.max(1, Math.round(normalizedWidth * imageWidth));
-    const height = Math.max(1, Math.round(normalizedHeight * imageHeight));
-
-    const boundedWidth = Math.min(width, imageWidth - left);
-    const boundedHeight = Math.min(height, imageHeight - top);
-
-    const croppedBytes = await sharp(originalBytes)
-      .extract({
-        left,
-        top,
-        width: boundedWidth,
-        height: boundedHeight
-      })
-      .jpeg({ quality: 92 })
-      .toBuffer();
-
-    const postcardObjectKey = buildVariantObjectKey(buildObjectKey(`recrop-${id}.jpg`), 'postcard');
-    const postcardImageUrl = await uploadBytesToStorage({
-      key: postcardObjectKey,
-      bytes: new Uint8Array(croppedBytes),
-      contentType: 'image/jpeg'
+    const postcardImageUrl = await recropPostcardAndUpload({
+      postcardId: postcard.id,
+      sourceImageUrl,
+      crop: {
+        x: payload.crop.x,
+        y: payload.crop.y,
+        width: payload.crop.width,
+        height: payload.crop.height
+      }
     });
 
-    try {
-      await prisma.postcard.update({
-        where: { id: postcard.id },
-        data: {
-          imageUrl: postcardImageUrl,
-          originalImageUrl: originalImageUrl ?? sourceImageUrl
-        }
-      });
-    } catch (error) {
-      if (!hasMissingOriginalImageColumnError(error)) {
-        throw error;
-      }
-      await prisma.postcard.update({
-        where: { id: postcard.id },
-        data: {
-          imageUrl: postcardImageUrl
-        }
-      });
-    }
+    await updatePostcardImageWithOriginalFallback({
+      postcardId: postcard.id,
+      postcardImageUrl,
+      originalImageUrl: originalImageUrl ?? sourceImageUrl
+    });
 
     return NextResponse.json(
       {
