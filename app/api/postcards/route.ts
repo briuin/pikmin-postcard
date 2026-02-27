@@ -57,15 +57,30 @@ function serializePostcards(
   });
 }
 
+function clampLatitude(value: number): number {
+  if (value > 90) {
+    return 90;
+  }
+  if (value < -90) {
+    return -90;
+  }
+  return value;
+}
+
+function normalizeLongitude(value: number): number {
+  const wrapped = ((value + 180) % 360 + 360) % 360 - 180;
+  return wrapped === -180 ? 180 : wrapped;
+}
+
 const publicQuerySchema = z
   .object({
     q: z.string().trim().max(80).optional(),
     limit: z.coerce.number().int().min(1).max(300).default(120),
     sort: z.enum(['ranking', 'newest', 'likes', 'reports']).default('ranking'),
-    north: z.coerce.number().min(-90).max(90).optional(),
-    south: z.coerce.number().min(-90).max(90).optional(),
-    east: z.coerce.number().min(-180).max(180).optional(),
-    west: z.coerce.number().min(-180).max(180).optional()
+    north: z.coerce.number().optional(),
+    south: z.coerce.number().optional(),
+    east: z.coerce.number().optional(),
+    west: z.coerce.number().optional()
   })
   .superRefine((value, ctx) => {
     const hasAnyBounds =
@@ -162,7 +177,7 @@ export async function GET(request: Request) {
   const query = queryParse.data;
   const whereAnd: Array<Record<string, unknown>> = [{ deletedAt: null }];
 
-  if (query.q) {
+  if (query.q && query.q.length > 0) {
     whereAnd.push({
       OR: [
         { title: { contains: query.q, mode: 'insensitive' } },
@@ -179,43 +194,55 @@ export async function GET(request: Request) {
     typeof query.east === 'number' &&
     typeof query.west === 'number'
   ) {
+    const north = clampLatitude(query.north);
+    const south = clampLatitude(query.south);
+    const maxLat = Math.max(north, south);
+    const minLat = Math.min(north, south);
     const latitudeFilter = {
       latitude: {
         not: null,
-        gte: query.south,
-        lte: query.north
+        gte: minLat,
+        lte: maxLat
       }
     };
 
-    if (query.west <= query.east) {
-      whereAnd.push({
-        ...latitudeFilter,
-        longitude: {
-          not: null,
-          gte: query.west,
-          lte: query.east
-        }
-      });
+    const lonSpan = Math.abs(query.east - query.west);
+    if (lonSpan >= 360) {
+      whereAnd.push(latitudeFilter);
     } else {
-      whereAnd.push({
-        ...latitudeFilter,
-        OR: [
-          {
-            longitude: {
-              not: null,
-              gte: query.west,
-              lte: 180
-            }
-          },
-          {
-            longitude: {
-              not: null,
-              gte: -180,
-              lte: query.east
-            }
+      const west = normalizeLongitude(query.west);
+      const east = normalizeLongitude(query.east);
+
+      if (west <= east) {
+        whereAnd.push({
+          ...latitudeFilter,
+          longitude: {
+            not: null,
+            gte: west,
+            lte: east
           }
-        ]
-      });
+        });
+      } else {
+        whereAnd.push({
+          ...latitudeFilter,
+          OR: [
+            {
+              longitude: {
+                not: null,
+                gte: west,
+                lte: 180
+              }
+            },
+            {
+              longitude: {
+                not: null,
+                gte: -180,
+                lte: east
+              }
+            }
+          ]
+        });
+      }
     }
   }
 
