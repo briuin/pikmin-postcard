@@ -5,6 +5,8 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { signIn, useSession } from 'next-auth/react';
+import ReactCrop, { type PercentCrop } from 'react-image-crop';
+import 'react-image-crop/dist/ReactCrop.css';
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MapViewportBounds, SavedMapMarker } from '@/components/open-map';
 
@@ -65,18 +67,21 @@ type DetectionDraft = {
   locationInput: string;
 };
 
-type CropDraft = {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-};
+type CropDraft = PercentCrop;
 
 type PostcardWorkbenchProps = {
   mode?: 'explore' | 'create' | 'dashboard' | 'full';
 };
 
 type ExploreSort = 'ranking' | 'newest' | 'likes' | 'reports';
+
+const DEFAULT_CROP_DRAFT: CropDraft = {
+  unit: '%',
+  x: 8,
+  y: 10,
+  width: 84,
+  height: 54
+};
 
 const OpenMap = dynamic(
   async () => {
@@ -134,6 +139,50 @@ function deriveOriginalImageUrl(imageUrl: string | null | undefined): string | n
   return null;
 }
 
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function sanitizePercentCrop(crop: Partial<PercentCrop>, fallback: CropDraft = DEFAULT_CROP_DRAFT): CropDraft {
+  const x = clampNumber(crop.x ?? fallback.x ?? DEFAULT_CROP_DRAFT.x ?? 0, 0, 99);
+  const y = clampNumber(crop.y ?? fallback.y ?? DEFAULT_CROP_DRAFT.y ?? 0, 0, 99);
+
+  let width = clampNumber(crop.width ?? fallback.width ?? DEFAULT_CROP_DRAFT.width ?? 50, 1, 100);
+  let height = clampNumber(crop.height ?? fallback.height ?? DEFAULT_CROP_DRAFT.height ?? 50, 1, 100);
+
+  if (x + width > 100) {
+    width = Math.max(1, 100 - x);
+  }
+  if (y + height > 100) {
+    height = Math.max(1, 100 - y);
+  }
+
+  return {
+    unit: '%',
+    x,
+    y,
+    width,
+    height
+  };
+}
+
+function toNormalizedCrop(crop: CropDraft): { x: number; y: number; width: number; height: number } {
+  const sanitized = sanitizePercentCrop(crop);
+  const x = clampNumber(sanitized.x ?? 0, 0, 95);
+  const y = clampNumber(sanitized.y ?? 0, 0, 95);
+  const maxWidth = Math.max(5, 100 - x);
+  const maxHeight = Math.max(5, 100 - y);
+  const width = clampNumber(sanitized.width ?? 84, 5, maxWidth);
+  const height = clampNumber(sanitized.height ?? 54, 5, maxHeight);
+
+  return {
+    x: Number((x / 100).toFixed(6)),
+    y: Number((y / 100).toFixed(6)),
+    width: Number((width / 100).toFixed(6)),
+    height: Number((height / 100).toFixed(6))
+  };
+}
+
 export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
   const router = useRouter();
   const { status: sessionStatus } = useSession();
@@ -181,12 +230,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
   const [deletingPostcardId, setDeletingPostcardId] = useState<string | null>(null);
   const [editingCropPostcardId, setEditingCropPostcardId] = useState<string | null>(null);
   const [editingCropOriginalUrl, setEditingCropOriginalUrl] = useState<string | null>(null);
-  const [cropDraft, setCropDraft] = useState<CropDraft>({
-    x: 0.08,
-    y: 0.1,
-    width: 0.84,
-    height: 0.54
-  });
+  const [cropDraft, setCropDraft] = useState<CropDraft>({ ...DEFAULT_CROP_DRAFT });
   const [savingCropPostcardId, setSavingCropPostcardId] = useState<string | null>(null);
   const [isLoadingJobs, setIsLoadingJobs] = useState(false);
   const [isLoadingMine, setIsLoadingMine] = useState(false);
@@ -740,55 +784,21 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
 
   function openCropEditor(postcard: PostcardRecord) {
     const derivedOriginalUrl = deriveOriginalImageUrl(postcard.imageUrl);
-    const sourceUrl = postcard.originalImageUrl ?? derivedOriginalUrl ?? postcard.imageUrl;
+    const sourceUrl = postcard.originalImageUrl ?? derivedOriginalUrl;
     if (!sourceUrl) {
-      setDashboardStatus('Image is not available for this postcard.');
+      setDashboardStatus('Original upload is not available for this postcard. Crop edit requires original image.');
       return;
     }
 
     setEditingCropPostcardId(postcard.id);
     setEditingCropOriginalUrl(sourceUrl);
-    setCropDraft({
-      x: 0.08,
-      y: 0.1,
-      width: 0.84,
-      height: 0.54
-    });
-    if (!postcard.originalImageUrl && !derivedOriginalUrl) {
-      setDashboardStatus('Original upload not found. Using current postcard image for crop edit.');
-    } else {
-      setDashboardStatus('');
-    }
+    setCropDraft({ ...DEFAULT_CROP_DRAFT });
+    setDashboardStatus('');
   }
 
   function closeCropEditor() {
     setEditingCropPostcardId(null);
     setEditingCropOriginalUrl(null);
-  }
-
-  function updateCropDraftValue(field: keyof CropDraft, value: number) {
-    setCropDraft((current) => {
-      const next = { ...current, [field]: value };
-
-      if (field === 'x') {
-        next.x = Math.min(next.x, 1 - next.width);
-      }
-      if (field === 'y') {
-        next.y = Math.min(next.y, 1 - next.height);
-      }
-      if (field === 'width') {
-        next.width = Math.min(next.width, 1 - next.x);
-      }
-      if (field === 'height') {
-        next.height = Math.min(next.height, 1 - next.y);
-      }
-
-      next.x = Math.max(0, next.x);
-      next.y = Math.max(0, next.y);
-      next.width = Math.max(0.05, next.width);
-      next.height = Math.max(0.05, next.height);
-      return next;
-    });
   }
 
   async function saveCropEdit(postcardId: string) {
@@ -803,7 +813,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
       const response = await fetch(`/api/postcards/${postcardId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ crop: cropDraft })
+        body: JSON.stringify({ crop: toNormalizedCrop(cropDraft) })
       });
 
       const payload = (await response.json()) as { error?: string };
@@ -1229,8 +1239,10 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
               {isLoadingMine ? <small>Loading your postcards...</small> : null}
               {!isLoadingMine && myPostcards.length === 0 ? <small>You have not created postcards yet.</small> : null}
               <div className={dashboardViewMode === 'grid' ? 'postcard-list dashboard-grid' : 'postcard-list dashboard-list'}>
-                {myPostcards.slice(0, 20).map((postcard) => (
-                  <article key={postcard.id} className="postcard-item">
+                {myPostcards.slice(0, 20).map((postcard) => {
+                  const hasOriginalImage = Boolean(postcard.originalImageUrl ?? deriveOriginalImageUrl(postcard.imageUrl));
+                  return (
+                    <article key={postcard.id} className="postcard-item">
                     <div className="postcard-item-head">
                       <strong>{postcard.title}</strong>
                       <small>{new Date(postcard.createdAt).toLocaleDateString()}</small>
@@ -1254,7 +1266,8 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
                         type="button"
                         className="action-button"
                         onClick={() => openCropEditor(postcard)}
-                        disabled={savingCropPostcardId === postcard.id || deletingPostcardId === postcard.id}
+                        disabled={!hasOriginalImage || savingCropPostcardId === postcard.id || deletingPostcardId === postcard.id}
+                        title={hasOriginalImage ? undefined : 'Original upload image is required for crop edit.'}
                       >
                         {editingCropPostcardId === postcard.id ? 'Editing Crop' : 'Edit Crop'}
                       </button>
@@ -1270,66 +1283,22 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
                     {editingCropPostcardId === postcard.id && editingCropOriginalUrl ? (
                       <div className="crop-editor">
                         <strong>Crop Editor (Original Upload)</strong>
-                        <small>Adjust the box to match the postcard photo area, then save.</small>
+                        <small>Drag and resize the rectangle directly on the original image.</small>
                         <div className="crop-preview">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={editingCropOriginalUrl} alt="Original upload for crop editing" className="crop-preview-image" />
-                          <div
-                            className="crop-preview-box"
-                            style={{
-                              left: `${cropDraft.x * 100}%`,
-                              top: `${cropDraft.y * 100}%`,
-                              width: `${cropDraft.width * 100}%`,
-                              height: `${cropDraft.height * 100}%`
-                            }}
-                          />
+                          <ReactCrop
+                            crop={cropDraft}
+                            onChange={(_, percentCrop) => setCropDraft((current) => sanitizePercentCrop(percentCrop, current))}
+                            ruleOfThirds
+                            keepSelection
+                            className="crop-react"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={editingCropOriginalUrl} alt="Original upload for crop editing" className="crop-preview-image" />
+                          </ReactCrop>
                         </div>
-                        <div className="crop-slider-grid">
-                          <label>
-                            Left ({Math.round(cropDraft.x * 100)}%)
-                            <input
-                              type="range"
-                              min={0}
-                              max={Math.max(0, 1 - cropDraft.width)}
-                              step={0.005}
-                              value={cropDraft.x}
-                              onChange={(event) => updateCropDraftValue('x', Number(event.target.value))}
-                            />
-                          </label>
-                          <label>
-                            Top ({Math.round(cropDraft.y * 100)}%)
-                            <input
-                              type="range"
-                              min={0}
-                              max={Math.max(0, 1 - cropDraft.height)}
-                              step={0.005}
-                              value={cropDraft.y}
-                              onChange={(event) => updateCropDraftValue('y', Number(event.target.value))}
-                            />
-                          </label>
-                          <label>
-                            Width ({Math.round(cropDraft.width * 100)}%)
-                            <input
-                              type="range"
-                              min={0.05}
-                              max={Math.max(0.05, 1 - cropDraft.x)}
-                              step={0.005}
-                              value={cropDraft.width}
-                              onChange={(event) => updateCropDraftValue('width', Number(event.target.value))}
-                            />
-                          </label>
-                          <label>
-                            Height ({Math.round(cropDraft.height * 100)}%)
-                            <input
-                              type="range"
-                              min={0.05}
-                              max={Math.max(0.05, 1 - cropDraft.y)}
-                              step={0.005}
-                              value={cropDraft.height}
-                              onChange={(event) => updateCropDraftValue('height', Number(event.target.value))}
-                            />
-                          </label>
-                        </div>
+                        <small>
+                          Selection: x {Math.round(cropDraft.x ?? 0)}%, y {Math.round(cropDraft.y ?? 0)}%, w {Math.round(cropDraft.width ?? 0)}%, h {Math.round(cropDraft.height ?? 0)}%
+                        </small>
                         <div className="chip-row">
                           <button
                             type="button"
@@ -1350,8 +1319,9 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
                         </div>
                       </div>
                     ) : null}
-                  </article>
-                ))}
+                    </article>
+                  );
+                })}
               </div>
             </>
           )}
