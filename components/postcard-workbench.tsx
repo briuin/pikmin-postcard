@@ -889,48 +889,98 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
   }
 
   const isExploreOnlyPage = mode === 'explore';
-  const workbenchClassName = showExplore && showCreate
-    ? 'workbench'
-    : `workbench workbench-single${isExploreOnlyPage ? ' explore-only-shell' : ''}`;
+  const panelClassName =
+    'relative rounded-[22px] border border-white/60 bg-[linear-gradient(165deg,rgba(255,255,255,0.96),rgba(245,255,246,0.92))] p-[0.88rem] shadow-[0_16px_34px_rgba(57,78,66,0.1),inset_0_1px_0_rgba(255,255,255,0.9)] max-[780px]:rounded-2xl max-[780px]:p-3';
+  const sectionHeadClassName = 'mb-2 grid gap-1.5';
+  const chipRowClassName = 'flex flex-wrap gap-1.5';
+  const chipClassName =
+    'inline-flex items-center rounded-full border border-[#d6e8d4] bg-[#f4fff4] px-2.5 py-1 text-[0.78rem] font-bold text-[#2b6442]';
+  const inlineFieldClassName = 'mb-0 grid gap-1.5 text-[0.91rem] font-bold text-[#39604f]';
+  const postcardItemClassName = 'grid gap-1.5 rounded-[14px] border border-[#e2eee0] bg-[#f8fffc] px-3 py-2.5';
+  const postcardItemHeadClassName = 'flex items-center justify-between gap-2';
+  const exploreResultsClassName =
+    'grid min-h-0 gap-2 overflow-auto pr-1 max-[1080px]:max-h-none max-[1080px]:overflow-visible max-[1080px]:pr-0';
+  const smallMutedClassName = 'text-[0.82rem] text-[#5f736c]';
+  const actionButtonClassName =
+    'rounded-[10px] bg-[linear-gradient(135deg,#56b36a,#2f9e58)] px-2.5 py-1.5 text-[0.83rem] font-bold text-white shadow-[0_4px_10px_rgba(47,158,88,0.18)] disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none';
+  const actionButtonWarnClassName =
+    'rounded-[10px] bg-[linear-gradient(135deg,#f4c742,#e5a634)] px-2.5 py-1.5 text-[0.83rem] font-bold text-[#25361f] shadow-[0_4px_10px_rgba(229,166,52,0.25)] disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none';
+  const cardThumbClassName = 'h-auto max-h-[160px] w-full rounded-[10px] border border-[#deeadb] object-cover';
+  const formStackClassName = 'grid gap-0.5';
+  const authCalloutClassName =
+    'grid gap-2 rounded-[14px] border border-[#dce8d7] bg-[linear-gradient(145deg,rgba(243,251,226,0.8),rgba(241,255,251,0.8))] p-3';
+  const statusBoxClassName = 'grid gap-1 rounded-[14px] border border-[#e3eddc] bg-[#fbfffa] p-3';
+  const statusSuccessClassName =
+    'grid gap-1 rounded-[14px] border border-[#b9e3c3] bg-[linear-gradient(145deg,rgba(230,255,236,0.92),rgba(243,255,250,0.95))] p-3';
+  const dashboardToolbarClassName =
+    'flex flex-wrap items-center justify-between gap-2 rounded-[14px] border border-[#deead9] bg-[linear-gradient(140deg,rgba(244,255,245,0.95),rgba(247,254,255,0.92))] px-2.5 py-2';
+  const cropEditorClassName = 'grid gap-2 rounded-xl border border-dashed border-[#c9dfc7] bg-[#f6fff6] p-2.5';
+  const cropPreviewClassName = 'w-full overflow-hidden rounded-[10px] border border-[#d8e7d8] bg-[#edf4ed]';
+  const cropImageClassName = 'block h-auto max-h-[420px] w-full bg-[#edf4ed] object-contain';
+
+  const workbenchClassName = [
+    'grid gap-3',
+    showExplore && showCreate ? 'grid-cols-[1.28fr_0.86fr] max-[1080px]:grid-cols-1' : 'grid-cols-1',
+    isExploreOnlyPage ? 'h-full min-h-0 overflow-hidden max-[1080px]:overflow-visible' : ''
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  const explorePanelClassName = `${panelClassName} grid min-h-0 grid-cols-[minmax(320px,390px)_minmax(0,1fr)] items-stretch gap-2 max-[1080px]:grid-cols-1`;
+  const exploreSidebarClassName =
+    'grid min-h-0 content-stretch grid-rows-[auto_auto_auto_minmax(0,1fr)] gap-2 max-[1080px]:order-2 max-[1080px]:grid-rows-[auto_auto_auto_auto]';
+  const exploreMapPaneClassName = 'min-w-0 max-[1080px]:order-1';
+  const exploreMapClassName = isExploreOnlyPage
+    ? 'h-full min-h-0 max-[1080px]:h-[460px] max-[1080px]:min-h-[460px] max-[780px]:h-[380px] max-[780px]:min-h-[380px]'
+    : 'h-[540px] min-h-[560px] max-[1080px]:h-[460px] max-[1080px]:min-h-[460px] max-[780px]:h-[380px] max-[780px]:min-h-[380px]';
+  const dashboardListClassName =
+    dashboardViewMode === 'grid'
+      ? 'mt-2 grid grid-cols-2 gap-2 max-[780px]:grid-cols-1'
+      : 'mt-2 grid grid-cols-1 gap-2';
+  const inputClassName =
+    'w-full rounded-[13px] border border-[#d8e6d5] bg-[#fdfffc] px-3 py-2 text-[#1f2e29] outline-none transition focus:border-[#72b485] focus:ring-4 focus:ring-[rgba(86,179,106,0.18)] disabled:opacity-60';
+  const primaryButtonClassName =
+    'rounded-[13px] bg-[linear-gradient(135deg,#56b36a,#2f9e58)] px-4 py-2.5 font-bold text-white shadow-[0_8px_16px_rgba(47,158,88,0.23)] transition hover:enabled:-translate-y-px hover:enabled:shadow-[0_11px_18px_rgba(47,158,88,0.27)] disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none';
 
   return (
     <section className={workbenchClassName}>
       {showExplore ? (
-        <article className="panel explore-panel explore-map-layout">
-          <aside className="explore-sidebar">
-            <div className="section-head">
+        <article className={explorePanelClassName}>
+          <aside className={exploreSidebarClassName}>
+            <div className={sectionHeadClassName}>
               <h2>{text.exploreTitle}</h2>
-              <div className="chip-row">
-                <span className="chip">{text.chipLoaded(visiblePostcards.length)}</span>
-                <span className="chip">{text.chipMarkers(publicMarkers.length)}</span>
-                <span className="chip">{text.chipInArea(visibleTotal)}</span>
-                {visibleHasMore ? <span className="chip">{text.chipLimitedTo(exploreLimit)}</span> : null}
+              <div className={chipRowClassName}>
+                <span className={chipClassName}>{text.chipLoaded(visiblePostcards.length)}</span>
+                <span className={chipClassName}>{text.chipMarkers(publicMarkers.length)}</span>
+                <span className={chipClassName}>{text.chipInArea(visibleTotal)}</span>
+                {visibleHasMore ? <span className={chipClassName}>{text.chipLimitedTo(exploreLimit)}</span> : null}
               </div>
             </div>
 
-            <details className="explore-filter-collapse">
-              <summary>{text.exploreFiltersTitle}</summary>
-              <div className="explore-filter-stack">
-                <label className="inline-field">
+            <details className="rounded-xl border border-[#dce9d8] bg-[#fbfffa] px-2.5 pb-2.5 pt-1">
+              <summary className="cursor-pointer py-2 font-bold text-[#2b6442] marker:text-[#5a7b67]">{text.exploreFiltersTitle}</summary>
+              <div className="grid gap-2 pt-1">
+                <label className={inlineFieldClassName}>
                   {text.exploreSearchLabel}
                   <input
+                    className={inputClassName}
                     value={searchText}
                     onChange={(event) => setSearchText(event.target.value)}
                     placeholder={text.exploreSearchPlaceholder}
                   />
                 </label>
-                <label className="inline-field">
+                <label className={inlineFieldClassName}>
                   {text.exploreSortLabel}
-                  <select value={exploreSort} onChange={(event) => setExploreSort(event.target.value as ExploreSort)}>
+                  <select className={inputClassName} value={exploreSort} onChange={(event) => setExploreSort(event.target.value as ExploreSort)}>
                     <option value="ranking">{text.exploreSortRanking}</option>
                     <option value="newest">{text.exploreSortNewest}</option>
                     <option value="likes">{text.exploreSortLikes}</option>
                     <option value="reports">{text.exploreSortReports}</option>
                   </select>
                 </label>
-                <label className="inline-field">
+                <label className={inlineFieldClassName}>
                   {text.exploreMaxResultsLabel}
-                  <select value={exploreLimit} onChange={(event) => setExploreLimit(Number(event.target.value))}>
+                  <select className={inputClassName} value={exploreLimit} onChange={(event) => setExploreLimit(Number(event.target.value))}>
                     <option value={60}>60</option>
                     <option value={120}>120</option>
                     <option value={200}>200</option>
@@ -939,22 +989,22 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
               </div>
             </details>
 
-            <div className="explore-status-stack">
-              {!mapBounds ? <small className="list-note">{text.exploreLoadingArea}</small> : null}
-              {isLoadingPublic ? <small className="list-note">{text.exploreLoadingPostcards}</small> : null}
+            <div className="grid gap-0.5 border-y border-[#e1ece0] px-0.5 py-1">
+              {!mapBounds ? <small className={smallMutedClassName}>{text.exploreLoadingArea}</small> : null}
+              {isLoadingPublic ? <small className={smallMutedClassName}>{text.exploreLoadingPostcards}</small> : null}
               {!isLoadingPublic && mapBounds && visiblePostcards.length === 0 ? (
-                <small className="list-note">{text.exploreNoResults}</small>
+                <small className={smallMutedClassName}>{text.exploreNoResults}</small>
               ) : null}
-              {exploreStatus ? <small className="list-note">{exploreStatus}</small> : null}
+              {exploreStatus ? <small className={smallMutedClassName}>{exploreStatus}</small> : null}
             </div>
 
-            <div className="explore-results">
+            <div className={exploreResultsClassName}>
               {visiblePostcards.map((postcard) => {
                 const hasMapPoint = typeof postcard.latitude === 'number' && typeof postcard.longitude === 'number';
                 const cardClassName = [
-                  'postcard-item',
-                  focusedMarkerId === postcard.id ? 'postcard-focused' : '',
-                  hasMapPoint ? 'explore-card-clickable' : ''
+                  postcardItemClassName,
+                  focusedMarkerId === postcard.id ? 'border-[#7ecb95] ring-2 ring-[rgba(86,179,106,0.2)]' : '',
+                  hasMapPoint ? 'cursor-pointer hover:border-[#95d7a7] hover:ring-2 hover:ring-[rgba(86,179,106,0.16)] focus-visible:outline-2 focus-visible:outline-[rgba(86,179,106,0.45)] focus-visible:outline-offset-2' : ''
                 ]
                   .filter(Boolean)
                   .join(' ');
@@ -983,27 +1033,27 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
                   >
                     {postcard.imageUrl ? (
                       <Image
-                        className="postcard-thumb explore-card-thumb"
+                        className={cardThumbClassName}
                         src={postcard.imageUrl}
                         alt={postcard.title}
                         width={640}
                         height={420}
                       />
                     ) : null}
-                    <div className="postcard-item-head">
+                    <div className={postcardItemHeadClassName}>
                       <strong>{postcard.title}</strong>
-                      <small>{new Date(postcard.createdAt).toLocaleDateString(text.dateLocale)}</small>
+                      <small className={smallMutedClassName}>{new Date(postcard.createdAt).toLocaleDateString(text.dateLocale)}</small>
                     </div>
-                    <small>{postcard.placeName || text.exploreUnknownPlace}</small>
-                    {postcard.uploaderMasked ? <small>{text.exploreUploaderBy(postcard.uploaderMasked)}</small> : null}
-                    <small>
+                    <small className={smallMutedClassName}>{postcard.placeName || text.exploreUnknownPlace}</small>
+                    {postcard.uploaderMasked ? <small className={smallMutedClassName}>{text.exploreUploaderBy(postcard.uploaderMasked)}</small> : null}
+                    <small className={smallMutedClassName}>
                       👍 {postcard.likeCount} · 👎 {postcard.dislikeCount} · ⚠️ {postcard.wrongLocationReports}
                     </small>
-                    {postcard.notes ? <p className="explore-note">{postcard.notes}</p> : null}
-                    <div className="chip-row explore-action-row">
+                    {postcard.notes ? <p className="m-0 line-clamp-2 text-[0.9rem] text-[#436054]">{postcard.notes}</p> : null}
+                    <div className="flex flex-wrap gap-1.5">
                       <button
                         type="button"
-                        className="action-button"
+                        className={actionButtonClassName}
                         onClick={(event) => {
                           event.stopPropagation();
                           void submitExploreFeedback(postcard.id, 'like');
@@ -1014,7 +1064,7 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
                       </button>
                       <button
                         type="button"
-                        className="action-button"
+                        className={actionButtonClassName}
                         onClick={(event) => {
                           event.stopPropagation();
                           void submitExploreFeedback(postcard.id, 'dislike');
@@ -1025,7 +1075,7 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
                       </button>
                       <button
                         type="button"
-                        className="action-button action-button-warn"
+                        className={actionButtonWarnClassName}
                         onClick={(event) => {
                           event.stopPropagation();
                           void submitExploreFeedback(postcard.id, 'report_wrong_location');
@@ -1041,9 +1091,9 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
             </div>
           </aside>
 
-          <div className="explore-map-pane">
+          <div className={exploreMapPaneClassName}>
             <OpenMap
-              className="map-shell-large map-shell-google"
+              className={exploreMapClassName}
               markers={publicMarkers}
               focusedMarkerId={focusedMarkerId}
             viewerFocusSignal={viewerFocusSignal}
@@ -1066,30 +1116,31 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
       ) : null}
 
       {showCreate ? (
-        <article className="panel create-panel">
-          <div className="section-head">
+        <article className={`${panelClassName} grid content-start gap-3`}>
+          <div className={sectionHeadClassName}>
             <div>
               <h2>{text.createTitle}</h2>
-              <small>{text.createSubtitle}</small>
+              <small className={smallMutedClassName}>{text.createSubtitle}</small>
             </div>
           </div>
 
           {!isAuthenticated ? (
-            <div className="auth-callout">
+            <div className={authCalloutClassName}>
               <strong>{text.loginRequiredTitle}</strong>
-              <small>{text.loginRequiredCreateBody}</small>
-              <button type="button" onClick={() => signIn('google')}>
+              <small className={smallMutedClassName}>{text.loginRequiredCreateBody}</small>
+              <button type="button" className={primaryButtonClassName} onClick={() => signIn('google')}>
                 {text.buttonSignInGoogle}
               </button>
             </div>
           ) : null}
 
-          <form onSubmit={submitAiDetectJob} className="form-stack">
+          <form onSubmit={submitAiDetectJob} className={formStackClassName}>
             <h3>{text.optionAiTitle}</h3>
-            <small>{text.optionAiBody}</small>
-            <label>
+            <small className={smallMutedClassName}>{text.optionAiBody}</small>
+            <label className={inlineFieldClassName}>
               {text.fieldImage}
               <input
+                className={inputClassName}
                 key={aiInputVersion}
                 type="file"
                 accept="image/*"
@@ -1097,41 +1148,43 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
                 disabled={!isAuthenticated || isSubmittingAi || isSavingManual}
               />
             </label>
-            <button type="submit" disabled={!isAuthenticated || !aiFile || isSubmittingAi || isSavingManual}>
+            <button type="submit" className={primaryButtonClassName} disabled={!isAuthenticated || !aiFile || isSubmittingAi || isSavingManual}>
               {isSubmittingAi ? text.buttonSubmitting : text.buttonSubmitAiJob}
             </button>
           </form>
 
           {queuedAiJobId ? (
-            <div className="status-box status-success">
-              <small>{text.queuedBody}</small>
-              <small>{text.queuedJobId(queuedAiJobId)}</small>
+            <div className={statusSuccessClassName}>
+              <small className={smallMutedClassName}>{text.queuedBody}</small>
+              <small className={smallMutedClassName}>{text.queuedJobId(queuedAiJobId)}</small>
               {queuedAiImageUrl ? (
-                <small>
+                <small className={smallMutedClassName}>
                   {text.queuedImageLabel}: <Link href={queuedAiImageUrl} target="_blank" rel="noreferrer">{text.queuedOpenUploadedImage}</Link>
                 </small>
               ) : null}
-              <button type="button" onClick={() => router.push('/dashboard')}>
+              <button type="button" className={primaryButtonClassName} onClick={() => router.push('/dashboard')}>
                 {text.buttonOpenDashboard}
               </button>
             </div>
           ) : null}
 
-          <div className="form-stack">
+          <div className={formStackClassName}>
             <h3>{text.optionManualTitle}</h3>
-            <small>{text.optionManualBody}</small>
-            <label>
+            <small className={smallMutedClassName}>{text.optionManualBody}</small>
+            <label className={inlineFieldClassName}>
               {text.fieldName}
               <input
+                className={inputClassName}
                 value={manualTitle}
                 onChange={(event) => setManualTitle(event.target.value)}
                 placeholder={text.manualNamePlaceholder}
                 disabled={!isAuthenticated || isSavingManual || isSubmittingAi}
               />
             </label>
-            <label>
+            <label className={inlineFieldClassName}>
               {text.fieldDescription}
               <textarea
+                className={inputClassName}
                 rows={4}
                 value={manualNotes}
                 onChange={(event) => setManualNotes(event.target.value)}
@@ -1139,114 +1192,118 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
                 disabled={!isAuthenticated || isSavingManual || isSubmittingAi}
               />
             </label>
-            <label>
+            <label className={inlineFieldClassName}>
               {text.fieldLocation}
               <input
+                className={inputClassName}
                 value={manualLocationInput}
                 onChange={(event) => setManualLocationInput(event.target.value)}
                 placeholder={text.manualLocationPlaceholder}
                 disabled={!isAuthenticated || isSavingManual || isSubmittingAi}
               />
             </label>
-            <label>
+            <label className={inlineFieldClassName}>
               {text.fieldImage}
               <input
+                className={inputClassName}
                 type="file"
                 accept="image/*"
                 onChange={(event) => setManualFile(event.target.files?.[0] ?? null)}
                 disabled={!isAuthenticated || isSavingManual || isSubmittingAi}
               />
             </label>
-            <button type="button" disabled={!isAuthenticated || isSavingManual || isSubmittingAi} onClick={saveManualPostcard}>
+            <button type="button" className={primaryButtonClassName} disabled={!isAuthenticated || isSavingManual || isSubmittingAi} onClick={saveManualPostcard}>
               {isSavingManual ? text.buttonSaving : text.buttonCreatePostcard}
             </button>
           </div>
 
-          <div className="status-box">
-            <small>{createStatus || text.noActionYet}</small>
+          <div className={statusBoxClassName}>
+            <small className={smallMutedClassName}>{createStatus || text.noActionYet}</small>
           </div>
         </article>
       ) : null}
 
       {showDashboard ? (
-        <article className="panel create-panel">
-          <div className="section-head">
+        <article className={`${panelClassName} grid content-start gap-3`}>
+          <div className={sectionHeadClassName}>
             <div>
               <h2>{text.dashboardTitle}</h2>
-              <small>{text.dashboardSubtitle}</small>
+              <small className={smallMutedClassName}>{text.dashboardSubtitle}</small>
             </div>
           </div>
 
           {!isAuthenticated ? (
-            <div className="auth-callout">
+            <div className={authCalloutClassName}>
               <strong>{text.loginRequiredTitle}</strong>
-              <small>{text.loginRequiredDashboardBody}</small>
-              <button type="button" onClick={() => signIn('google')}>
+              <small className={smallMutedClassName}>{text.loginRequiredDashboardBody}</small>
+              <button type="button" className={primaryButtonClassName} onClick={() => signIn('google')}>
                 {text.buttonSignInGoogle}
               </button>
             </div>
           ) : (
             <>
-              <div className="dashboard-toolbar">
-                <div className="chip-row">
-                  <span className="chip">{text.chipAiJobs(jobs.length)}</span>
-                  <span className="chip">{text.chipMyPostcards(myPostcards.length)}</span>
+              <div className={dashboardToolbarClassName}>
+                <div className={chipRowClassName}>
+                  <span className={chipClassName}>{text.chipAiJobs(jobs.length)}</span>
+                  <span className={chipClassName}>{text.chipMyPostcards(myPostcards.length)}</span>
                 </div>
-                <div className="chip-row">
-                  <button type="button" className="action-button" onClick={() => setDashboardViewMode('grid')} disabled={dashboardViewMode === 'grid'}>
+                <div className={chipRowClassName}>
+                  <button type="button" className={actionButtonClassName} onClick={() => setDashboardViewMode('grid')} disabled={dashboardViewMode === 'grid'}>
                     {text.buttonGrid}
                   </button>
-                  <button type="button" className="action-button" onClick={() => setDashboardViewMode('list')} disabled={dashboardViewMode === 'list'}>
+                  <button type="button" className={actionButtonClassName} onClick={() => setDashboardViewMode('list')} disabled={dashboardViewMode === 'list'}>
                     {text.buttonList}
                   </button>
-                  <button type="button" className="action-button" onClick={() => void loadDashboardData()} disabled={isLoadingJobs || isLoadingMine}>
+                  <button type="button" className={actionButtonClassName} onClick={() => void loadDashboardData()} disabled={isLoadingJobs || isLoadingMine}>
                     {text.buttonRefresh}
                   </button>
                 </div>
               </div>
 
-              {dashboardStatus ? <small>{dashboardStatus}</small> : null}
+              {dashboardStatus ? <small className={smallMutedClassName}>{dashboardStatus}</small> : null}
 
               <h3 style={{ marginTop: '0.5rem' }}>{text.aiJobsTitle}</h3>
-              {isLoadingJobs ? <small>{text.aiJobsLoading}</small> : null}
-              {!isLoadingJobs && jobs.length === 0 ? <small>{text.aiJobsEmpty}</small> : null}
-              <div className={dashboardViewMode === 'grid' ? 'postcard-list dashboard-grid' : 'postcard-list dashboard-list'}>
+              {isLoadingJobs ? <small className={smallMutedClassName}>{text.aiJobsLoading}</small> : null}
+              {!isLoadingJobs && jobs.length === 0 ? <small className={smallMutedClassName}>{text.aiJobsEmpty}</small> : null}
+              <div className={dashboardListClassName}>
                 {jobs.slice(0, 20).map((job) => (
-                  <article key={job.id} className="postcard-item">
-                    <div className="postcard-item-head">
+                  <article key={job.id} className={postcardItemClassName}>
+                    <div className={postcardItemHeadClassName}>
                       <strong>{job.status}</strong>
-                      <small>{new Date(job.createdAt).toLocaleString(text.dateLocale)}</small>
+                      <small className={smallMutedClassName}>{new Date(job.createdAt).toLocaleString(text.dateLocale)}</small>
                     </div>
                     {job.imageUrl ? (
                       <Image
-                        className="postcard-thumb postcard-thumb-contain"
+                        className="h-auto max-h-[180px] w-full rounded-[10px] border border-[#deeadb] object-contain bg-[#edf6ef]"
                         src={job.imageUrl}
                         alt={text.aiJobImageAlt(job.id)}
                         width={640}
                         height={420}
                       />
                     ) : null}
-                    <small>{job.placeGuess ?? text.aiJobNoGuess}</small>
+                    <small className={smallMutedClassName}>{job.placeGuess ?? text.aiJobNoGuess}</small>
                     {job.status === 'SUCCEEDED' && job.latitude !== null && job.longitude !== null ? (
-                      <small>
+                      <small className={smallMutedClassName}>
                         {job.latitude.toFixed(6)}, {job.longitude.toFixed(6)}
                         {job.confidence !== null ? ` (${text.aiConfidenceLabel(Math.round(job.confidence * 100))})` : ''}
                       </small>
                     ) : null}
                     {job.status === 'SUCCEEDED' && job.latitude !== null && job.longitude !== null ? (
                       <>
-                        <label>
+                        <label className={inlineFieldClassName}>
                           {text.fieldName}
                           <input
+                            className={inputClassName}
                             value={jobDrafts[job.id]?.title ?? ''}
                             onChange={(event) => updateJobDraft(job.id, { title: event.target.value })}
                             placeholder={text.fieldName}
                             disabled={savingJobId === job.id}
                           />
                         </label>
-                        <label>
+                        <label className={inlineFieldClassName}>
                           {text.fieldDescription}
                           <textarea
+                            className={inputClassName}
                             rows={3}
                             value={jobDrafts[job.id]?.notes ?? ''}
                             onChange={(event) => updateJobDraft(job.id, { notes: event.target.value })}
@@ -1254,9 +1311,10 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
                             disabled={savingJobId === job.id}
                           />
                         </label>
-                        <label>
+                        <label className={inlineFieldClassName}>
                           {text.fieldLocation}
                           <input
+                            className={inputClassName}
                             value={jobDrafts[job.id]?.locationInput ?? ''}
                             onChange={(event) => updateJobDraft(job.id, { locationInput: event.target.value })}
                             placeholder={text.manualLocationPlaceholder}
@@ -1264,10 +1322,11 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
                           />
                         </label>
                         {isJobAlreadySaved(job) ? (
-                          <small>{text.aiResultAlreadySaved}</small>
+                          <small className={smallMutedClassName}>{text.aiResultAlreadySaved}</small>
                         ) : (
                           <button
                             type="button"
+                            className={primaryButtonClassName}
                             onClick={() => void saveDetectedJobAsPostcard(job)}
                             disabled={savingJobId === job.id}
                           >
@@ -1276,40 +1335,40 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
                         )}
                       </>
                     ) : null}
-                    {job.status === 'FAILED' && job.errorMessage ? <small>{job.errorMessage}</small> : null}
+                    {job.status === 'FAILED' && job.errorMessage ? <small className={smallMutedClassName}>{job.errorMessage}</small> : null}
                   </article>
                 ))}
               </div>
 
               <h3 style={{ marginTop: '0.5rem' }}>{text.myPostcardsTitle}</h3>
-              {isLoadingMine ? <small>{text.myPostcardsLoading}</small> : null}
-              {!isLoadingMine && myPostcards.length === 0 ? <small>{text.myPostcardsEmpty}</small> : null}
-              <div className={dashboardViewMode === 'grid' ? 'postcard-list dashboard-grid' : 'postcard-list dashboard-list'}>
+              {isLoadingMine ? <small className={smallMutedClassName}>{text.myPostcardsLoading}</small> : null}
+              {!isLoadingMine && myPostcards.length === 0 ? <small className={smallMutedClassName}>{text.myPostcardsEmpty}</small> : null}
+              <div className={dashboardListClassName}>
                 {myPostcards.slice(0, 20).map((postcard) => {
                   return (
-                    <article key={postcard.id} className="postcard-item">
-                    <div className="postcard-item-head">
+                    <article key={postcard.id} className={postcardItemClassName}>
+                    <div className={postcardItemHeadClassName}>
                       <strong>{postcard.title}</strong>
-                      <small>{new Date(postcard.createdAt).toLocaleDateString(text.dateLocale)}</small>
+                      <small className={smallMutedClassName}>{new Date(postcard.createdAt).toLocaleDateString(text.dateLocale)}</small>
                     </div>
                     {postcard.imageUrl ? (
                       <Image
-                        className="postcard-thumb"
+                        className="h-auto max-h-[180px] w-full rounded-[10px] border border-[#deeadb] object-cover"
                         src={postcard.imageUrl}
                         alt={postcard.title}
                         width={640}
                         height={420}
                       />
                     ) : null}
-                    <small>{postcard.placeName || text.exploreUnknownPlace}</small>
+                    <small className={smallMutedClassName}>{postcard.placeName || text.exploreUnknownPlace}</small>
                     {typeof postcard.latitude === 'number' && typeof postcard.longitude === 'number' ? (
-                      <small>{postcard.latitude.toFixed(6)}, {postcard.longitude.toFixed(6)}</small>
+                      <small className={smallMutedClassName}>{postcard.latitude.toFixed(6)}, {postcard.longitude.toFixed(6)}</small>
                     ) : null}
-                    {postcard.notes ? <p>{postcard.notes}</p> : null}
-                    <div className="chip-row">
+                    {postcard.notes ? <p className="m-0 text-[0.9rem] text-[#436054]">{postcard.notes}</p> : null}
+                    <div className={chipRowClassName}>
                       <button
                         type="button"
-                        className="action-button"
+                        className={actionButtonClassName}
                         onClick={() => openCropEditor(postcard)}
                         disabled={savingCropPostcardId === postcard.id || deletingPostcardId === postcard.id}
                       >
@@ -1317,7 +1376,7 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
                       </button>
                       <button
                         type="button"
-                        className="action-button"
+                        className={actionButtonClassName}
                         onClick={() => void softDeletePostcard(postcard)}
                         disabled={deletingPostcardId === postcard.id || savingCropPostcardId === postcard.id}
                       >
@@ -1325,31 +1384,31 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
                       </button>
                     </div>
                     {editingCropPostcardId === postcard.id && editingCropOriginalUrl ? (
-                      <div className="crop-editor">
+                      <div className={cropEditorClassName}>
                         <strong>{text.cropEditorTitle}</strong>
-                        <small>{text.cropEditorBody}</small>
-                        <div className="crop-preview">
+                        <small className={smallMutedClassName}>{text.cropEditorBody}</small>
+                        <div className={cropPreviewClassName}>
                           <ReactCrop
                             crop={cropDraft}
                             onChange={(_, percentCrop) => setCropDraft((current) => sanitizePercentCrop(percentCrop, current))}
                             ruleOfThirds
                             keepSelection
-                            className="crop-react"
+                            className="block w-full"
                           >
                             {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={editingCropOriginalUrl} alt={text.cropEditorImageAlt} className="crop-preview-image" />
+                            <img src={editingCropOriginalUrl} alt={text.cropEditorImageAlt} className={cropImageClassName} />
                           </ReactCrop>
                         </div>
-                        <small>{text.cropSelection(
+                        <small className={smallMutedClassName}>{text.cropSelection(
                           Math.round(cropDraft.x ?? 0),
                           Math.round(cropDraft.y ?? 0),
                           Math.round(cropDraft.width ?? 0),
                           Math.round(cropDraft.height ?? 0)
                         )}</small>
-                        <div className="chip-row">
+                        <div className={chipRowClassName}>
                           <button
                             type="button"
-                            className="action-button"
+                            className={actionButtonClassName}
                             onClick={() => void saveCropEdit(postcard.id)}
                             disabled={savingCropPostcardId === postcard.id}
                           >
@@ -1357,7 +1416,7 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
                           </button>
                           <button
                             type="button"
-                            className="action-button"
+                            className={actionButtonClassName}
                             onClick={closeCropEditor}
                             disabled={savingCropPostcardId === postcard.id}
                           >

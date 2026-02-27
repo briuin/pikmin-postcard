@@ -390,9 +390,12 @@ export function OpenMap({
     () => (focusedMarkerId ? markers.find((marker) => marker.id === focusedMarkerId) : undefined),
     [focusedMarkerId, markers]
   );
+  const mapShellClassName = className
+    ? `overflow-hidden rounded-2xl border border-[#d6e7db] ${className}`
+    : 'h-[510px] overflow-hidden rounded-2xl border border-[#d6e7db]';
 
   return (
-    <div className={className ? `map-shell ${className}` : 'map-shell'}>
+    <div className={mapShellClassName}>
       <MapContainer center={[35.6812, 139.7671]} zoom={3} zoomControl={false} style={{ height: '100%', width: '100%' }}>
         <TileLayer
           attribution='&copy; OpenStreetMap contributors'
