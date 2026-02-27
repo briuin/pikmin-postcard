@@ -11,7 +11,6 @@ permissions:
 
 env:
   AWS_REGION: us-east-1
-  SSM_DATABASE_URL_PARAM: /pikmin-postcard/DATABASE_URL
   ECR_REPOSITORY: pikmin-postcard
   ECS_CLUSTER: pikmin-postcard-cluster
   ECS_SERVICE: pikmin-postcard-service
@@ -47,18 +46,6 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Load DATABASE_URL from SSM
-        run: |
-          DATABASE_URL_VALUE=$(aws ssm get-parameter \
-            --name "$SSM_DATABASE_URL_PARAM" \
-            --with-decryption \
-            --query "Parameter.Value" \
-            --output text)
-          echo "DATABASE_URL=$DATABASE_URL_VALUE" >> $GITHUB_ENV
-
-      - name: Run Prisma migrations
-        run: npm run prisma:migrate
-
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
@@ -81,10 +68,97 @@ jobs:
           container-name: ${{ env.CONTAINER_NAME }}
           image: ${{ steps.build-image.outputs.image }}
 
-      - name: Deploy to ECS
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
-        with:
-          task-definition: ${{ steps.task-def.outputs.task-definition }}
-          service: ${{ env.ECS_SERVICE }}
-          cluster: ${{ env.ECS_CLUSTER }}
-          wait-for-service-stability: true
+      - name: Register rendered task definition
+        id: register-task-def
+        run: |
+          TASK_DEFINITION_ARN=$(aws ecs register-task-definition \
+            --cli-input-json "file://${{ steps.task-def.outputs.task-definition }}" \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
+          echo "task-definition-arn=$TASK_DEFINITION_ARN" >> $GITHUB_OUTPUT
+
+      - name: Run Prisma migration task on ECS
+        env:
+          TASK_DEFINITION_ARN: ${{ steps.register-task-def.outputs.task-definition-arn }}
+        run: |
+          SUBNETS=$(aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE" \
+            --query 'services[0].networkConfiguration.awsvpcConfiguration.subnets' \
+            --output text | tr '\t' ',')
+
+          SECURITY_GROUPS=$(aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE" \
+            --query 'services[0].networkConfiguration.awsvpcConfiguration.securityGroups' \
+            --output text | tr '\t' ',')
+
+          ASSIGN_PUBLIC_IP=$(aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE" \
+            --query 'services[0].networkConfiguration.awsvpcConfiguration.assignPublicIp' \
+            --output text)
+
+          cat > /tmp/migrate-overrides.json <<'JSON'
+          {
+            "containerOverrides": [
+              {
+                "name": "pikmin-postcard-app",
+                "command": [
+                  "sh",
+                  "-lc",
+                  "node node_modules/prisma/build/index.js migrate deploy --schema=prisma/schema.prisma"
+                ]
+              }
+            ]
+          }
+          JSON
+
+          TASK_ARN=$(aws ecs run-task \
+            --cluster "$ECS_CLUSTER" \
+            --launch-type FARGATE \
+            --task-definition "$TASK_DEFINITION_ARN" \
+            --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SECURITY_GROUPS],assignPublicIp=$ASSIGN_PUBLIC_IP}" \
+            --overrides file:///tmp/migrate-overrides.json \
+            --query 'tasks[0].taskArn' \
+            --output text)
+
+          if [ -z "$TASK_ARN" ] || [ "$TASK_ARN" = "None" ]; then
+            echo "Failed to start migration task."
+            exit 1
+          fi
+
+          aws ecs wait tasks-stopped --cluster "$ECS_CLUSTER" --tasks "$TASK_ARN"
+
+          EXIT_CODE=$(aws ecs describe-tasks \
+            --cluster "$ECS_CLUSTER" \
+            --tasks "$TASK_ARN" \
+            --query 'tasks[0].containers[0].exitCode' \
+            --output text)
+
+          STOPPED_REASON=$(aws ecs describe-tasks \
+            --cluster "$ECS_CLUSTER" \
+            --tasks "$TASK_ARN" \
+            --query 'tasks[0].stoppedReason' \
+            --output text)
+
+          echo "Migration task stopped reason: $STOPPED_REASON"
+
+          if [ "$EXIT_CODE" != "0" ]; then
+            echo "Migration task failed with exit code: $EXIT_CODE"
+            exit 1
+          fi
+
+      - name: Deploy task definition to ECS service
+        env:
+          TASK_DEFINITION_ARN: ${{ steps.register-task-def.outputs.task-definition-arn }}
+        run: |
+          aws ecs update-service \
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_SERVICE" \
+            --task-definition "$TASK_DEFINITION_ARN" \
+            --force-new-deployment
+
+          aws ecs wait services-stable \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE"
