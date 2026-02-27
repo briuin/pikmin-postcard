@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { signIn, useSession } from 'next-auth/react';
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { SavedMapMarker } from '@/components/open-map';
+import type { MapViewportBounds, SavedMapMarker } from '@/components/open-map';
 
 type PostcardRecord = {
   id: string;
@@ -25,6 +25,14 @@ type PostcardRecord = {
   locationModelVersion: string | null;
   uploaderMasked?: string | null;
   createdAt: string;
+};
+
+type PublicPostcardsPayload = {
+  items: PostcardRecord[];
+  total: number;
+  hasMore: boolean;
+  limit: number;
+  sort: 'ranking' | 'newest' | 'likes' | 'reports';
 };
 
 type DetectionJobRecord = {
@@ -59,6 +67,8 @@ type DetectionDraft = {
 type PostcardWorkbenchProps = {
   mode?: 'explore' | 'create' | 'dashboard' | 'full';
 };
+
+type ExploreSort = 'ranking' | 'newest' | 'likes' | 'reports';
 
 const OpenMap = dynamic(
   async () => {
@@ -110,9 +120,16 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
   const [postcards, setPostcards] = useState<PostcardRecord[]>([]);
   const [isLoadingPublic, setIsLoadingPublic] = useState(false);
   const [exploreStatus, setExploreStatus] = useState('');
+  const [exploreSort, setExploreSort] = useState<ExploreSort>('ranking');
+  const [exploreLimit, setExploreLimit] = useState(120);
+  const [visibleTotal, setVisibleTotal] = useState(0);
+  const [visibleHasMore, setVisibleHasMore] = useState(false);
+  const [mapBounds, setMapBounds] = useState<MapViewportBounds | null>(null);
+  const [mapZoom, setMapZoom] = useState<number>(3);
   const [feedbackPendingKey, setFeedbackPendingKey] = useState<string | null>(null);
 
   const [deviceLocation, setDeviceLocation] = useState<DeviceLocation | null>(null);
+  const [viewerFocusSignal, setViewerFocusSignal] = useState(0);
   const [geoPermission, setGeoPermission] = useState<GeoPermissionState>('prompt');
   const [isRequestingLocation, setIsRequestingLocation] = useState(false);
 
@@ -139,20 +156,10 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
   const [dashboardStatus, setDashboardStatus] = useState('');
   const [dashboardViewMode, setDashboardViewMode] = useState<'grid' | 'list'>('grid');
 
-  const filteredPostcards = useMemo(() => {
-    const query = searchText.trim().toLowerCase();
-    if (!query) {
-      return postcards;
-    }
-
-    return postcards.filter((postcard) => {
-      const haystack = `${postcard.title} ${postcard.placeName ?? ''} ${postcard.notes ?? ''} ${postcard.aiPlaceGuess ?? ''} ${postcard.uploaderMasked ?? ''}`.toLowerCase();
-      return haystack.includes(query);
-    });
-  }, [postcards, searchText]);
+  const visiblePostcards = postcards;
 
   const publicMarkers = useMemo<SavedMapMarker[]>(() => {
-    return filteredPostcards
+    return visiblePostcards
       .filter((postcard) => typeof postcard.latitude === 'number' && typeof postcard.longitude === 'number')
       .map((postcard) => ({
         id: postcard.id,
@@ -172,7 +179,7 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
         dislikeCount: postcard.dislikeCount ?? 0,
         wrongLocationReports: postcard.wrongLocationReports ?? 0
       }));
-  }, [filteredPostcards]);
+  }, [visiblePostcards]);
 
   const ensureAuthenticated = useCallback((): boolean => {
     if (!isAuthenticated) {
@@ -226,6 +233,8 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
       }
 
       if (granted && !silent) {
+        setFocusedMarkerId(null);
+        setViewerFocusSignal((current) => current + 1);
         setExploreStatus('Your location is now shown on the map.');
       }
 
@@ -233,6 +242,24 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
     } finally {
       setIsRequestingLocation(false);
     }
+  }, []);
+
+  const handleViewportChange = useCallback((bounds: MapViewportBounds, zoom: number) => {
+    setMapZoom(zoom);
+    setMapBounds((current) => {
+      if (!current) {
+        return bounds;
+      }
+
+      const threshold = 0.0001;
+      const unchanged =
+        Math.abs(current.north - bounds.north) < threshold &&
+        Math.abs(current.south - bounds.south) < threshold &&
+        Math.abs(current.east - bounds.east) < threshold &&
+        Math.abs(current.west - bounds.west) < threshold;
+
+      return unchanged ? current : bounds;
+    });
   }, []);
 
   useEffect(() => {
@@ -280,9 +307,61 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
     };
   }, [requestDeviceLocation]);
 
+  const loadPublicPostcards = useCallback(async () => {
+    if (!mapBounds || !showExplore) {
+      return;
+    }
+
+    setIsLoadingPublic(true);
+    try {
+      const params = new URLSearchParams({
+        sort: exploreSort,
+        limit: String(exploreLimit),
+        north: String(mapBounds.north),
+        south: String(mapBounds.south),
+        east: String(mapBounds.east),
+        west: String(mapBounds.west)
+      });
+
+      const query = searchText.trim();
+      if (query) {
+        params.set('q', query);
+      }
+
+      const response = await fetch(`/api/postcards?${params.toString()}`, { cache: 'no-store' });
+      if (!response.ok) {
+        throw new Error('Failed to load postcards.');
+      }
+
+      const data = (await response.json()) as PublicPostcardsPayload | PostcardRecord[];
+      if (Array.isArray(data)) {
+        setPostcards(data);
+        setVisibleTotal(data.length);
+        setVisibleHasMore(false);
+        return;
+      }
+
+      setPostcards(data.items ?? []);
+      setVisibleTotal(typeof data.total === 'number' ? data.total : data.items?.length ?? 0);
+      setVisibleHasMore(Boolean(data.hasMore));
+    } catch (error) {
+      setExploreStatus(error instanceof Error ? error.message : 'Unknown list error.');
+    } finally {
+      setIsLoadingPublic(false);
+    }
+  }, [mapBounds, showExplore, exploreSort, exploreLimit, searchText]);
+
   useEffect(() => {
-    void loadPublicPostcards();
-  }, []);
+    if (!showExplore || !mapBounds) {
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      void loadPublicPostcards();
+    }, 180);
+
+    return () => clearTimeout(timeout);
+  }, [showExplore, mapBounds, loadPublicPostcards]);
 
   useEffect(() => {
     return () => {
@@ -325,22 +404,6 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
       return changed ? next : current;
     });
   }, [jobs]);
-
-  async function loadPublicPostcards() {
-    setIsLoadingPublic(true);
-    try {
-      const response = await fetch('/api/postcards', { cache: 'no-store' });
-      if (!response.ok) {
-        throw new Error('Failed to load postcards.');
-      }
-      const data = (await response.json()) as PostcardRecord[];
-      setPostcards(data);
-    } catch (error) {
-      setExploreStatus(error instanceof Error ? error.message : 'Unknown list error.');
-    } finally {
-      setIsLoadingPublic(false);
-    }
-  }
 
   async function submitExploreFeedback(
     postcardId: string,
@@ -686,12 +749,43 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
           <div className="section-head">
             <div>
               <h2>Explore Postcards</h2>
-              <small>Public view and search. Use Find Me to show your current location on the map.</small>
+              <small>Pan/zoom the map to load postcards inside the current visible area.</small>
             </div>
             <div className="chip-row">
-              <span className="chip">{filteredPostcards.length} in search</span>
-              <span className="chip">{publicMarkers.length} with coordinates</span>
+              <span className="chip">{visiblePostcards.length} loaded</span>
+              <span className="chip">{publicMarkers.length} markers</span>
+              <span className="chip">Zoom {mapZoom}</span>
+              <span className="chip">{visibleTotal} in area</span>
+              {visibleHasMore ? <span className="chip">limited to {exploreLimit}</span> : null}
             </div>
+          </div>
+
+          <div className="explore-filter-row">
+            <label className="inline-field">
+              Search
+              <input
+                value={searchText}
+                onChange={(event) => setSearchText(event.target.value)}
+                placeholder="Title, place, note, AI guess"
+              />
+            </label>
+            <label className="inline-field">
+              Ranking
+              <select value={exploreSort} onChange={(event) => setExploreSort(event.target.value as ExploreSort)}>
+                <option value="ranking">Top ranked</option>
+                <option value="newest">Newest</option>
+                <option value="likes">Most likes</option>
+                <option value="reports">Most reported</option>
+              </select>
+            </label>
+            <label className="inline-field">
+              Max results
+              <select value={exploreLimit} onChange={(event) => setExploreLimit(Number(event.target.value))}>
+                <option value={60}>60</option>
+                <option value={120}>120</option>
+                <option value={200}>200</option>
+              </select>
+            </label>
           </div>
 
           <div className="auth-callout" style={{ marginBottom: '0.8rem' }}>
@@ -707,19 +801,12 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
             </button>
           </div>
 
-          <label className="search-label">
-            Search postcards
-            <input
-              value={searchText}
-              onChange={(event) => setSearchText(event.target.value)}
-              placeholder="Try city, place name, or postcard title"
-            />
-          </label>
-
           <OpenMap
             className="map-shell-large"
             markers={publicMarkers}
             focusedMarkerId={focusedMarkerId}
+            viewerFocusSignal={viewerFocusSignal}
+            onViewportChange={handleViewportChange}
             viewerPoint={
               deviceLocation
                 ? {
@@ -731,14 +818,15 @@ export function PostcardWorkbench({ mode = 'full' }: PostcardWorkbenchProps) {
             }
           />
 
+          {!mapBounds ? <small className="list-note">Loading visible map area...</small> : null}
           {isLoadingPublic ? <small className="list-note">Loading postcards...</small> : null}
-          {!isLoadingPublic && filteredPostcards.length === 0 ? (
-            <small className="list-note">No postcards match this search.</small>
+          {!isLoadingPublic && mapBounds && visiblePostcards.length === 0 ? (
+            <small className="list-note">No postcards found in the current map area/filter.</small>
           ) : null}
           {exploreStatus ? <small className="list-note">{exploreStatus}</small> : null}
 
           <div className="postcard-list">
-            {filteredPostcards.slice(0, 12).map((postcard) => (
+            {visiblePostcards.map((postcard) => (
               <article key={postcard.id} className="postcard-item">
                 <div className="postcard-item-head">
                   <strong>{postcard.title}</strong>

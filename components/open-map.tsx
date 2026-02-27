@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import L from 'leaflet';
 import Image from 'next/image';
 import { MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet';
@@ -24,6 +24,13 @@ export type SavedMapMarker = {
   wrongLocationReports?: number;
 };
 
+export type MapViewportBounds = {
+  north: number;
+  south: number;
+  east: number;
+  west: number;
+};
+
 type DraftPoint = {
   latitude: number;
   longitude: number;
@@ -41,6 +48,8 @@ type OpenMapProps = {
   viewerPoint?: ViewerPoint;
   markers?: SavedMapMarker[];
   focusedMarkerId?: string | null;
+  viewerFocusSignal?: number;
+  onViewportChange?: (bounds: MapViewportBounds, zoom: number) => void;
   onPick?: (lat: number, lng: number) => void;
   className?: string;
 };
@@ -89,23 +98,43 @@ function MapViewportManager({
   draftPoint,
   viewerPoint,
   markers,
-  focusedMarker
+  focusedMarker,
+  viewerFocusSignal
 }: {
   draftPoint?: DraftPoint;
   viewerPoint?: ViewerPoint;
   markers: SavedMapMarker[];
   focusedMarker?: SavedMapMarker;
+  viewerFocusSignal?: number;
 }) {
   const map = useMap();
+  const initializedRef = useRef(false);
+  const lastFocusedIdRef = useRef<string | null>(null);
+  const lastViewerFocusSignalRef = useRef(0);
 
   useEffect(() => {
-    if (focusedMarker) {
-      map.setView([focusedMarker.latitude, focusedMarker.longitude], 12);
+    if (viewerPoint && typeof viewerFocusSignal === 'number' && viewerFocusSignal !== lastViewerFocusSignalRef.current) {
+      map.setView([viewerPoint.latitude, viewerPoint.longitude], 13);
+      lastViewerFocusSignalRef.current = viewerFocusSignal;
+      lastFocusedIdRef.current = null;
       return;
     }
 
+    if (focusedMarker) {
+      if (lastFocusedIdRef.current !== focusedMarker.id) {
+        map.setView([focusedMarker.latitude, focusedMarker.longitude], 12);
+        lastFocusedIdRef.current = focusedMarker.id;
+      }
+      return;
+    }
+    lastFocusedIdRef.current = null;
+
     if (draftPoint) {
       map.setView([draftPoint.latitude, draftPoint.longitude], 10);
+      return;
+    }
+
+    if (initializedRef.current) {
       return;
     }
 
@@ -116,12 +145,14 @@ function MapViewportManager({
 
     if (points.length === 0) {
       map.setView([35.6812, 139.7671], 3);
+      initializedRef.current = true;
       return;
     }
 
     if (points.length === 1) {
       const zoom = viewerPoint && markers.length === 0 ? 11 : 6;
       map.setView(points[0], zoom);
+      initializedRef.current = true;
       return;
     }
 
@@ -129,7 +160,65 @@ function MapViewportManager({
       padding: [36, 36],
       maxZoom: 7
     });
-  }, [map, focusedMarker, draftPoint, viewerPoint, markers]);
+    initializedRef.current = true;
+  }, [map, focusedMarker, draftPoint, viewerPoint, viewerFocusSignal, markers]);
+
+  return null;
+}
+
+function MapViewportEvents({
+  onViewportChange
+}: {
+  onViewportChange?: (bounds: MapViewportBounds, zoom: number) => void;
+}) {
+  const map = useMapEvents({
+    moveend() {
+      if (!onViewportChange) {
+        return;
+      }
+      const bounds = map.getBounds();
+      onViewportChange(
+        {
+          north: bounds.getNorth(),
+          south: bounds.getSouth(),
+          east: bounds.getEast(),
+          west: bounds.getWest()
+        },
+        map.getZoom()
+      );
+    },
+    zoomend() {
+      if (!onViewportChange) {
+        return;
+      }
+      const bounds = map.getBounds();
+      onViewportChange(
+        {
+          north: bounds.getNorth(),
+          south: bounds.getSouth(),
+          east: bounds.getEast(),
+          west: bounds.getWest()
+        },
+        map.getZoom()
+      );
+    }
+  });
+
+  useEffect(() => {
+    if (!onViewportChange) {
+      return;
+    }
+    const bounds = map.getBounds();
+    onViewportChange(
+      {
+        north: bounds.getNorth(),
+        south: bounds.getSouth(),
+        east: bounds.getEast(),
+        west: bounds.getWest()
+      },
+      map.getZoom()
+    );
+  }, [map, onViewportChange]);
 
   return null;
 }
@@ -194,7 +283,7 @@ function getLocationMethodText(marker: SavedMapMarker): string {
   return 'Location: unknown method';
 }
 
-export function OpenMap({ draftPoint, viewerPoint, markers = [], focusedMarkerId, onPick, className }: OpenMapProps) {
+export function OpenMap({ draftPoint, viewerPoint, markers = [], focusedMarkerId, viewerFocusSignal, onViewportChange, onPick, className }: OpenMapProps) {
   const clusters = useMemo(() => clusterByDistance(markers), [markers]);
   const focusedMarker = useMemo(
     () => (focusedMarkerId ? markers.find((marker) => marker.id === focusedMarkerId) : undefined),
@@ -209,7 +298,14 @@ export function OpenMap({ draftPoint, viewerPoint, markers = [], focusedMarkerId
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <MapClickHandler onPick={onPick} />
-        <MapViewportManager draftPoint={draftPoint} viewerPoint={viewerPoint} markers={markers} focusedMarker={focusedMarker} />
+        <MapViewportEvents onViewportChange={onViewportChange} />
+        <MapViewportManager
+          draftPoint={draftPoint}
+          viewerPoint={viewerPoint}
+          markers={markers}
+          focusedMarker={focusedMarker}
+          viewerFocusSignal={viewerFocusSignal}
+        />
 
         {clusters.map((cluster) => {
           if (cluster.points.length === 1) {

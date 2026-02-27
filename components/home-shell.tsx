@@ -12,21 +12,18 @@ export function HomeShell({ page }: HomeShellProps) {
   const { data: session, status } = useSession();
   const isAuthenticated = status === 'authenticated';
   const isLoading = status === 'loading';
-  const subtitle =
-    page === 'explore'
-      ? 'Browse postcards on the map without login.'
-      : page === 'create'
-        ? 'Sign in with Google to submit AI detection and create new postcard entries.'
-        : 'Your private dashboard for AI detection jobs and your own postcards.';
 
   return (
     <div className="home-shell">
-      <header className="hero panel">
-        <div className="hero-copy">
-          <p className="eyebrow">Pikmin Bloom Companion</p>
-          <h1>Postcard Garden Map</h1>
-          <p className="hero-subtitle">{subtitle}</p>
-          <nav className="hero-nav" aria-label="Primary">
+      <header className="topbar panel">
+        <div className="topbar-main">
+          <div className="topbar-brand">
+            <span className="brand-pikmin" aria-hidden>
+              P
+            </span>
+            <h1>Pikmin Postcards</h1>
+          </div>
+          <nav className="topbar-nav" aria-label="Primary">
             <Link href="/" className={page === 'explore' ? 'nav-tab nav-tab-active' : 'nav-tab'}>
               Explore
             </Link>
@@ -37,14 +34,9 @@ export function HomeShell({ page }: HomeShellProps) {
               Dashboard
             </Link>
           </nav>
-          <div className="hero-badges">
-            <span className="badge badge-public">Public: Explore + Search</span>
-            <span className="badge badge-private">Login: AI + Add Postcard</span>
-          </div>
         </div>
-        <div className="session-card">
-          <small className="session-label">Session</small>
-          <p className="session-value">{isLoading ? 'Checking session...' : isAuthenticated ? session?.user?.email : 'Viewing as guest'}</p>
+        <div className="session-inline">
+          <small>{isLoading ? 'Checking session...' : isAuthenticated ? session?.user?.email : 'Guest mode'}</small>
           {isAuthenticated ? (
             <button type="button" onClick={() => signOut({ callbackUrl: page === 'create' ? '/create' : page === 'dashboard' ? '/dashboard' : '/' })}>
               Sign out
