@@ -26,6 +26,12 @@ enum FeedbackAction {
   REPORT_WRONG_LOCATION
 }
 
+enum PostcardEditAction {
+  DETAILS_UPDATED
+  CROP_UPDATED
+  SOFT_DELETED
+}
+
 model User {
   id            String         @id @default(cuid())
   email         String         @unique
@@ -34,6 +40,7 @@ model User {
   postcards     Postcard[]
   detectionJobs DetectionJob[]
   feedbacks     PostcardFeedback[]
+  editHistory   PostcardEditHistory[]
 }
 
 model Postcard {
@@ -64,6 +71,7 @@ model Postcard {
   user                 User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   tags                 PostcardTag[]
   feedbacks            PostcardFeedback[]
+  editHistory          PostcardEditHistory[]
 
   @@index([userId, createdAt])
   @@index([deletedAt])
@@ -117,4 +125,19 @@ model PostcardFeedback {
   @@unique([postcardId, userId, action])
   @@index([userId, createdAt])
   @@index([postcardId, createdAt])
+}
+
+model PostcardEditHistory {
+  id         String            @id @default(cuid())
+  postcardId String
+  userId     String
+  action     PostcardEditAction
+  beforeData Json?
+  afterData  Json?
+  createdAt  DateTime          @default(now())
+  postcard   Postcard          @relation(fields: [postcardId], references: [id], onDelete: Cascade)
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([postcardId, createdAt])
+  @@index([userId, createdAt])
 }

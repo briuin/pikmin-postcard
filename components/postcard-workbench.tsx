@@ -17,6 +17,7 @@ import type {
   DeviceLocation,
   ExploreSort,
   GeoPermissionState,
+  PostcardEditDraft,
   PostcardRecord,
   PublicPostcardsPayload
 } from '@/components/workbench/types';
@@ -40,6 +41,18 @@ const DEFAULT_CROP_DRAFT: CropDraft = {
   width: 84,
   height: 54
 };
+
+function buildPostcardDraft(postcard: PostcardRecord): PostcardEditDraft {
+  return {
+    title: postcard.title ?? '',
+    notes: postcard.notes ?? '',
+    placeName: postcard.placeName ?? '',
+    locationInput:
+      typeof postcard.latitude === 'number' && typeof postcard.longitude === 'number'
+        ? `${postcard.latitude.toFixed(6)}, ${postcard.longitude.toFixed(6)}`
+        : ''
+  };
+}
 
 const OpenMap = dynamic(
   async () => {
@@ -92,7 +105,9 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
   const [jobs, setJobs] = useState<DetectionJobRecord[]>([]);
   const [myPostcards, setMyPostcards] = useState<PostcardRecord[]>([]);
   const [jobDrafts, setJobDrafts] = useState<Record<string, DetectionDraft>>({});
+  const [postcardDrafts, setPostcardDrafts] = useState<Record<string, PostcardEditDraft>>({});
   const [savingJobId, setSavingJobId] = useState<string | null>(null);
+  const [savingPostcardId, setSavingPostcardId] = useState<string | null>(null);
   const [deletingPostcardId, setDeletingPostcardId] = useState<string | null>(null);
   const [editingCropPostcardId, setEditingCropPostcardId] = useState<string | null>(null);
   const [editingCropOriginalUrl, setEditingCropOriginalUrl] = useState<string | null>(null);
@@ -380,18 +395,24 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
         body: JSON.stringify({ action })
       });
 
-      const payload = (await response.json()) as { error?: string };
+      const payload = (await response.json()) as {
+        error?: string;
+        result?: 'added' | 'removed' | 'switched' | 'already_reported';
+        action?: 'like' | 'dislike' | 'report_wrong_location';
+      };
       if (!response.ok) {
         throw new Error(payload.error ?? text.feedbackFailed);
       }
 
-      setExploreStatus(
-        action === 'like'
-          ? text.feedbackThanksLike
-          : action === 'dislike'
-            ? text.feedbackDislikeRecorded
-            : text.feedbackWrongLocation
-      );
+      const feedbackAction = payload.action ?? action;
+      const result = payload.result ?? 'added';
+      if (feedbackAction === 'like') {
+        setExploreStatus(result === 'removed' ? text.feedbackLikeRemoved : text.feedbackThanksLike);
+      } else if (feedbackAction === 'dislike') {
+        setExploreStatus(result === 'removed' ? text.feedbackDislikeRemoved : text.feedbackDislikeRecorded);
+      } else {
+        setExploreStatus(text.feedbackWrongLocation);
+      }
       await loadPublicPostcards();
     } catch (error) {
       setExploreStatus(error instanceof Error ? error.message : text.feedbackUnknownError);
@@ -423,6 +444,13 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
       const mineData = (await mineResponse.json()) as PostcardRecord[];
       setJobs(jobsData);
       setMyPostcards(mineData);
+      setPostcardDrafts((current) => {
+        const next: Record<string, PostcardEditDraft> = { ...current };
+        for (const postcard of mineData) {
+          next[postcard.id] = buildPostcardDraft(postcard);
+        }
+        return next;
+      });
     } catch (error) {
       setDashboardStatus(error instanceof Error ? error.message : text.dashboardUnknownError);
     } finally {
@@ -581,6 +609,21 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
     }));
   }
 
+  function updatePostcardDraft(postcardId: string, patch: Partial<PostcardEditDraft>) {
+    setPostcardDrafts((current) => ({
+      ...current,
+      [postcardId]: {
+        ...(current[postcardId] ?? {
+          title: '',
+          notes: '',
+          placeName: '',
+          locationInput: ''
+        }),
+        ...patch
+      }
+    }));
+  }
+
   function isJobAlreadySaved(job: DetectionJobRecord): boolean {
     return myPostcards.some((postcard) => postcard.imageUrl === job.imageUrl);
   }
@@ -654,6 +697,83 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
       setDashboardStatus(error instanceof Error ? error.message : text.aiSaveUnknownError);
     } finally {
       setSavingJobId(null);
+    }
+  }
+
+  async function savePostcardEdits(postcard: PostcardRecord) {
+    if (!ensureAuthenticated()) {
+      return;
+    }
+
+    const draft = postcardDrafts[postcard.id] ?? buildPostcardDraft(postcard);
+    const title = draft.title.trim();
+    if (!title) {
+      setDashboardStatus(text.manualNameRequired);
+      return;
+    }
+
+    let latitude: number | null = null;
+    let longitude: number | null = null;
+    const locationInput = draft.locationInput.trim();
+    if (locationInput.length > 0) {
+      try {
+        const parsed = parseLocationInput(locationInput, text);
+        latitude = parsed.latitude;
+        longitude = parsed.longitude;
+      } catch (error) {
+        setDashboardStatus(error instanceof Error ? error.message : text.manualInvalidLocation);
+        return;
+      }
+    }
+
+    const normalizedOriginal = buildPostcardDraft(postcard);
+    const normalizedCurrent: PostcardEditDraft = {
+      title,
+      notes: draft.notes.trim(),
+      placeName: draft.placeName.trim(),
+      locationInput:
+        latitude !== null && longitude !== null
+          ? `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
+          : ''
+    };
+    const hasChanges =
+      normalizedOriginal.title !== normalizedCurrent.title ||
+      normalizedOriginal.notes !== normalizedCurrent.notes ||
+      normalizedOriginal.placeName !== normalizedCurrent.placeName ||
+      normalizedOriginal.locationInput !== normalizedCurrent.locationInput;
+
+    if (!hasChanges) {
+      setDashboardStatus(text.editPostcardNoChanges);
+      return;
+    }
+
+    setSavingPostcardId(postcard.id);
+    setDashboardStatus(text.editPostcardSaving);
+
+    try {
+      const response = await fetch(`/api/postcards/${postcard.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          notes: draft.notes.trim() ? draft.notes : null,
+          placeName: draft.placeName.trim() ? draft.placeName : null,
+          latitude,
+          longitude
+        })
+      });
+
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error ?? text.editPostcardFailed);
+      }
+
+      await Promise.all([loadDashboardData(), loadPublicPostcards()]);
+      setDashboardStatus(text.editPostcardSaved);
+    } catch (error) {
+      setDashboardStatus(error instanceof Error ? error.message : text.editPostcardUnknownError);
+    } finally {
+      setSavingPostcardId(null);
     }
   }
 
@@ -839,7 +959,9 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
           jobs={jobs}
           myPostcards={myPostcards}
           jobDrafts={jobDrafts}
+          postcardDrafts={postcardDrafts}
           savingJobId={savingJobId}
+          savingPostcardId={savingPostcardId}
           deletingPostcardId={deletingPostcardId}
           editingCropPostcardId={editingCropPostcardId}
           editingCropOriginalUrl={editingCropOriginalUrl}
@@ -853,7 +975,9 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
           onSetDashboardViewMode={setDashboardViewMode}
           onRefresh={() => void loadDashboardData()}
           onUpdateJobDraft={updateJobDraft}
+          onUpdatePostcardDraft={updatePostcardDraft}
           onSaveDetectedJob={(job) => void saveDetectedJobAsPostcard(job)}
+          onSavePostcard={(postcard) => void savePostcardEdits(postcard)}
           isJobAlreadySaved={isJobAlreadySaved}
           onOpenCropEditor={openCropEditor}
           onSaveCrop={(postcardId) => void saveCropEdit(postcardId)}

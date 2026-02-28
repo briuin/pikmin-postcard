@@ -62,6 +62,13 @@ export type DetectionDraft = {
   locationInput: string;
 };
 
+export type PostcardEditDraft = {
+  title: string;
+  notes: string;
+  placeName: string;
+  locationInput: string;
+};
+
 export type ExploreSort = 'ranking' | 'newest' | 'likes' | 'reports';
 export type DashboardViewMode = 'grid' | 'list';
 

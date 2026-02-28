@@ -12,6 +12,72 @@ type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
+type FeedbackResult = 'added' | 'removed' | 'switched' | 'already_reported';
+
+function toFeedbackAction(action: 'like' | 'dislike' | 'report_wrong_location'): FeedbackAction {
+  if (action === 'like') {
+    return FeedbackAction.LIKE;
+  }
+  if (action === 'dislike') {
+    return FeedbackAction.DISLIKE;
+  }
+  return FeedbackAction.REPORT_WRONG_LOCATION;
+}
+
+async function incrementActionCount(
+  tx: Prisma.TransactionClient,
+  postcardId: string,
+  action: FeedbackAction
+): Promise<void> {
+  if (action === FeedbackAction.LIKE) {
+    await tx.postcard.update({
+      where: { id: postcardId },
+      data: { likeCount: { increment: 1 } }
+    });
+    return;
+  }
+
+  if (action === FeedbackAction.DISLIKE) {
+    await tx.postcard.update({
+      where: { id: postcardId },
+      data: { dislikeCount: { increment: 1 } }
+    });
+    return;
+  }
+
+  await tx.postcard.update({
+    where: { id: postcardId },
+    data: { wrongLocationReports: { increment: 1 } }
+  });
+}
+
+async function decrementActionCount(
+  tx: Prisma.TransactionClient,
+  postcardId: string,
+  action: FeedbackAction
+): Promise<void> {
+  if (action === FeedbackAction.LIKE) {
+    await tx.postcard.update({
+      where: { id: postcardId },
+      data: { likeCount: { decrement: 1 } }
+    });
+    return;
+  }
+
+  if (action === FeedbackAction.DISLIKE) {
+    await tx.postcard.update({
+      where: { id: postcardId },
+      data: { dislikeCount: { decrement: 1 } }
+    });
+    return;
+  }
+
+  await tx.postcard.update({
+    where: { id: postcardId },
+    data: { wrongLocationReports: { decrement: 1 } }
+  });
+}
+
 export async function POST(request: Request, context: RouteContext) {
   const userId = await getAuthenticatedUserId({ createIfMissing: true });
   if (!userId) {
@@ -25,20 +91,7 @@ export async function POST(request: Request, context: RouteContext) {
 
   try {
     const body = feedbackSchema.parse(await request.json());
-
-    const action =
-      body.action === 'like'
-        ? FeedbackAction.LIKE
-        : body.action === 'dislike'
-          ? FeedbackAction.DISLIKE
-          : FeedbackAction.REPORT_WRONG_LOCATION;
-
-    const updateData =
-      body.action === 'like'
-        ? { likeCount: { increment: 1 } }
-        : body.action === 'dislike'
-          ? { dislikeCount: { increment: 1 } }
-          : { wrongLocationReports: { increment: 1 } };
+    const action = toFeedbackAction(body.action);
 
     const postcard = await prisma.$transaction(async (tx) => {
       const exists = await tx.postcard.findFirst({
@@ -53,17 +106,74 @@ export async function POST(request: Request, context: RouteContext) {
         return null;
       }
 
-      await tx.postcardFeedback.create({
-        data: {
-          postcardId: id,
-          userId,
-          action
+      let result: FeedbackResult = 'added';
+      if (action === FeedbackAction.REPORT_WRONG_LOCATION) {
+        try {
+          await tx.postcardFeedback.create({
+            data: {
+              postcardId: id,
+              userId,
+              action
+            }
+          });
+          await incrementActionCount(tx, id, action);
+        } catch (error) {
+          if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+            result = 'already_reported';
+          } else {
+            throw error;
+          }
         }
-      });
+      } else {
+        const existingVotes = await tx.postcardFeedback.findMany({
+          where: {
+            postcardId: id,
+            userId,
+            action: {
+              in: [FeedbackAction.LIKE, FeedbackAction.DISLIKE]
+            }
+          },
+          select: {
+            id: true,
+            action: true
+          }
+        });
 
-      return tx.postcard.update({
+        const sameVote = existingVotes.find((item) => item.action === action);
+        const oppositeVote = existingVotes.find((item) => item.action !== action);
+
+        if (sameVote) {
+          await tx.postcardFeedback.delete({
+            where: {
+              id: sameVote.id
+            }
+          });
+          await decrementActionCount(tx, id, action);
+          result = 'removed';
+        } else {
+          if (oppositeVote) {
+            await tx.postcardFeedback.delete({
+              where: {
+                id: oppositeVote.id
+              }
+            });
+            await decrementActionCount(tx, id, oppositeVote.action);
+            result = 'switched';
+          }
+
+          await tx.postcardFeedback.create({
+            data: {
+              postcardId: id,
+              userId,
+              action
+            }
+          });
+          await incrementActionCount(tx, id, action);
+        }
+      }
+
+      const counts = await tx.postcard.findUnique({
         where: { id },
-        data: updateData,
         select: {
           id: true,
           likeCount: true,
@@ -71,6 +181,32 @@ export async function POST(request: Request, context: RouteContext) {
           wrongLocationReports: true
         }
       });
+
+      if (!counts) {
+        return null;
+      }
+
+      const feedbackRows = await tx.postcardFeedback.findMany({
+        where: {
+          postcardId: id,
+          userId
+        },
+        select: {
+          action: true
+        }
+      });
+      const feedbackSet = new Set(feedbackRows.map((item) => item.action));
+
+      return {
+        ...counts,
+        result,
+        action: body.action,
+        viewerFeedback: {
+          liked: feedbackSet.has(FeedbackAction.LIKE),
+          disliked: feedbackSet.has(FeedbackAction.DISLIKE),
+          reportedWrongLocation: feedbackSet.has(FeedbackAction.REPORT_WRONG_LOCATION)
+        }
+      };
     });
 
     if (!postcard) {
@@ -79,15 +215,6 @@ export async function POST(request: Request, context: RouteContext) {
 
     return NextResponse.json(postcard, { status: 200 });
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-      return NextResponse.json(
-        {
-          error: 'You have already submitted this feedback action for this postcard.'
-        },
-        { status: 409 }
-      );
-    }
-
     return NextResponse.json(
       {
         error: 'Failed to submit feedback.',

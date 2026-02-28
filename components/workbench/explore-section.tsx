@@ -87,7 +87,7 @@ export function ExploreSection({
   const postcardItemClassName = 'grid gap-1.5 rounded-[14px] border border-[#e2eee0] bg-[#f8fffc] px-3 py-2.5';
   const postcardItemHeadClassName = 'flex items-center justify-between gap-2';
   const exploreResultsClassName =
-    'grid min-h-0 gap-2 overflow-auto pr-1 max-[1080px]:max-h-none max-[1080px]:overflow-visible max-[1080px]:pr-0';
+    'flex min-h-0 flex-col gap-2 overflow-auto pr-1 max-[1080px]:max-h-none max-[1080px]:overflow-visible max-[1080px]:pr-0';
   const smallMutedClassName = 'text-[0.82rem] text-[#5f736c]';
   const actionButtonClassName =
     'rounded-[10px] bg-[linear-gradient(135deg,#56b36a,#2f9e58)] px-2.5 py-1.5 text-[0.83rem] font-bold text-white shadow-[0_4px_10px_rgba(47,158,88,0.18)] disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none';
@@ -178,6 +178,7 @@ export function ExploreSection({
             const cardClassName = [
               postcardItemClassName,
               focusedMarkerId === postcard.id ? 'border-[#7ecb95] ring-2 ring-[rgba(86,179,106,0.2)]' : '',
+              'shrink-0',
               'cursor-pointer hover:border-[#95d7a7] hover:ring-2 hover:ring-[rgba(86,179,106,0.16)] focus-visible:outline-2 focus-visible:outline-[rgba(86,179,106,0.45)] focus-visible:outline-offset-2'
             ]
               .filter(Boolean)
@@ -304,36 +305,42 @@ export function ExploreSection({
               ) : null}
               <button
                 type="button"
-                className={actionButtonClassName}
+                className={
+                  selectedPostcard.viewerFeedback?.liked
+                    ? `${actionButtonClassName} ring-2 ring-[rgba(47,158,88,0.32)]`
+                    : actionButtonClassName
+                }
                 onClick={() => onSubmitFeedback(selectedPostcard.id, 'like')}
                 disabled={
                   !isAuthenticated ||
-                  selectedPostcard.viewerFeedback?.liked === true ||
                   feedbackPendingKey === `${selectedPostcard.id}:like`
                 }
               >
                 {!isAuthenticated
                   ? text.exploreVoteUp
                   : selectedPostcard.viewerFeedback?.liked
-                    ? text.exploreVoteDone
+                    ? text.exploreVoteUpCancel
                     : feedbackPendingKey === `${selectedPostcard.id}:like`
                       ? '...'
                       : text.exploreVoteUp}
               </button>
               <button
                 type="button"
-                className={actionButtonClassName}
+                className={
+                  selectedPostcard.viewerFeedback?.disliked
+                    ? `${actionButtonClassName} ring-2 ring-[rgba(47,158,88,0.32)]`
+                    : actionButtonClassName
+                }
                 onClick={() => onSubmitFeedback(selectedPostcard.id, 'dislike')}
                 disabled={
                   !isAuthenticated ||
-                  selectedPostcard.viewerFeedback?.disliked === true ||
                   feedbackPendingKey === `${selectedPostcard.id}:dislike`
                 }
               >
                 {!isAuthenticated
                   ? text.exploreVoteDown
                   : selectedPostcard.viewerFeedback?.disliked
-                    ? text.exploreVoteDone
+                    ? text.exploreVoteDownCancel
                     : feedbackPendingKey === `${selectedPostcard.id}:dislike`
                       ? '...'
                       : text.exploreVoteDown}

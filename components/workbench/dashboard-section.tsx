@@ -7,6 +7,7 @@ import type {
   DashboardViewMode,
   DetectionDraft,
   DetectionJobRecord,
+  PostcardEditDraft,
   PostcardRecord
 } from '@/components/workbench/types';
 import type { CropDraft } from '@/components/workbench/utils';
@@ -17,7 +18,9 @@ type DashboardSectionProps = {
   jobs: DetectionJobRecord[];
   myPostcards: PostcardRecord[];
   jobDrafts: Record<string, DetectionDraft>;
+  postcardDrafts: Record<string, PostcardEditDraft>;
   savingJobId: string | null;
+  savingPostcardId: string | null;
   deletingPostcardId: string | null;
   editingCropPostcardId: string | null;
   editingCropOriginalUrl: string | null;
@@ -31,7 +34,9 @@ type DashboardSectionProps = {
   onSetDashboardViewMode: (mode: DashboardViewMode) => void;
   onRefresh: () => void;
   onUpdateJobDraft: (jobId: string, patch: Partial<DetectionDraft>) => void;
+  onUpdatePostcardDraft: (postcardId: string, patch: Partial<PostcardEditDraft>) => void;
   onSaveDetectedJob: (job: DetectionJobRecord) => void;
+  onSavePostcard: (postcard: PostcardRecord) => void;
   isJobAlreadySaved: (job: DetectionJobRecord) => boolean;
   onOpenCropEditor: (postcard: PostcardRecord) => void;
   onSaveCrop: (postcardId: string) => void;
@@ -46,7 +51,9 @@ export function DashboardSection({
   jobs,
   myPostcards,
   jobDrafts,
+  postcardDrafts,
   savingJobId,
+  savingPostcardId,
   deletingPostcardId,
   editingCropPostcardId,
   editingCropOriginalUrl,
@@ -60,7 +67,9 @@ export function DashboardSection({
   onSetDashboardViewMode,
   onRefresh,
   onUpdateJobDraft,
+  onUpdatePostcardDraft,
   onSaveDetectedJob,
+  onSavePostcard,
   isJobAlreadySaved,
   onOpenCropEditor,
   onSaveCrop,
@@ -232,17 +241,65 @@ export function DashboardSection({
                     height={420}
                   />
                 ) : null}
-                <small className={smallMutedClassName}>{postcard.placeName || text.exploreUnknownPlace}</small>
-                {typeof postcard.latitude === 'number' && typeof postcard.longitude === 'number' ? (
-                  <small className={smallMutedClassName}>{postcard.latitude.toFixed(6)}, {postcard.longitude.toFixed(6)}</small>
-                ) : null}
-                {postcard.notes ? <p className="m-0 text-[0.9rem] text-[#436054]">{postcard.notes}</p> : null}
+                <label className={inlineFieldClassName}>
+                  {text.fieldName}
+                  <input
+                    className={inputClassName}
+                    value={postcardDrafts[postcard.id]?.title ?? ''}
+                    onChange={(event) => onUpdatePostcardDraft(postcard.id, { title: event.target.value })}
+                    placeholder={text.fieldName}
+                    disabled={savingPostcardId === postcard.id || deletingPostcardId === postcard.id}
+                  />
+                </label>
+                <label className={inlineFieldClassName}>
+                  {text.fieldPlaceName}
+                  <input
+                    className={inputClassName}
+                    value={postcardDrafts[postcard.id]?.placeName ?? ''}
+                    onChange={(event) => onUpdatePostcardDraft(postcard.id, { placeName: event.target.value })}
+                    placeholder={text.exploreUnknownPlace}
+                    disabled={savingPostcardId === postcard.id || deletingPostcardId === postcard.id}
+                  />
+                </label>
+                <label className={inlineFieldClassName}>
+                  {text.fieldDescription}
+                  <textarea
+                    className={inputClassName}
+                    rows={3}
+                    value={postcardDrafts[postcard.id]?.notes ?? ''}
+                    onChange={(event) => onUpdatePostcardDraft(postcard.id, { notes: event.target.value })}
+                    placeholder={text.manualDescriptionPlaceholder}
+                    disabled={savingPostcardId === postcard.id || deletingPostcardId === postcard.id}
+                  />
+                </label>
+                <label className={inlineFieldClassName}>
+                  {text.fieldLocation}
+                  <input
+                    className={inputClassName}
+                    value={postcardDrafts[postcard.id]?.locationInput ?? ''}
+                    onChange={(event) => onUpdatePostcardDraft(postcard.id, { locationInput: event.target.value })}
+                    placeholder={text.manualLocationPlaceholder}
+                    disabled={savingPostcardId === postcard.id || deletingPostcardId === postcard.id}
+                  />
+                </label>
                 <div className={chipRowClassName}>
                   <button
                     type="button"
                     className={actionButtonClassName}
+                    onClick={() => onSavePostcard(postcard)}
+                    disabled={savingPostcardId === postcard.id || deletingPostcardId === postcard.id}
+                  >
+                    {savingPostcardId === postcard.id ? text.buttonSavingChanges : text.buttonSaveChanges}
+                  </button>
+                  <button
+                    type="button"
+                    className={actionButtonClassName}
                     onClick={() => onOpenCropEditor(postcard)}
-                    disabled={savingCropPostcardId === postcard.id || deletingPostcardId === postcard.id}
+                    disabled={
+                      savingCropPostcardId === postcard.id ||
+                      deletingPostcardId === postcard.id ||
+                      savingPostcardId === postcard.id
+                    }
                   >
                     {editingCropPostcardId === postcard.id ? text.buttonEditingCrop : text.buttonEditCrop}
                   </button>
@@ -250,7 +307,11 @@ export function DashboardSection({
                     type="button"
                     className={actionButtonClassName}
                     onClick={() => onSoftDelete(postcard)}
-                    disabled={deletingPostcardId === postcard.id || savingCropPostcardId === postcard.id}
+                    disabled={
+                      deletingPostcardId === postcard.id ||
+                      savingCropPostcardId === postcard.id ||
+                      savingPostcardId === postcard.id
+                    }
                   >
                     {deletingPostcardId === postcard.id ? text.buttonRemoving : text.buttonRemoveSoftDelete}
                   </button>
