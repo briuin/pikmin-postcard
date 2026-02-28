@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import type { WorkbenchText } from '@/lib/i18n';
+import type { PostcardType } from '@/components/workbench/types';
 import { parseLocationInput } from '@/components/workbench/utils';
 
 type UseCreateControllerArgs = {
@@ -17,6 +18,7 @@ export function useCreateController({ text, isAuthenticated, loadPublicPostcards
   const [aiFile, setAiFile] = useState<File | null>(null);
   const [manualFile, setManualFile] = useState<File | null>(null);
   const [manualTitle, setManualTitle] = useState('');
+  const [manualPostcardType, setManualPostcardType] = useState<PostcardType | ''>('');
   const [manualNotes, setManualNotes] = useState('');
   const [manualLocationInput, setManualLocationInput] = useState('');
   const [isSubmittingAi, setIsSubmittingAi] = useState(false);
@@ -114,6 +116,11 @@ export function useCreateController({ text, isAuthenticated, loadPublicPostcards
       return;
     }
 
+    if (!manualPostcardType) {
+      setCreateStatus(text.manualTypeRequired);
+      return;
+    }
+
     let coords: { latitude: number; longitude: number };
     try {
       coords = parseLocationInput(manualLocationInput, text);
@@ -150,6 +157,7 @@ export function useCreateController({ text, isAuthenticated, loadPublicPostcards
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: manualTitle,
+          postcardType: manualPostcardType,
           notes: manualNotes,
           imageUrl: uploadPayload.imageUrl,
           latitude: coords.latitude,
@@ -169,6 +177,7 @@ export function useCreateController({ text, isAuthenticated, loadPublicPostcards
       }
 
       setManualTitle('');
+      setManualPostcardType('');
       setManualNotes('');
       setManualLocationInput('');
       setManualFile(null);
@@ -179,7 +188,16 @@ export function useCreateController({ text, isAuthenticated, loadPublicPostcards
     } finally {
       setIsSavingManual(false);
     }
-  }, [ensureCreateAuthenticated, loadPublicPostcards, manualFile, manualLocationInput, manualNotes, manualTitle, text]);
+  }, [
+    ensureCreateAuthenticated,
+    loadPublicPostcards,
+    manualFile,
+    manualLocationInput,
+    manualNotes,
+    manualPostcardType,
+    manualTitle,
+    text
+  ]);
 
   const openDashboard = useCallback(() => {
     router.push('/dashboard');
@@ -197,6 +215,7 @@ export function useCreateController({ text, isAuthenticated, loadPublicPostcards
     aiFile,
     manualFile,
     manualTitle,
+    manualPostcardType,
     manualNotes,
     manualLocationInput,
     isSubmittingAi,
@@ -208,6 +227,7 @@ export function useCreateController({ text, isAuthenticated, loadPublicPostcards
     setAiFile,
     setManualFile,
     setManualTitle,
+    setManualPostcardType,
     setManualNotes,
     setManualLocationInput,
     submitAiDetectJob,

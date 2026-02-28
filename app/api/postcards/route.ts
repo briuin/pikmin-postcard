@@ -1,10 +1,10 @@
-import { LocationStatus } from '@prisma/client';
+import { LocationStatus, PostcardType } from '@prisma/client';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import {
-  getAuthenticatedUserEmail,
+  getAuthenticatedUser,
   getAuthenticatedUserId,
-  getUserIdByEmail
+  isApprovedUser
 } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import {
@@ -15,9 +15,11 @@ import { serializePostcards } from '@/lib/postcards/list';
 import { buildPublicOrderBy, buildPublicWhere, parsePublicQuery } from '@/lib/postcards/query';
 import { findPostcardsForList } from '@/lib/postcards/repository';
 import { hasMissingOriginalImageColumnError } from '@/lib/postcards/shared';
+import { recordUserAction } from '@/lib/user-action-log';
 
 const postcardCreateSchema = z.object({
   title: z.string().min(1),
+  postcardType: z.nativeEnum(PostcardType),
   notes: z.string().max(2000).optional(),
   imageUrl: z.string().url().optional(),
   originalImageUrl: z.string().url().optional(),
@@ -40,16 +42,16 @@ export async function GET(request: Request) {
   const viewerUserId = await getAuthenticatedUserId();
 
   if (mineOnly) {
-    const userEmail = await getAuthenticatedUserEmail();
-    if (!userEmail) {
+    const userId = await getAuthenticatedUserId({ createIfMissing: true });
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
     }
 
-    const userId = await getUserIdByEmail(userEmail);
-
-    if (!userId) {
-      return NextResponse.json([], { status: 200 });
-    }
+    await recordUserAction({
+      request,
+      userId,
+      action: 'MY_POSTCARD_LIST'
+    });
 
     const postcards = await findPostcardsForList({
       where: {
@@ -115,16 +117,35 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const userId = await getAuthenticatedUserId({ createIfMissing: true });
-    if (!userId) {
+    const actor = await getAuthenticatedUser({ createIfMissing: true });
+    if (!actor) {
       return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+    }
+    if (!isApprovedUser(actor)) {
+      return NextResponse.json({ error: 'Account pending approval.' }, { status: 403 });
+    }
+    if (!actor.canCreatePostcard) {
+      return NextResponse.json(
+        { error: 'You are not allowed to create postcards.' },
+        { status: 403 }
+      );
     }
 
     const body = postcardCreateSchema.parse(await request.json());
+    await recordUserAction({
+      request,
+      userId: actor.id,
+      action: 'POSTCARD_CREATE',
+      metadata: {
+        postcardType: body.postcardType,
+        locationStatus: body.locationStatus ?? LocationStatus.AUTO
+      }
+    });
 
     const baseData = {
-      userId,
+      userId: actor.id,
       title: body.title,
+      postcardType: body.postcardType,
       notes: body.notes,
       imageUrl: body.imageUrl,
       city: body.city,

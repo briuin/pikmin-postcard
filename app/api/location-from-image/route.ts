@@ -1,14 +1,15 @@
-import { DetectionJobStatus } from '@prisma/client';
+import { DetectionJobStatus, PostcardType } from '@prisma/client';
 import { NextResponse } from 'next/server';
 import {
-  getAuthenticatedUserEmail,
+  getAuthenticatedUser,
   getAuthenticatedUserId,
-  getUserIdByEmail
+  isApprovedUser
 } from '@/lib/api-auth';
 import { buildCroppedPostcardImage } from '@/lib/location-detection/crop';
 import { detectWithGemini } from '@/lib/location-detection/gemini';
 import { hasMissingOriginalImageColumnError } from '@/lib/postcards/shared';
 import { prisma } from '@/lib/prisma';
+import { recordUserAction } from '@/lib/user-action-log';
 import {
   assertSupportedImage,
   buildObjectKey,
@@ -32,6 +33,7 @@ function buildAutoPostcardData(params: {
   return {
     userId: params.userId,
     title,
+    postcardType: PostcardType.UNKNOWN,
     notes: 'Auto-created from AI detection upload.',
     imageUrl: params.imageUrl,
     ...(params.includeOriginalImageUrl ? { originalImageUrl: params.originalImageUrl } : {}),
@@ -157,17 +159,17 @@ async function processDetectionJob(params: {
   }
 }
 
-export async function GET() {
-  const userEmail = await getAuthenticatedUserEmail();
-  if (!userEmail) {
+export async function GET(request: Request) {
+  const userId = await getAuthenticatedUserId({ createIfMissing: true });
+  if (!userId) {
     return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   }
 
-  const userId = await getUserIdByEmail(userEmail);
-
-  if (!userId) {
-    return NextResponse.json([], { status: 200 });
-  }
+  await recordUserAction({
+    request,
+    userId,
+    action: 'DETECTION_JOB_LIST'
+  });
 
   const jobs = await prisma.detectionJob.findMany({
     where: { userId },
@@ -179,9 +181,18 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const userId = await getAuthenticatedUserId({ createIfMissing: true });
-  if (!userId) {
+  const actor = await getAuthenticatedUser({ createIfMissing: true });
+  if (!actor) {
     return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+  }
+  if (!isApprovedUser(actor)) {
+    return NextResponse.json({ error: 'Account pending approval.' }, { status: 403 });
+  }
+  if (!actor.canSubmitDetection) {
+    return NextResponse.json(
+      { error: 'You are not allowed to submit AI detection jobs.' },
+      { status: 403 }
+    );
   }
 
   try {
@@ -191,6 +202,17 @@ export async function POST(request: Request) {
     if (!(file instanceof File)) {
       return NextResponse.json({ error: 'Missing image file.' }, { status: 400 });
     }
+
+    await recordUserAction({
+      request,
+      userId: actor.id,
+      action: 'DETECTION_JOB_SUBMIT',
+      metadata: {
+        fileName: file.name,
+        mimeType: file.type,
+        size: file.size
+      }
+    });
 
     assertSupportedImage(file);
 
@@ -207,7 +229,7 @@ export async function POST(request: Request) {
 
     const job = await prisma.detectionJob.create({
       data: {
-        userId,
+        userId: actor.id,
         imageUrl: originalImageUrl,
         status: DetectionJobStatus.QUEUED
       }
@@ -215,7 +237,7 @@ export async function POST(request: Request) {
 
     void processDetectionJob({
       jobId: job.id,
-      userId,
+      userId: actor.id,
       mimeType: file.type,
       fileBytes,
       originalImageUrl,

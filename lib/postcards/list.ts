@@ -5,6 +5,7 @@ const postcardListSelectBase = {
   id: true,
   userId: true,
   title: true,
+  postcardType: true,
   notes: true,
   imageUrl: true,
   capturedAt: true,

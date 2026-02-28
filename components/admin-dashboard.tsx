@@ -1,13 +1,13 @@
 'use client';
 
-import { UserRole } from '@prisma/client';
+import { UserApprovalStatus, UserRole } from '@prisma/client';
 import Image from 'next/image';
 import { signIn, useSession } from 'next-auth/react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Locale } from '@/lib/i18n';
 import { messages } from '@/lib/i18n';
 import { parseLocationInput } from '@/components/workbench/utils';
-import type { PostcardRecord } from '@/components/workbench/types';
+import type { PostcardRecord, PostcardType } from '@/components/workbench/types';
 
 type AdminDashboardProps = {
   locale: Locale;
@@ -18,12 +18,25 @@ type AdminUserRecord = {
   email: string;
   displayName: string | null;
   role: UserRole;
+  approvalStatus: UserApprovalStatus;
+  canCreatePostcard: boolean;
+  canSubmitDetection: boolean;
+  canVote: boolean;
   createdAt: string;
   postcardCount: number;
 };
 
+type UserAccessDraft = {
+  role: UserRole;
+  approvalStatus: UserApprovalStatus;
+  canCreatePostcard: boolean;
+  canSubmitDetection: boolean;
+  canVote: boolean;
+};
+
 type PostcardEditDraft = {
   title: string;
+  postcardType: PostcardType;
   notes: string;
   placeName: string;
   locationInput: string;
@@ -44,6 +57,7 @@ type TabKey = 'users' | 'postcards' | 'reported' | 'feedback';
 function buildPostcardDraft(postcard: PostcardRecord): PostcardEditDraft {
   return {
     title: postcard.title ?? '',
+    postcardType: postcard.postcardType ?? 'UNKNOWN',
     notes: postcard.notes ?? '',
     placeName: postcard.placeName ?? '',
     locationInput:
@@ -55,6 +69,16 @@ function buildPostcardDraft(postcard: PostcardRecord): PostcardEditDraft {
 
 function isManagerOrAbove(role: UserRole | undefined): boolean {
   return role === UserRole.ADMIN || role === UserRole.MANAGER;
+}
+
+function buildUserAccessDraft(user: AdminUserRecord): UserAccessDraft {
+  return {
+    role: user.role,
+    approvalStatus: user.approvalStatus,
+    canCreatePostcard: user.canCreatePostcard,
+    canSubmitDetection: user.canSubmitDetection,
+    canVote: user.canVote
+  };
 }
 
 export function AdminDashboard({ locale }: AdminDashboardProps) {
@@ -74,13 +98,15 @@ export function AdminDashboard({ locale }: AdminDashboardProps) {
   const [allPostcards, setAllPostcards] = useState<PostcardRecord[]>([]);
   const [reportedPostcards, setReportedPostcards] = useState<PostcardRecord[]>([]);
   const [feedbacks, setFeedbacks] = useState<AdminFeedbackRecord[]>([]);
-  const [roleDrafts, setRoleDrafts] = useState<Record<string, UserRole>>({});
+  const [userAccessDrafts, setUserAccessDrafts] = useState<Record<string, UserAccessDraft>>({});
   const [postcardDrafts, setPostcardDrafts] = useState<Record<string, PostcardEditDraft>>({});
   const [searchText, setSearchText] = useState('');
+  const [userSearchText, setUserSearchText] = useState('');
+  const [userRoleFilter, setUserRoleFilter] = useState<'ALL' | UserRole>('ALL');
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const [isLoadingPostcards, setIsLoadingPostcards] = useState(false);
   const [isLoadingFeedbacks, setIsLoadingFeedbacks] = useState(false);
-  const [savingRoleUserId, setSavingRoleUserId] = useState<string | null>(null);
+  const [savingUserAccessId, setSavingUserAccessId] = useState<string | null>(null);
   const [savingPostcardId, setSavingPostcardId] = useState<string | null>(null);
   const [statusText, setStatusText] = useState('');
 
@@ -98,17 +124,25 @@ export function AdminDashboard({ locale }: AdminDashboardProps) {
 
     setIsLoadingUsers(true);
     try {
-      const response = await fetch('/api/admin/users', { cache: 'no-store' });
+      const url = new URL('/api/admin/users', window.location.origin);
+      if (userSearchText.trim().length > 0) {
+        url.searchParams.set('q', userSearchText.trim());
+      }
+      if (userRoleFilter !== 'ALL') {
+        url.searchParams.set('role', userRoleFilter);
+      }
+      url.searchParams.set('limit', '500');
+      const response = await fetch(url.toString(), { cache: 'no-store' });
       const payload = (await response.json()) as AdminUserRecord[] | { error?: string };
       if (!response.ok || !Array.isArray(payload)) {
         throw new Error((payload as { error?: string }).error ?? text.roleSaveFailed);
       }
 
       setUsers(payload);
-      setRoleDrafts((current) => {
+      setUserAccessDrafts((current) => {
         const next = { ...current };
         for (const user of payload) {
-          next[user.id] = user.role;
+          next[user.id] = buildUserAccessDraft(user);
         }
         return next;
       });
@@ -117,7 +151,7 @@ export function AdminDashboard({ locale }: AdminDashboardProps) {
     } finally {
       setIsLoadingUsers(false);
     }
-  }, [canManageUsers, text.roleSaveFailed]);
+  }, [canManageUsers, text.roleSaveFailed, userRoleFilter, userSearchText]);
 
   const loadFeedbacks = useCallback(async () => {
     if (!canAccess) {
@@ -199,9 +233,19 @@ export function AdminDashboard({ locale }: AdminDashboardProps) {
     void refreshAll();
   }, [isAuthenticated, canAccess, refreshAll]);
 
-  async function saveUserRole(user: AdminUserRecord) {
-    const nextRole = roleDrafts[user.id] ?? user.role;
-    setSavingRoleUserId(user.id);
+  useEffect(() => {
+    if (!isAuthenticated || !canManageUsers || activeTab !== 'users') {
+      return;
+    }
+    const timer = setTimeout(() => {
+      void loadUsers();
+    }, 180);
+    return () => clearTimeout(timer);
+  }, [activeTab, canManageUsers, isAuthenticated, loadUsers, userRoleFilter, userSearchText]);
+
+  async function saveUserAccess(user: AdminUserRecord) {
+    const draft = userAccessDrafts[user.id] ?? buildUserAccessDraft(user);
+    setSavingUserAccessId(user.id);
     setStatusText('');
     try {
       const response = await fetch('/api/admin/users', {
@@ -209,7 +253,11 @@ export function AdminDashboard({ locale }: AdminDashboardProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: user.id,
-          role: nextRole
+          role: draft.role,
+          approvalStatus: draft.approvalStatus,
+          canCreatePostcard: draft.canCreatePostcard,
+          canSubmitDetection: draft.canSubmitDetection,
+          canVote: draft.canVote
         })
       });
       const payload = (await response.json()) as { error?: string };
@@ -222,7 +270,7 @@ export function AdminDashboard({ locale }: AdminDashboardProps) {
     } catch (error) {
       setStatusText(error instanceof Error ? error.message : text.roleSaveFailed);
     } finally {
-      setSavingRoleUserId(null);
+      setSavingUserAccessId(null);
     }
   }
 
@@ -238,6 +286,7 @@ export function AdminDashboard({ locale }: AdminDashboardProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: draft.title,
+          postcardType: draft.postcardType,
           notes: draft.notes,
           placeName: draft.placeName,
           latitude: parsed.latitude,
@@ -339,15 +388,42 @@ export function AdminDashboard({ locale }: AdminDashboardProps) {
         </button>
       </div>
 
-      <label className="grid gap-1 text-[0.91rem] font-bold text-[#39604f]">
-        {text.searchLabel}
-        <input
-          className="w-full rounded-[13px] border border-[#d8e6d5] bg-[#fdfffc] px-3 py-2 text-[#1f2e29] outline-none transition focus:border-[#72b485] focus:ring-4 focus:ring-[rgba(86,179,106,0.18)]"
-          value={searchText}
-          onChange={(event) => setSearchText(event.target.value)}
-          placeholder={text.searchPlaceholder}
-        />
-      </label>
+      {activeTab === 'users' ? (
+        <div className="grid gap-2 rounded-[14px] border border-[#deead9] bg-[#f8fffc] p-3 min-[720px]:grid-cols-2">
+          <label className="grid gap-1 text-[0.9rem] font-bold text-[#39604f]">
+            {text.userSearchLabel}
+            <input
+              className="w-full rounded-[11px] border border-[#d8e6d5] bg-[#fdfffc] px-3 py-2 text-[#1f2e29] outline-none transition focus:border-[#72b485] focus:ring-4 focus:ring-[rgba(86,179,106,0.18)]"
+              value={userSearchText}
+              onChange={(event) => setUserSearchText(event.target.value)}
+              placeholder={text.userSearchPlaceholder}
+            />
+          </label>
+          <label className="grid gap-1 text-[0.9rem] font-bold text-[#39604f]">
+            {text.userRoleFilterLabel}
+            <select
+              className="rounded-[11px] border border-[#d8e6d5] bg-white px-2.5 py-2"
+              value={userRoleFilter}
+              onChange={(event) => setUserRoleFilter(event.target.value as 'ALL' | UserRole)}
+            >
+              <option value="ALL">{text.userRoleFilterAll}</option>
+              <option value={UserRole.ADMIN}>ADMIN</option>
+              <option value={UserRole.MANAGER}>MANAGER</option>
+              <option value={UserRole.MEMBER}>MEMBER</option>
+            </select>
+          </label>
+        </div>
+      ) : (
+        <label className="grid gap-1 text-[0.91rem] font-bold text-[#39604f]">
+          {text.searchLabel}
+          <input
+            className="w-full rounded-[13px] border border-[#d8e6d5] bg-[#fdfffc] px-3 py-2 text-[#1f2e29] outline-none transition focus:border-[#72b485] focus:ring-4 focus:ring-[rgba(86,179,106,0.18)]"
+            value={searchText}
+            onChange={(event) => setSearchText(event.target.value)}
+            placeholder={text.searchPlaceholder}
+          />
+        </label>
+      )}
 
       {statusText ? <small className="text-[#5f736c]">{statusText}</small> : null}
 
@@ -359,44 +435,120 @@ export function AdminDashboard({ locale }: AdminDashboardProps) {
           {!isLoadingUsers && users.length === 0 ? <small className="text-[#5f736c]">{text.usersEmpty}</small> : null}
 
           <div className="grid gap-2">
-            {users.map((user) => (
-              <article key={user.id} className="grid gap-1.5 rounded-[14px] border border-[#e2eee0] bg-[#f8fffc] px-3 py-2.5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <strong>{user.displayName?.trim() || user.email}</strong>
-                  <small className="text-[#5f736c]">{user.email}</small>
-                </div>
-                <small className="text-[#5f736c]">
-                  {new Date(user.createdAt).toLocaleDateString(locale === 'zh-TW' ? 'zh-TW' : 'en-US')} · {user.postcardCount} postcards
-                </small>
-                <div className="flex flex-wrap items-center gap-2">
-                  <label className="grid gap-1 text-[0.86rem] font-bold text-[#39604f]">
-                    {text.userRoleLabel}
-                    <select
-                      className="rounded-[10px] border border-[#d8e6d5] bg-white px-2.5 py-1.5"
-                      value={roleDrafts[user.id] ?? user.role}
-                      onChange={(event) =>
-                        setRoleDrafts((current) => ({
-                          ...current,
-                          [user.id]: event.target.value as UserRole
-                        }))
-                      }
+            {users.map((user) => {
+              const draft = userAccessDrafts[user.id] ?? buildUserAccessDraft(user);
+              return (
+                <article key={user.id} className="grid gap-1.5 rounded-[14px] border border-[#e2eee0] bg-[#f8fffc] px-3 py-2.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <strong>{user.displayName?.trim() || user.email}</strong>
+                    <small className="text-[#5f736c]">{user.email}</small>
+                  </div>
+                  <small className="text-[#5f736c]">
+                    {new Date(user.createdAt).toLocaleDateString(locale === 'zh-TW' ? 'zh-TW' : 'en-US')} · {user.postcardCount} postcards
+                  </small>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label className="grid gap-1 text-[0.86rem] font-bold text-[#39604f]">
+                      {text.userRoleLabel}
+                      <select
+                        className="rounded-[10px] border border-[#d8e6d5] bg-white px-2.5 py-1.5"
+                        value={draft.role}
+                        onChange={(event) =>
+                          setUserAccessDrafts((current) => ({
+                            ...current,
+                            [user.id]: {
+                              ...draft,
+                              role: event.target.value as UserRole
+                            }
+                          }))
+                        }
+                      >
+                        <option value={UserRole.ADMIN}>ADMIN</option>
+                        <option value={UserRole.MANAGER}>MANAGER</option>
+                        <option value={UserRole.MEMBER}>MEMBER</option>
+                      </select>
+                    </label>
+                    <label className="grid gap-1 text-[0.86rem] font-bold text-[#39604f]">
+                      {text.userApprovalLabel}
+                      <select
+                        className="rounded-[10px] border border-[#d8e6d5] bg-white px-2.5 py-1.5"
+                        value={draft.approvalStatus}
+                        onChange={(event) =>
+                          setUserAccessDrafts((current) => ({
+                            ...current,
+                            [user.id]: {
+                              ...draft,
+                              approvalStatus: event.target.value as UserApprovalStatus
+                            }
+                          }))
+                        }
+                      >
+                        <option value={UserApprovalStatus.APPROVED}>{text.userApprovalApproved}</option>
+                        <option value={UserApprovalStatus.PENDING}>{text.userApprovalPending}</option>
+                      </select>
+                    </label>
+                    <div className="grid gap-1 rounded-[10px] border border-[#d8e6d5] bg-white px-2.5 py-2">
+                      <small className="font-bold text-[#39604f]">{text.userPermissionsLabel}</small>
+                      <label className="flex items-center gap-1.5 text-[0.85rem] font-semibold text-[#2f4d40]">
+                        <input
+                          type="checkbox"
+                          checked={draft.canCreatePostcard}
+                          onChange={(event) =>
+                            setUserAccessDrafts((current) => ({
+                              ...current,
+                              [user.id]: {
+                                ...draft,
+                                canCreatePostcard: event.target.checked
+                              }
+                            }))
+                          }
+                        />
+                        {text.userPermissionCreate}
+                      </label>
+                      <label className="flex items-center gap-1.5 text-[0.85rem] font-semibold text-[#2f4d40]">
+                        <input
+                          type="checkbox"
+                          checked={draft.canSubmitDetection}
+                          onChange={(event) =>
+                            setUserAccessDrafts((current) => ({
+                              ...current,
+                              [user.id]: {
+                                ...draft,
+                                canSubmitDetection: event.target.checked
+                              }
+                            }))
+                          }
+                        />
+                        {text.userPermissionAiDetect}
+                      </label>
+                      <label className="flex items-center gap-1.5 text-[0.85rem] font-semibold text-[#2f4d40]">
+                        <input
+                          type="checkbox"
+                          checked={draft.canVote}
+                          onChange={(event) =>
+                            setUserAccessDrafts((current) => ({
+                              ...current,
+                              [user.id]: {
+                                ...draft,
+                                canVote: event.target.checked
+                              }
+                            }))
+                          }
+                        />
+                        {text.userPermissionVote}
+                      </label>
+                    </div>
+                    <button
+                      type="button"
+                      className="rounded-[10px] bg-[linear-gradient(135deg,#56b36a,#2f9e58)] px-3 py-1.5 text-[0.83rem] font-bold text-white disabled:opacity-60"
+                      disabled={savingUserAccessId === user.id}
+                      onClick={() => void saveUserAccess(user)}
                     >
-                      <option value={UserRole.ADMIN}>ADMIN</option>
-                      <option value={UserRole.MANAGER}>MANAGER</option>
-                      <option value={UserRole.MEMBER}>MEMBER</option>
-                    </select>
-                  </label>
-                  <button
-                    type="button"
-                    className="rounded-[10px] bg-[linear-gradient(135deg,#56b36a,#2f9e58)] px-3 py-1.5 text-[0.83rem] font-bold text-white disabled:opacity-60"
-                    disabled={savingRoleUserId === user.id}
-                    onClick={() => void saveUserRole(user)}
-                  >
-                    {savingRoleUserId === user.id ? text.savingRole : text.saveRole}
-                  </button>
-                </div>
-              </article>
-            ))}
+                      {savingUserAccessId === user.id ? text.savingRole : text.saveRole}
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         </div>
       ) : null}
@@ -470,6 +622,27 @@ export function AdminDashboard({ locale }: AdminDashboardProps) {
                         }))
                       }
                     />
+                  </label>
+                  <label className="grid gap-1 text-[0.86rem] font-bold text-[#39604f]">
+                    {messages[locale].workbench.fieldPostcardType}
+                    <select
+                      className="rounded-[10px] border border-[#d8e6d5] bg-white px-2.5 py-1.5"
+                      value={draft.postcardType}
+                      onChange={(event) =>
+                        setPostcardDrafts((current) => ({
+                          ...current,
+                          [postcard.id]: {
+                            ...draft,
+                            postcardType: event.target.value as PostcardType
+                          }
+                        }))
+                      }
+                    >
+                      <option value="MUSHROOM">{messages[locale].workbench.postcardTypeMushroom}</option>
+                      <option value="FLOWER">{messages[locale].workbench.postcardTypeFlower}</option>
+                      <option value="EXPLORATION">{messages[locale].workbench.postcardTypeExploration}</option>
+                      <option value="UNKNOWN">{messages[locale].workbench.postcardTypeUnknown}</option>
+                    </select>
                   </label>
                   <label className="grid gap-1 text-[0.86rem] font-bold text-[#39604f]">
                     {text.fieldPlaceName}

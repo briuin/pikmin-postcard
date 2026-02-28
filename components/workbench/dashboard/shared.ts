@@ -12,6 +12,7 @@ export const DEFAULT_CROP_DRAFT: CropDraft = {
 export function buildPostcardDraft(postcard: PostcardRecord): PostcardEditDraft {
   return {
     title: postcard.title ?? '',
+    postcardType: postcard.postcardType ?? 'UNKNOWN',
     notes: postcard.notes ?? '',
     placeName: postcard.placeName ?? '',
     locationInput:

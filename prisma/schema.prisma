@@ -38,6 +38,18 @@ enum UserRole {
   ADMIN
 }
 
+enum UserApprovalStatus {
+  PENDING
+  APPROVED
+}
+
+enum PostcardType {
+  MUSHROOM
+  FLOWER
+  EXPLORATION
+  UNKNOWN
+}
+
 enum FeedbackMessageStatus {
   OPEN
   CLOSED
@@ -48,6 +60,10 @@ model User {
   email         String         @unique
   displayName   String?
   role          UserRole       @default(MEMBER)
+  approvalStatus UserApprovalStatus @default(APPROVED)
+  canCreatePostcard  Boolean   @default(true)
+  canSubmitDetection Boolean   @default(true)
+  canVote            Boolean   @default(true)
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   postcards     Postcard[]
@@ -55,12 +71,14 @@ model User {
   feedbacks     PostcardFeedback[]
   feedbackMessages FeedbackMessage[]
   editHistory   PostcardEditHistory[]
+  actionLogs    UserActionLog[]
 }
 
 model Postcard {
   id                   String         @id @default(cuid())
   userId               String
   title                String
+  postcardType         PostcardType   @default(UNKNOWN)
   notes                String?
   imageUrl             String?
   originalImageUrl     String?
@@ -168,4 +186,20 @@ model FeedbackMessage {
 
   @@index([userId, createdAt])
   @@index([status, createdAt])
+}
+
+model UserActionLog {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String
+  method    String
+  path      String
+  ipAddress String?
+  userAgent String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
 }

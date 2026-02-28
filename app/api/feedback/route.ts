@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getAuthenticatedUserId } from '@/lib/api-auth';
+import { getAuthenticatedUser, isApprovedUser } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { recordUserAction } from '@/lib/user-action-log';
 
 const feedbackCreateSchema = z.object({
   subject: z.string().trim().min(2).max(120),
@@ -9,16 +10,28 @@ const feedbackCreateSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const userId = await getAuthenticatedUserId({ createIfMissing: true });
-  if (!userId) {
+  const actor = await getAuthenticatedUser({ createIfMissing: true });
+  if (!actor) {
     return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+  }
+  if (!isApprovedUser(actor)) {
+    return NextResponse.json({ error: 'Account pending approval.' }, { status: 403 });
   }
 
   try {
     const body = feedbackCreateSchema.parse(await request.json());
+    await recordUserAction({
+      request,
+      userId: actor.id,
+      action: 'FEEDBACK_SUBMIT',
+      metadata: {
+        subjectLength: body.subject.length,
+        messageLength: body.message.length
+      }
+    });
     const created = await prisma.feedbackMessage.create({
       data: {
-        userId,
+        userId: actor.id,
         subject: body.subject,
         message: body.message
       },

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { getAuthenticatedUser, isManagerOrAboveRole } from '@/lib/api-auth';
 import { serializePostcards } from '@/lib/postcards/list';
 import { findPostcardsForList } from '@/lib/postcards/repository';
+import { recordUserAction } from '@/lib/user-action-log';
 
 const adminPostcardQuerySchema = z.object({
   q: z.string().trim().max(120).optional(),
@@ -38,6 +39,16 @@ export async function GET(request: Request) {
   }
 
   const query = parse.data;
+  await recordUserAction({
+    request,
+    userId: actor.id,
+    action: query.reportedOnly ? 'ADMIN_POSTCARDS_LIST_REPORTED' : 'ADMIN_POSTCARDS_LIST',
+    metadata: {
+      reportedOnly: query.reportedOnly,
+      search: query.q ?? ''
+    }
+  });
+
   const whereAnd: Prisma.PostcardWhereInput[] = [{ deletedAt: null }];
   if (query.reportedOnly) {
     whereAnd.push({

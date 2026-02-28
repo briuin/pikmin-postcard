@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getAuthenticatedUser, isManagerOrAboveRole } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { recordUserAction } from '@/lib/user-action-log';
 
 const adminFeedbackQuerySchema = z.object({
   q: z.string().trim().max(120).optional(),
@@ -36,6 +37,16 @@ export async function GET(request: Request) {
   }
 
   const query = parse.data;
+  await recordUserAction({
+    request,
+    userId: actor.id,
+    action: 'ADMIN_FEEDBACK_LIST',
+    metadata: {
+      status: query.status ?? null,
+      search: query.q ?? ''
+    }
+  });
+
   const whereAnd: Array<Record<string, unknown>> = [];
   if (query.status) {
     whereAnd.push({ status: query.status });

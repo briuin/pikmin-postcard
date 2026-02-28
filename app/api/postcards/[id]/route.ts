@@ -1,11 +1,16 @@
-import { LocationStatus, PostcardEditAction, type Prisma } from '@prisma/client';
+import { LocationStatus, PostcardEditAction, PostcardType, type Prisma } from '@prisma/client';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getAuthenticatedUser, isManagerOrAboveRole } from '@/lib/api-auth';
+import {
+  getAuthenticatedUser,
+  isApprovedUser,
+  isManagerOrAboveRole
+} from '@/lib/api-auth';
 import { findPostcardCropSource, recropPostcardAndUpload } from '@/lib/postcards/crop-service';
 import { postcardEditSelect, toEditSnapshot, toNullableText } from '@/lib/postcards/edit-history';
 import { deriveOriginalImageUrl } from '@/lib/postcards/shared';
 import { prisma } from '@/lib/prisma';
+import { recordUserAction } from '@/lib/user-action-log';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -23,6 +28,7 @@ const cropUpdateSchema = z.object({
 const postcardUpdateSchema = z
   .object({
     title: z.string().trim().min(1).max(180).optional(),
+    postcardType: z.nativeEnum(PostcardType).optional(),
     notes: z.string().max(2000).nullable().optional(),
     placeName: z.string().max(180).nullable().optional(),
     city: z.string().max(120).nullable().optional(),
@@ -53,6 +59,9 @@ function buildPostcardUpdateData(payload: PostcardUpdatePayload): Prisma.Postcar
 
   if (payload.title !== undefined) {
     updateData.title = payload.title;
+  }
+  if (payload.postcardType !== undefined) {
+    updateData.postcardType = payload.postcardType;
   }
   if (payload.notes !== undefined) {
     updateData.notes = toNullableText(payload.notes);
@@ -90,6 +99,9 @@ export async function PATCH(request: Request, context: RouteContext) {
   if (!actor) {
     return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   }
+  if (!isApprovedUser(actor)) {
+    return NextResponse.json({ error: 'Account pending approval.' }, { status: 403 });
+  }
   const canEditAny = isManagerOrAboveRole(actor.role);
 
   const { id } = await context.params;
@@ -99,6 +111,14 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   try {
     const body = await request.json();
+    await recordUserAction({
+      request,
+      userId: actor.id,
+      action: body && typeof body === 'object' && 'crop' in body ? 'POSTCARD_CROP_EDIT' : 'POSTCARD_EDIT',
+      metadata: {
+        postcardId: id
+      }
+    });
 
     if (body && typeof body === 'object' && 'crop' in body) {
       const payload = cropUpdateSchema.parse(body);
@@ -237,16 +257,28 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
 }
 
-export async function DELETE(_: Request, context: RouteContext) {
+export async function DELETE(request: Request, context: RouteContext) {
   const actor = await getAuthenticatedUser();
   if (!actor) {
     return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+  }
+  if (!isApprovedUser(actor)) {
+    return NextResponse.json({ error: 'Account pending approval.' }, { status: 403 });
   }
 
   const { id } = await context.params;
   if (!id) {
     return NextResponse.json({ error: 'Missing postcard id.' }, { status: 400 });
   }
+
+  await recordUserAction({
+    request,
+    userId: actor.id,
+    action: 'POSTCARD_SOFT_DELETE',
+    metadata: {
+      postcardId: id
+    }
+  });
 
   const now = new Date();
   const deleted = await prisma.$transaction(async (tx) => {

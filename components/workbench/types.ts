@@ -1,8 +1,11 @@
 import type { SavedMapMarker } from '@/components/open-map';
 
+export type PostcardType = 'MUSHROOM' | 'FLOWER' | 'EXPLORATION' | 'UNKNOWN';
+
 export type PostcardRecord = {
   id: string;
   title: string;
+  postcardType: PostcardType;
   notes: string | null;
   placeName: string | null;
   imageUrl: string | null;
@@ -58,6 +61,7 @@ export type DeviceLocation = {
 
 export type PostcardEditDraft = {
   title: string;
+  postcardType: PostcardType;
   notes: string;
   placeName: string;
   locationInput: string;

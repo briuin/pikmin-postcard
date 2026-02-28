@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
 import { FeedbackAction, Prisma } from '@prisma/client';
 import { z } from 'zod';
-import { getAuthenticatedUserId } from '@/lib/api-auth';
+import { getAuthenticatedUser, isApprovedUser } from '@/lib/api-auth';
 import { toViewerFeedback } from '@/lib/postcards/feedback';
 import { prisma } from '@/lib/prisma';
+import { recordUserAction } from '@/lib/user-action-log';
 
 const feedbackSchema = z.object({
   action: z.enum(['like', 'dislike', 'report_wrong_location'])
@@ -80,9 +81,18 @@ async function decrementActionCount(
 }
 
 export async function POST(request: Request, context: RouteContext) {
-  const userId = await getAuthenticatedUserId({ createIfMissing: true });
-  if (!userId) {
+  const actor = await getAuthenticatedUser({ createIfMissing: true });
+  if (!actor) {
     return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+  }
+  if (!isApprovedUser(actor)) {
+    return NextResponse.json({ error: 'Account pending approval.' }, { status: 403 });
+  }
+  if (!actor.canVote) {
+    return NextResponse.json(
+      { error: 'You are not allowed to vote or report locations.' },
+      { status: 403 }
+    );
   }
 
   const { id } = await context.params;
@@ -92,6 +102,15 @@ export async function POST(request: Request, context: RouteContext) {
 
   try {
     const body = feedbackSchema.parse(await request.json());
+    await recordUserAction({
+      request,
+      userId: actor.id,
+      action: 'POSTCARD_FEEDBACK',
+      metadata: {
+        postcardId: id,
+        feedbackAction: body.action
+      }
+    });
     const action = toFeedbackAction(body.action);
 
     const postcard = await prisma.$transaction(async (tx) => {
@@ -113,7 +132,7 @@ export async function POST(request: Request, context: RouteContext) {
           await tx.postcardFeedback.create({
             data: {
               postcardId: id,
-              userId,
+              userId: actor.id,
               action
             }
           });
@@ -129,7 +148,7 @@ export async function POST(request: Request, context: RouteContext) {
         const existingVotes = await tx.postcardFeedback.findMany({
           where: {
             postcardId: id,
-            userId,
+            userId: actor.id,
             action: {
               in: [FeedbackAction.LIKE, FeedbackAction.DISLIKE]
             }
@@ -165,7 +184,7 @@ export async function POST(request: Request, context: RouteContext) {
           await tx.postcardFeedback.create({
             data: {
               postcardId: id,
-              userId,
+              userId: actor.id,
               action
             }
           });
@@ -190,7 +209,7 @@ export async function POST(request: Request, context: RouteContext) {
       const feedbackRows = await tx.postcardFeedback.findMany({
         where: {
           postcardId: id,
-          userId
+          userId: actor.id
         },
         select: {
           action: true

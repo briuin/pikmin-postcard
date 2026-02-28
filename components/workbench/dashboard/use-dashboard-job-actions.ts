@@ -56,6 +56,7 @@ export function useDashboardJobActions({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             title,
+            postcardType: 'UNKNOWN',
             imageUrl: job.imageUrl,
             originalImageUrl: deriveOriginalImageUrl(job.imageUrl) ?? undefined,
             placeName: job.placeGuess ?? undefined,

@@ -321,6 +321,24 @@ export function DashboardSection({
                         />
                       </label>
                       <label className={inlineFieldClassName}>
+                        {text.fieldPostcardType}
+                        <select
+                          className={inputClassName}
+                          value={postcardDrafts[postcard.id]?.postcardType ?? 'UNKNOWN'}
+                          onChange={(event) =>
+                            onUpdatePostcardDraft(postcard.id, {
+                              postcardType: event.target.value as PostcardRecord['postcardType']
+                            })
+                          }
+                          disabled={savingPostcardId === postcard.id || deletingPostcardId === postcard.id}
+                        >
+                          <option value="MUSHROOM">{text.postcardTypeMushroom}</option>
+                          <option value="FLOWER">{text.postcardTypeFlower}</option>
+                          <option value="EXPLORATION">{text.postcardTypeExploration}</option>
+                          <option value="UNKNOWN">{text.postcardTypeUnknown}</option>
+                        </select>
+                      </label>
+                      <label className={inlineFieldClassName}>
                         {text.fieldPlaceName}
                         <input
                           className={inputClassName}

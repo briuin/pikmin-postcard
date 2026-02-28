@@ -1,0 +1,4 @@
+CREATE TYPE "PostcardType" AS ENUM ('MUSHROOM', 'FLOWER', 'EXPLORATION', 'UNKNOWN');
+
+ALTER TABLE "Postcard"
+ADD COLUMN "postcardType" "PostcardType" NOT NULL DEFAULT 'UNKNOWN';

@@ -133,6 +133,7 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
           isSavingManual={create.isSavingManual}
           aiFile={create.aiFile}
           manualTitle={create.manualTitle}
+          manualPostcardType={create.manualPostcardType}
           manualNotes={create.manualNotes}
           manualLocationInput={create.manualLocationInput}
           aiInputVersion={create.aiInputVersion}
@@ -144,6 +145,7 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
           onAiFileChange={create.setAiFile}
           onOpenDashboard={create.openDashboard}
           onManualTitleChange={create.setManualTitle}
+          onManualPostcardTypeChange={create.setManualPostcardType}
           onManualNotesChange={create.setManualNotes}
           onManualLocationInputChange={create.setManualLocationInput}
           onManualFileChange={create.setManualFile}

@@ -44,6 +44,7 @@ export function useDashboardPostcardActions({
         [postcardId]: {
           ...(current[postcardId] ?? {
             title: '',
+            postcardType: 'UNKNOWN',
             notes: '',
             placeName: '',
             locationInput: ''
@@ -85,6 +86,7 @@ export function useDashboardPostcardActions({
       const normalizedOriginal = buildPostcardDraft(postcard);
       const normalizedCurrent: PostcardEditDraft = {
         title,
+        postcardType: draft.postcardType,
         notes: draft.notes.trim(),
         placeName: draft.placeName.trim(),
         locationInput:
@@ -94,6 +96,7 @@ export function useDashboardPostcardActions({
       };
       const hasChanges =
         normalizedOriginal.title !== normalizedCurrent.title ||
+        normalizedOriginal.postcardType !== normalizedCurrent.postcardType ||
         normalizedOriginal.notes !== normalizedCurrent.notes ||
         normalizedOriginal.placeName !== normalizedCurrent.placeName ||
         normalizedOriginal.locationInput !== normalizedCurrent.locationInput;
@@ -112,6 +115,7 @@ export function useDashboardPostcardActions({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             title,
+            postcardType: draft.postcardType,
             notes: draft.notes.trim() ? draft.notes : null,
             placeName: draft.placeName.trim() ? draft.placeName : null,
             latitude,

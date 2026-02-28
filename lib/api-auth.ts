@@ -1,6 +1,7 @@
 import { auth } from '@/auth';
-import { UserRole } from '@prisma/client';
+import { UserApprovalStatus, UserRole } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { defaultApprovalStatusForRole, isApprovedStatus } from '@/lib/user-approval';
 import { normalizeEmail, roleForEmail } from '@/lib/user-role';
 
 type UserIdOptions = {
@@ -17,6 +18,10 @@ type AuthenticatedUser = {
   email: string;
   name: string | null;
   role: UserRole;
+  approvalStatus: UserApprovalStatus;
+  canCreatePostcard: boolean;
+  canSubmitDetection: boolean;
+  canVote: boolean;
 };
 
 export async function getAuthenticatedUserEmail(): Promise<string | null> {
@@ -50,15 +55,20 @@ export async function getUserIdByEmail(
   const normalizedEmail = normalizeEmail(email);
   const displayName = options.defaultDisplayName?.trim();
   const defaultRole = roleForEmail(normalizedEmail);
+  const defaultApprovalStatus = defaultApprovalStatusForRole(defaultRole);
 
   if (options.createIfMissing) {
     const user = await prisma.user.upsert({
       where: { email: normalizedEmail },
-      update: defaultRole === UserRole.ADMIN ? { role: UserRole.ADMIN } : {},
+      update:
+        defaultRole === UserRole.ADMIN
+          ? { role: UserRole.ADMIN, approvalStatus: UserApprovalStatus.APPROVED }
+          : {},
       create: {
         email: normalizedEmail,
         displayName: displayName && displayName.length > 0 ? displayName : null,
-        role: defaultRole
+        role: defaultRole,
+        approvalStatus: defaultApprovalStatus
       }
     });
     return user.id;
@@ -94,20 +104,29 @@ export async function getAuthenticatedUser(
 
   const normalizedEmail = normalizeEmail(identity.email);
   const defaultRole = roleForEmail(normalizedEmail);
+  const defaultApprovalStatus = defaultApprovalStatusForRole(defaultRole);
 
   if (options.createIfMissing) {
     const user = await prisma.user.upsert({
       where: { email: normalizedEmail },
-      update: defaultRole === UserRole.ADMIN ? { role: UserRole.ADMIN } : {},
+      update:
+        defaultRole === UserRole.ADMIN
+          ? { role: UserRole.ADMIN, approvalStatus: UserApprovalStatus.APPROVED }
+          : {},
       create: {
         email: normalizedEmail,
         displayName: identity.name,
-        role: defaultRole
+        role: defaultRole,
+        approvalStatus: defaultApprovalStatus
       },
       select: {
         id: true,
         email: true,
-        role: true
+        role: true,
+        approvalStatus: true,
+        canCreatePostcard: true,
+        canSubmitDetection: true,
+        canVote: true
       }
     });
 
@@ -115,6 +134,10 @@ export async function getAuthenticatedUser(
       id: user.id,
       email: user.email,
       role: user.role,
+      approvalStatus: user.approvalStatus,
+      canCreatePostcard: user.canCreatePostcard,
+      canSubmitDetection: user.canSubmitDetection,
+      canVote: user.canVote,
       name: identity.name
     };
   }
@@ -124,7 +147,11 @@ export async function getAuthenticatedUser(
     select: {
       id: true,
       email: true,
-      role: true
+      role: true,
+      approvalStatus: true,
+      canCreatePostcard: true,
+      canSubmitDetection: true,
+      canVote: true
     }
   });
 
@@ -136,8 +163,18 @@ export async function getAuthenticatedUser(
     id: user.id,
     email: user.email,
     role: user.role,
+    approvalStatus: user.approvalStatus,
+    canCreatePostcard: user.canCreatePostcard,
+    canSubmitDetection: user.canSubmitDetection,
+    canVote: user.canVote,
     name: identity.name
   };
+}
+
+export function isApprovedUser(
+  user: Pick<AuthenticatedUser, 'approvalStatus'>
+): boolean {
+  return isApprovedStatus(user.approvalStatus);
 }
 
 export { isAdminRole, isManagerOrAboveRole } from '@/lib/user-role';

@@ -1,7 +1,8 @@
 import NextAuth from 'next-auth';
-import { UserRole } from '@prisma/client';
+import { UserApprovalStatus, UserRole } from '@prisma/client';
 import Google from 'next-auth/providers/google';
 import { prisma } from '@/lib/prisma';
+import { defaultApprovalStatusForRole } from '@/lib/user-approval';
 import { normalizeEmail, roleForEmail } from '@/lib/user-role';
 
 export const { handlers, auth } = NextAuth({
@@ -30,11 +31,18 @@ export const { handlers, auth } = NextAuth({
 
       await prisma.user.upsert({
         where: { email },
-        update: defaultRole === UserRole.ADMIN ? { role: UserRole.ADMIN } : {},
+        update:
+          defaultRole === UserRole.ADMIN
+            ? {
+                role: UserRole.ADMIN,
+                approvalStatus: UserApprovalStatus.APPROVED
+              }
+            : {},
         create: {
           email,
           displayName: name,
-          role: defaultRole
+          role: defaultRole,
+          approvalStatus: defaultApprovalStatusForRole(defaultRole)
         }
       });
 
@@ -52,7 +60,8 @@ export const { handlers, auth } = NextAuth({
         where: { email },
         select: {
           id: true,
-          role: true
+          role: true,
+          approvalStatus: true
         }
       });
 
@@ -60,25 +69,29 @@ export const { handlers, auth } = NextAuth({
         user = await prisma.user.create({
           data: {
             email,
-            role: defaultRole
+            role: defaultRole,
+            approvalStatus: defaultApprovalStatusForRole(defaultRole)
           },
           select: {
             id: true,
-            role: true
+            role: true,
+            approvalStatus: true
           }
         });
       } else if (defaultRole === UserRole.ADMIN && user.role !== UserRole.ADMIN) {
         user = await prisma.user.update({
           where: { email },
-          data: { role: UserRole.ADMIN },
+          data: { role: UserRole.ADMIN, approvalStatus: UserApprovalStatus.APPROVED },
           select: {
             id: true,
-            role: true
+            role: true,
+            approvalStatus: true
           }
         });
       }
 
       token.role = user.role;
+      token.approvalStatus = user.approvalStatus;
       token.userId = user.id;
       return token;
     },
@@ -88,6 +101,10 @@ export const { handlers, auth } = NextAuth({
           token.role === UserRole.ADMIN || token.role === UserRole.MANAGER
             ? token.role
             : UserRole.MEMBER;
+        session.user.approvalStatus =
+          token.approvalStatus === UserApprovalStatus.APPROVED
+            ? UserApprovalStatus.APPROVED
+            : UserApprovalStatus.PENDING;
       }
       return session;
     }

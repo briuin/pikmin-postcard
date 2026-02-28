@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import type { FormEvent } from 'react';
 import type { WorkbenchText } from '@/lib/i18n';
+import type { PostcardType } from '@/components/workbench/types';
 
 type CreateSectionProps = {
   text: WorkbenchText;
@@ -11,6 +12,7 @@ type CreateSectionProps = {
   isSavingManual: boolean;
   aiFile: File | null;
   manualTitle: string;
+  manualPostcardType: PostcardType | '';
   manualNotes: string;
   manualLocationInput: string;
   aiInputVersion: number;
@@ -22,6 +24,7 @@ type CreateSectionProps = {
   onAiFileChange: (file: File | null) => void;
   onOpenDashboard: () => void;
   onManualTitleChange: (value: string) => void;
+  onManualPostcardTypeChange: (value: PostcardType | '') => void;
   onManualNotesChange: (value: string) => void;
   onManualLocationInputChange: (value: string) => void;
   onManualFileChange: (file: File | null) => void;
@@ -35,6 +38,7 @@ export function CreateSection({
   isSavingManual,
   aiFile,
   manualTitle,
+  manualPostcardType,
   manualNotes,
   manualLocationInput,
   aiInputVersion,
@@ -46,6 +50,7 @@ export function CreateSection({
   onAiFileChange,
   onOpenDashboard,
   onManualTitleChange,
+  onManualPostcardTypeChange,
   onManualNotesChange,
   onManualLocationInputChange,
   onManualFileChange,
@@ -137,6 +142,21 @@ export function CreateSection({
           />
         </label>
         <label className={inlineFieldClassName}>
+          {text.fieldPostcardType}
+          <select
+            className={inputClassName}
+            value={manualPostcardType}
+            onChange={(event) => onManualPostcardTypeChange(event.target.value as PostcardType | '')}
+            disabled={!isAuthenticated || isSavingManual || isSubmittingAi}
+          >
+            <option value="">{text.postcardTypeSelectPlaceholder}</option>
+            <option value="MUSHROOM">{text.postcardTypeMushroom}</option>
+            <option value="FLOWER">{text.postcardTypeFlower}</option>
+            <option value="EXPLORATION">{text.postcardTypeExploration}</option>
+            <option value="UNKNOWN">{text.postcardTypeUnknown}</option>
+          </select>
+        </label>
+        <label className={inlineFieldClassName}>
           {text.fieldDescription}
           <textarea
             className={inputClassName}
@@ -167,7 +187,12 @@ export function CreateSection({
             disabled={!isAuthenticated || isSavingManual || isSubmittingAi}
           />
         </label>
-        <button type="button" className={primaryButtonClassName} disabled={!isAuthenticated || isSavingManual || isSubmittingAi} onClick={onSaveManual}>
+        <button
+          type="button"
+          className={primaryButtonClassName}
+          disabled={!isAuthenticated || !manualPostcardType || isSavingManual || isSubmittingAi}
+          onClick={onSaveManual}
+        >
           {isSavingManual ? text.buttonSaving : text.buttonCreatePostcard}
         </button>
       </div>

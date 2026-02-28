@@ -3,6 +3,7 @@ import { type Prisma } from '@prisma/client';
 export const postcardEditSelect = {
   id: true,
   title: true,
+  postcardType: true,
   notes: true,
   placeName: true,
   city: true,
@@ -29,6 +30,7 @@ export function toNullableText(value: string | null | undefined): string | null 
 export function toEditSnapshot(postcard: EditablePostcard): Prisma.JsonObject {
   return {
     title: postcard.title,
+    postcardType: postcard.postcardType,
     notes: postcard.notes,
     placeName: postcard.placeName,
     city: postcard.city,
