@@ -10,11 +10,12 @@ import {
 } from '@/components/workbench/explore-view/styles';
 import { ExploreSummary } from '@/components/workbench/explore-view/summary';
 import { ExploreToastBanner } from '@/components/workbench/explore-view/toast';
-import type { ExploreToast } from '@/components/workbench/explore-view/types';
+import type { ExploreReportInput, ExploreToast } from '@/components/workbench/explore-view/types';
 import { useAutoDismiss } from '@/components/use-auto-dismiss';
 import { useBodyScrollLock } from '@/components/use-body-scroll-lock';
 import type { WorkbenchText } from '@/lib/i18n';
 import type { ExploreSort, PostcardRecord } from '@/components/workbench/types';
+import type { ExploreFeedbackAction } from '@/components/workbench/explore/shared';
 
 type ExploreSectionProps = {
   text: WorkbenchText;
@@ -34,7 +35,11 @@ type ExploreSectionProps = {
   onSearchChange: (value: string) => void;
   onSortChange: (value: ExploreSort) => void;
   onLimitChange: (value: number) => void;
-  onSubmitFeedback: (postcardId: string, action: 'like' | 'dislike' | 'report_wrong_location') => void;
+  onSubmitFeedback: (
+    postcardId: string,
+    action: ExploreFeedbackAction,
+    reportInput?: ExploreReportInput
+  ) => void;
   onSignIn: () => void;
   mapNode: ReactNode;
 };

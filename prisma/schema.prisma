@@ -55,6 +55,20 @@ enum FeedbackMessageStatus {
   CLOSED
 }
 
+enum PostcardReportReason {
+  WRONG_LOCATION
+  SPAM
+  ILLEGAL_IMAGE
+  OTHER
+}
+
+enum PostcardReportStatus {
+  PENDING
+  IN_PROGRESS
+  VERIFIED
+  REMOVED
+}
+
 model User {
   id            String         @id @default(cuid())
   email         String         @unique
@@ -72,6 +86,8 @@ model User {
   feedbackMessages FeedbackMessage[]
   editHistory   PostcardEditHistory[]
   actionLogs    UserActionLog[]
+  submittedReports PostcardReport[] @relation("ReporterReports")
+  resolvedReportCases PostcardReportCase[] @relation("ResolverCases")
 }
 
 model Postcard {
@@ -96,6 +112,7 @@ model Postcard {
   likeCount            Int            @default(0)
   dislikeCount         Int            @default(0)
   wrongLocationReports Int            @default(0)
+  reportVersion        Int            @default(1)
   locationStatus       LocationStatus @default(AUTO)
   locationModelVersion String?
   deletedAt            DateTime?
@@ -105,6 +122,8 @@ model Postcard {
   tags                 PostcardTag[]
   feedbacks            PostcardFeedback[]
   editHistory          PostcardEditHistory[]
+  reportCases          PostcardReportCase[]
+  reports              PostcardReport[]
 
   @@index([userId, createdAt])
   @@index([deletedAt])
@@ -173,6 +192,44 @@ model PostcardEditHistory {
 
   @@index([postcardId, createdAt])
   @@index([userId, createdAt])
+}
+
+model PostcardReportCase {
+  id               String              @id @default(cuid())
+  postcardId       String
+  version          Int
+  status           PostcardReportStatus @default(PENDING)
+  adminNote        String?
+  resolvedAt       DateTime?
+  resolvedByUserId String?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  postcard         Postcard            @relation(fields: [postcardId], references: [id], onDelete: Cascade)
+  reports          PostcardReport[]
+  resolvedBy       User?               @relation("ResolverCases", fields: [resolvedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([postcardId, version])
+  @@index([status, updatedAt])
+  @@index([postcardId, updatedAt])
+}
+
+model PostcardReport {
+  id             String              @id @default(cuid())
+  postcardId     String
+  version        Int
+  caseId         String
+  reporterUserId String
+  reason         PostcardReportReason
+  description    String?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  postcard       Postcard            @relation(fields: [postcardId], references: [id], onDelete: Cascade)
+  reportCase     PostcardReportCase  @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  reporter       User                @relation("ReporterReports", fields: [reporterUserId], references: [id], onDelete: Cascade)
+
+  @@unique([postcardId, version, reporterUserId])
+  @@index([caseId, createdAt])
+  @@index([reporterUserId, createdAt])
 }
 
 model FeedbackMessage {

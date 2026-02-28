@@ -2,7 +2,7 @@ import type { MapViewportBounds, SavedMapMarker } from '@/components/open-map';
 import type { WorkbenchText } from '@/lib/i18n';
 import type { ExploreSort, PostcardRecord } from '@/components/workbench/types';
 
-export type ExploreFeedbackAction = 'like' | 'dislike' | 'report_wrong_location';
+export type ExploreFeedbackAction = 'like' | 'dislike' | 'report';
 
 type FeedbackResult = 'added' | 'removed' | 'switched' | 'already_reported';
 
@@ -13,6 +13,7 @@ type FeedbackMessageText = Pick<
   | 'feedbackDislikeRecorded'
   | 'feedbackDislikeRemoved'
   | 'feedbackWrongLocation'
+  | 'feedbackReportAlreadySubmitted'
 >;
 
 export function buildPublicMarkers(postcards: PostcardRecord[]): SavedMapMarker[] {
@@ -84,6 +85,9 @@ export function getFeedbackStatusMessage(
   }
   if (action === 'dislike') {
     return result === 'removed' ? text.feedbackDislikeRemoved : text.feedbackDislikeRecorded;
+  }
+  if (result === 'already_reported') {
+    return text.feedbackReportAlreadySubmitted;
   }
   return text.feedbackWrongLocation;
 }

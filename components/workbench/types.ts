@@ -1,6 +1,8 @@
 import type { SavedMapMarker } from '@/components/open-map';
 
 export type PostcardType = 'MUSHROOM' | 'FLOWER' | 'EXPLORATION' | 'UNKNOWN';
+export type PostcardReportReason = 'WRONG_LOCATION' | 'SPAM' | 'ILLEGAL_IMAGE' | 'OTHER';
+export type PostcardReportStatus = 'PENDING' | 'IN_PROGRESS' | 'VERIFIED' | 'REMOVED';
 
 export type PostcardRecord = {
   id: string;
@@ -20,6 +22,20 @@ export type PostcardRecord = {
   likeCount: number;
   dislikeCount: number;
   wrongLocationReports: number;
+  reportVersion: number;
+  activeReportCaseId?: string | null;
+  activeReportCaseStatus?: PostcardReportStatus | null;
+  activeReportCaseUpdatedAt?: string | null;
+  activeReportAdminNote?: string | null;
+  activeReportCount?: number;
+  activeReportReasonCounts?: Record<string, number>;
+  activeReportReports?: Array<{
+    id: string;
+    reason: PostcardReportReason;
+    description: string | null;
+    reporterName: string;
+    createdAt: string;
+  }>;
   locationStatus: 'AUTO' | 'USER_CONFIRMED' | 'MANUAL';
   locationModelVersion: string | null;
   uploaderName?: string | null;
@@ -52,6 +68,23 @@ export type DetectionJobRecord = {
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
+};
+
+export type DashboardReportRecord = {
+  reportId: string;
+  caseId: string;
+  postcardId: string;
+  postcardTitle: string;
+  postcardImageUrl: string | null;
+  postcardPlaceName: string | null;
+  postcardDeletedAt: string | null;
+  reportReason: PostcardReportReason;
+  reportDescription: string | null;
+  reportVersion: number;
+  status: PostcardReportStatus;
+  adminNote: string | null;
+  reportedAt: string;
+  statusUpdatedAt: string;
 };
 
 export type GeoPermissionState = 'checking' | 'prompt' | 'granted' | 'denied' | 'unsupported';

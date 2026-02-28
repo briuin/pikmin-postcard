@@ -4,6 +4,7 @@ import type { DashboardViewMode, PostcardEditDraft, PostcardRecord } from '@/com
 import { useDashboardJobActions } from '@/components/workbench/dashboard/use-dashboard-job-actions';
 import { useDashboardPostcardActions } from '@/components/workbench/dashboard/use-dashboard-postcard-actions';
 import { useDashboardProfileActions } from '@/components/workbench/dashboard/use-dashboard-profile-actions';
+import { useDashboardReportActions } from '@/components/workbench/dashboard/use-dashboard-report-actions';
 
 type UseDashboardMutationsArgs = {
   text: WorkbenchText;
@@ -74,6 +75,14 @@ export function useDashboardMutations({
     setProfileDisplayName
   });
 
+  const { cancelingReportId, cancelReport } = useDashboardReportActions({
+    text,
+    ensureAuthenticated,
+    loadDashboardData,
+    loadPublicPostcards,
+    setDashboardStatus
+  });
+
   return {
     savingJobId,
     savingPostcardId,
@@ -82,6 +91,7 @@ export function useDashboardMutations({
     editingCropOriginalUrl,
     cropDraft,
     savingCropPostcardId,
+    cancelingReportId,
     isSavingProfile,
     dashboardViewMode,
     setDashboardViewMode,
@@ -94,6 +104,7 @@ export function useDashboardMutations({
     closeCropEditor,
     saveCropEdit,
     softDeletePostcard,
-    updateCropDraft
+    updateCropDraft,
+    cancelReport
   };
 }

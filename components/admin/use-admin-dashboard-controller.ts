@@ -6,10 +6,12 @@ import type { AdminText, WorkbenchText } from '@/lib/i18n';
 import {
   type AdminFeedbackRecord,
   type AdminPostcardEditDraft,
+  type AdminReportStatusDraft,
   type AdminTabKey,
   type AdminUserRecord,
   type UserAccessDraft,
   buildAdminPostcardDraft,
+  buildAdminReportStatusDraft,
   buildUserAccessDraft
 } from '@/components/admin-dashboard-types';
 import { parseLocationInput } from '@/components/workbench/utils';
@@ -42,6 +44,7 @@ export function useAdminDashboardController({
   const [feedbacks, setFeedbacks] = useState<AdminFeedbackRecord[]>([]);
   const [userAccessDrafts, setUserAccessDrafts] = useState<Record<string, UserAccessDraft>>({});
   const [postcardDrafts, setPostcardDrafts] = useState<Record<string, AdminPostcardEditDraft>>({});
+  const [reportStatusDrafts, setReportStatusDrafts] = useState<Record<string, AdminReportStatusDraft>>({});
   const [searchText, setSearchText] = useState('');
   const [userSearchText, setUserSearchText] = useState('');
   const [userRoleFilter, setUserRoleFilter] = useState<'ALL' | UserRole>('ALL');
@@ -50,6 +53,7 @@ export function useAdminDashboardController({
   const [isLoadingFeedbacks, setIsLoadingFeedbacks] = useState(false);
   const [savingUserAccessId, setSavingUserAccessId] = useState<string | null>(null);
   const [savingPostcardId, setSavingPostcardId] = useState<string | null>(null);
+  const [savingReportCaseId, setSavingReportCaseId] = useState<string | null>(null);
   const [statusText, setStatusText] = useState('');
 
   useEffect(() => {
@@ -158,6 +162,19 @@ export function useAdminDashboardController({
           }
           return next;
         });
+
+        if (reportedOnly) {
+          setReportStatusDrafts((current) => {
+            const next = { ...current };
+            for (const postcard of postcards) {
+              if (!postcard.activeReportCaseId) {
+                continue;
+              }
+              next[postcard.id] = buildAdminReportStatusDraft(postcard);
+            }
+            return next;
+          });
+        }
       } catch (error) {
         setStatusText(error instanceof Error ? error.message : text.savePostcardFailed);
       } finally {
@@ -256,6 +273,39 @@ export function useAdminDashboardController({
     [loadPostcards, parseText, postcardDrafts, text.savePostcardDone, text.savePostcardFailed]
   );
 
+  const saveReportedPostcardStatus = useCallback(
+    async (postcard: PostcardRecord) => {
+      if (!postcard.activeReportCaseId) {
+        return;
+      }
+
+      const draft = reportStatusDrafts[postcard.id] ?? buildAdminReportStatusDraft(postcard);
+      setSavingReportCaseId(postcard.activeReportCaseId);
+      setStatusText('');
+
+      try {
+        const response = await fetch('/api/admin/reports', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            caseId: postcard.activeReportCaseId,
+            status: draft.status,
+            adminNote: draft.adminNote
+          })
+        });
+        await parseJsonResponseOrThrow(response, text.reportedStatusSaveFailed);
+
+        setStatusText(text.reportedStatusSaved);
+        await Promise.all([loadPostcards(false), loadPostcards(true)]);
+      } catch (error) {
+        setStatusText(error instanceof Error ? error.message : text.reportedStatusSaveFailed);
+      } finally {
+        setSavingReportCaseId(null);
+      }
+    },
+    [loadPostcards, reportStatusDrafts, text.reportedStatusSaveFailed, text.reportedStatusSaved]
+  );
+
   return {
     activeTab,
     setActiveTab,
@@ -267,6 +317,8 @@ export function useAdminDashboardController({
     setUserAccessDrafts,
     postcardDrafts,
     setPostcardDrafts,
+    reportStatusDrafts,
+    setReportStatusDrafts,
     searchText,
     setSearchText,
     userSearchText,
@@ -278,9 +330,11 @@ export function useAdminDashboardController({
     isLoadingFeedbacks,
     savingUserAccessId,
     savingPostcardId,
+    savingReportCaseId,
     statusText,
     refreshAll,
     saveUserAccess,
-    savePostcard
+    savePostcard,
+    saveReportedPostcardStatus
   };
 }

@@ -1,6 +1,10 @@
 import { UserApprovalStatus, UserRole } from '@prisma/client';
 import { buildPostcardDraftValues } from '@/components/workbench/postcard-draft';
-import type { PostcardRecord, PostcardType } from '@/components/workbench/types';
+import type {
+  PostcardRecord,
+  PostcardReportStatus,
+  PostcardType
+} from '@/components/workbench/types';
 
 export type AdminUserRecord = {
   id: string;
@@ -31,6 +35,11 @@ export type AdminPostcardEditDraft = {
   locationInput: string;
 };
 
+export type AdminReportStatusDraft = {
+  status: PostcardReportStatus;
+  adminNote: string;
+};
+
 export type AdminFeedbackRecord = {
   id: string;
   subject: string;
@@ -54,6 +63,13 @@ export function buildUserAccessDraft(user: AdminUserRecord): UserAccessDraft {
     canCreatePostcard: user.canCreatePostcard,
     canSubmitDetection: user.canSubmitDetection,
     canVote: user.canVote
+  };
+}
+
+export function buildAdminReportStatusDraft(postcard: PostcardRecord): AdminReportStatusDraft {
+  return {
+    status: postcard.activeReportCaseStatus ?? 'PENDING',
+    adminNote: postcard.activeReportAdminNote ?? ''
   };
 }
 

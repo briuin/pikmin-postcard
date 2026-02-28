@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { isAiDetected } from '@/components/workbench/explore-view/helpers';
 import {
@@ -22,6 +23,19 @@ export function ExplorePostcardModal({
   onCopyShareLink,
   onSignIn
 }: ExplorePostcardModalProps) {
+  const [isReportFormOpen, setIsReportFormOpen] = useState(false);
+  const [reportReason, setReportReason] = useState<'wrong_location' | 'spam' | 'illegal_image' | 'other'>(
+    'wrong_location'
+  );
+  const [reportDescription, setReportDescription] = useState('');
+  const reportPending = feedbackPendingKey === `${postcard.id}:report`;
+
+  useEffect(() => {
+    setIsReportFormOpen(false);
+    setReportReason('wrong_location');
+    setReportDescription('');
+  }, [postcard.id]);
+
   return (
     <div
       className="fixed inset-0 z-[1200] grid place-items-center bg-[radial-gradient(circle_at_16%_8%,rgba(244,199,66,0.26),transparent_38%),radial-gradient(circle_at_86%_18%,rgba(78,142,247,0.22),transparent_40%),rgba(14,28,22,0.58)] p-3 backdrop-blur-[2px] max-[780px]:place-items-end max-[780px]:p-0"
@@ -177,22 +191,78 @@ export function ExplorePostcardModal({
           <button
             type="button"
             className={modalActionWarnButtonClassName}
-            onClick={() => onSubmitFeedback(postcard.id, 'report_wrong_location')}
+            onClick={() => setIsReportFormOpen((current) => !current)}
             disabled={
               !isAuthenticated ||
               postcard.viewerFeedback?.reportedWrongLocation === true ||
-              feedbackPendingKey === `${postcard.id}:report_wrong_location`
+              reportPending
             }
           >
             {!isAuthenticated
-              ? text.exploreFlag
+              ? text.exploreReportOpen
               : postcard.viewerFeedback?.reportedWrongLocation
                 ? text.exploreVoteDone
-                : feedbackPendingKey === `${postcard.id}:report_wrong_location`
+                : reportPending
                   ? '...'
-                  : text.exploreFlag}
+                  : text.exploreReportOpen}
           </button>
         </div>
+
+        {isAuthenticated && isReportFormOpen && !postcard.viewerFeedback?.reportedWrongLocation ? (
+          <div className="relative z-10 grid gap-2 rounded-[14px] border border-[#f0d8c3] bg-[linear-gradient(160deg,#fff8f2,#fff3e8)] p-2.5">
+            <label className="grid gap-1 text-[0.82rem] font-bold text-[#6d4a2f]">
+              {text.exploreReportReasonLabel}
+              <select
+                className="rounded-[10px] border border-[#f1d7bf] bg-white px-2 py-1.5 text-[0.86rem] text-[#5b3d27]"
+                value={reportReason}
+                onChange={(event) =>
+                  setReportReason(
+                    event.target.value as 'wrong_location' | 'spam' | 'illegal_image' | 'other'
+                  )
+                }
+              >
+                <option value="wrong_location">{text.exploreReportReasonWrongLocation}</option>
+                <option value="spam">{text.exploreReportReasonSpam}</option>
+                <option value="illegal_image">{text.exploreReportReasonIllegalImage}</option>
+                <option value="other">{text.exploreReportReasonOther}</option>
+              </select>
+            </label>
+            <label className="grid gap-1 text-[0.82rem] font-bold text-[#6d4a2f]">
+              {text.exploreReportDescriptionLabel}
+              <textarea
+                rows={3}
+                className="rounded-[10px] border border-[#f1d7bf] bg-white px-2 py-1.5 text-[0.86rem] text-[#5b3d27]"
+                placeholder={text.exploreReportDescriptionPlaceholder}
+                value={reportDescription}
+                onChange={(event) => setReportDescription(event.target.value)}
+              />
+            </label>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                className={modalActionWarnButtonClassName}
+                onClick={() => {
+                  onSubmitFeedback(postcard.id, 'report', {
+                    reason: reportReason,
+                    description: reportDescription
+                  });
+                  setIsReportFormOpen(false);
+                }}
+                disabled={reportPending}
+              >
+                {reportPending ? text.exploreReportSubmitting : text.exploreReportSubmit}
+              </button>
+              <button
+                type="button"
+                className={modalActionButtonClassName}
+                onClick={() => setIsReportFormOpen(false)}
+                disabled={reportPending}
+              >
+                {text.buttonCancel}
+              </button>
+            </div>
+          </div>
+        ) : null}
       </article>
     </div>
   );

@@ -39,19 +39,59 @@ export async function findViewerFeedbackRowsForPostcards(
   }
 
   const ids = Array.from(new Set(postcardIds.map((id) => String(id))));
-
-  return prisma.postcardFeedback.findMany({
-    where: {
-      userId,
-      postcardId: {
-        in: ids
+  const [voteRows, postcards, reportRows] = await Promise.all([
+    prisma.postcardFeedback.findMany({
+      where: {
+        userId,
+        action: {
+          in: [FeedbackAction.LIKE, FeedbackAction.DISLIKE]
+        },
+        postcardId: {
+          in: ids
+        }
+      },
+      select: {
+        postcardId: true,
+        action: true
       }
-    },
-    select: {
-      postcardId: true,
-      action: true
-    }
-  });
+    }),
+    prisma.postcard.findMany({
+      where: {
+        id: {
+          in: ids
+        }
+      },
+      select: {
+        id: true,
+        reportVersion: true
+      }
+    }),
+    prisma.postcardReport.findMany({
+      where: {
+        reporterUserId: userId,
+        postcardId: {
+          in: ids
+        }
+      },
+      select: {
+        postcardId: true,
+        version: true
+      }
+    })
+  ]);
+
+  const versionByPostcardId = new Map(
+    postcards.map((postcard) => [postcard.id, postcard.reportVersion])
+  );
+
+  const reportFeedbackRows: FeedbackRow[] = reportRows
+    .filter((reportRow) => versionByPostcardId.get(reportRow.postcardId) === reportRow.version)
+    .map((reportRow) => ({
+      postcardId: reportRow.postcardId,
+      action: FeedbackAction.REPORT_WRONG_LOCATION
+    }));
+
+  return [...voteRows, ...reportFeedbackRows];
 }
 
 export function attachViewerFeedback<T extends { id: string | number }>(

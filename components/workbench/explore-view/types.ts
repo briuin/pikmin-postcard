@@ -1,5 +1,11 @@
 import type { WorkbenchText } from '@/lib/i18n';
 import type { ExploreSort, PostcardRecord } from '@/components/workbench/types';
+import type { ExploreFeedbackAction } from '@/components/workbench/explore/shared';
+
+export type ExploreReportInput = {
+  reason: 'wrong_location' | 'spam' | 'illegal_image' | 'other';
+  description: string;
+};
 
 export type ExploreToast = {
   message: string;
@@ -46,7 +52,11 @@ export type ExplorePostcardModalProps = {
   postcard: PostcardRecord;
   feedbackPendingKey: string | null;
   onClose: () => void;
-  onSubmitFeedback: (postcardId: string, action: 'like' | 'dislike' | 'report_wrong_location') => void;
+  onSubmitFeedback: (
+    postcardId: string,
+    action: ExploreFeedbackAction,
+    reportInput?: ExploreReportInput
+  ) => void;
   onCopyCoordinates: (postcard: PostcardRecord) => Promise<void>;
   onCopyShareLink: (postcard: PostcardRecord) => Promise<void>;
   onSignIn: () => void;

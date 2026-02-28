@@ -9,6 +9,7 @@ import {
   getFeedbackStatusMessage,
   type ExploreFeedbackAction
 } from '@/components/workbench/explore/shared';
+import type { ExploreReportInput } from '@/components/workbench/explore-view/types';
 import { useExploreGeolocationController } from '@/components/workbench/explore/use-geolocation-controller';
 import type { WorkbenchText } from '@/lib/i18n';
 import { parseJsonResponseOrThrow } from '@/lib/http-response';
@@ -107,7 +108,11 @@ export function useExploreController({ text, isAuthenticated, showExplore }: Use
   ]);
 
   const submitExploreFeedback = useCallback(
-    async (postcardId: string, action: ExploreFeedbackAction) => {
+    async (
+      postcardId: string,
+      action: ExploreFeedbackAction,
+      reportInput?: ExploreReportInput
+    ) => {
       if (!isAuthenticated) {
         setExploreStatus(text.feedbackRequireAuth);
         return;
@@ -120,7 +125,15 @@ export function useExploreController({ text, isAuthenticated, showExplore }: Use
         const response = await fetch(`/api/postcards/${postcardId}/feedback`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action })
+          body: JSON.stringify(
+            action === 'report'
+              ? {
+                  action,
+                  reason: reportInput?.reason ?? 'wrong_location',
+                  description: reportInput?.description ?? ''
+                }
+              : { action }
+          )
         });
 
         const payload = await parseJsonResponseOrThrow<{

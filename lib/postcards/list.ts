@@ -22,6 +22,7 @@ const postcardListSelectBase = {
   likeCount: true,
   dislikeCount: true,
   wrongLocationReports: true,
+  reportVersion: true,
   locationStatus: true,
   locationModelVersion: true,
   deletedAt: true,

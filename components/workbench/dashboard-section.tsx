@@ -6,6 +6,7 @@ import { DashboardAuthCallout } from '@/components/workbench/dashboard-view/auth
 import { DashboardCategoryTabs } from '@/components/workbench/dashboard-view/category-tabs';
 import { DashboardImagePreviewModal } from '@/components/workbench/dashboard-view/image-preview-modal';
 import { DashboardPostcardsList } from '@/components/workbench/dashboard-view/postcards-list';
+import { DashboardReportsList } from '@/components/workbench/dashboard-view/reports-list';
 import { DashboardProfilePanel } from '@/components/workbench/dashboard-view/profile-panel';
 import {
   getDashboardListClassName,
@@ -26,6 +27,7 @@ export function DashboardSection({
   isAuthenticated,
   jobs,
   myPostcards,
+  myReports,
   postcardDrafts,
   savingJobId,
   savingPostcardId,
@@ -34,8 +36,10 @@ export function DashboardSection({
   editingCropOriginalUrl,
   cropDraft,
   savingCropPostcardId,
+  cancelingReportId,
   isLoadingJobs,
   isLoadingMine,
+  isLoadingReports,
   isLoadingProfile,
   isSavingProfile,
   profileEmail,
@@ -55,7 +59,8 @@ export function DashboardSection({
   onSaveCrop,
   onCloseCropEditor,
   onSoftDelete,
-  onCropChange
+  onCropChange,
+  onCancelReport
 }: DashboardSectionProps) {
   const [previewImage, setPreviewImage] = useState<PreviewImage | null>(null);
   const [activeCategory, setActiveCategory] = useState<DashboardCategory>('ai');
@@ -105,6 +110,7 @@ export function DashboardSection({
               activeCategory={activeCategory}
               jobsCount={jobs.length}
               postcardsCount={myPostcards.length}
+              reportsCount={myReports.length}
               onChangeCategory={setActiveCategory}
             />
 
@@ -142,6 +148,17 @@ export function DashboardSection({
                 onSoftDelete={onSoftDelete}
                 onCropChange={onCropChange}
                 onPreviewImage={setPreviewImage}
+              />
+            ) : null}
+
+            {activeCategory === 'reports' ? (
+              <DashboardReportsList
+                text={text}
+                reports={myReports}
+                isLoadingReports={isLoadingReports}
+                dashboardListClassName={dashboardListClassName}
+                cancelingReportId={cancelingReportId}
+                onCancelReport={onCancelReport}
               />
             ) : null}
           </div>

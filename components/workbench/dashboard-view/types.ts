@@ -2,6 +2,7 @@ import type { PercentCrop } from 'react-image-crop';
 import type { WorkbenchText } from '@/lib/i18n';
 import type {
   DashboardViewMode,
+  DashboardReportRecord,
   DetectionJobRecord,
   PostcardEditDraft,
   PostcardRecord
@@ -13,6 +14,7 @@ export type DashboardSectionProps = {
   isAuthenticated: boolean;
   jobs: DetectionJobRecord[];
   myPostcards: PostcardRecord[];
+  myReports: DashboardReportRecord[];
   postcardDrafts: Record<string, PostcardEditDraft>;
   savingJobId: string | null;
   savingPostcardId: string | null;
@@ -23,8 +25,10 @@ export type DashboardSectionProps = {
   savingCropPostcardId: string | null;
   isLoadingJobs: boolean;
   isLoadingMine: boolean;
+  isLoadingReports: boolean;
   isLoadingProfile: boolean;
   isSavingProfile: boolean;
+  cancelingReportId: string | null;
   profileEmail: string;
   profileDisplayName: string;
   dashboardStatus: string;
@@ -43,6 +47,7 @@ export type DashboardSectionProps = {
   onCloseCropEditor: () => void;
   onSoftDelete: (postcard: PostcardRecord) => void;
   onCropChange: (crop: PercentCrop) => void;
+  onCancelReport: (report: DashboardReportRecord) => void;
 };
 
 export type PreviewImage = {
@@ -50,4 +55,4 @@ export type PreviewImage = {
   alt: string;
 };
 
-export type DashboardCategory = 'ai' | 'postcards';
+export type DashboardCategory = 'ai' | 'postcards' | 'reports';

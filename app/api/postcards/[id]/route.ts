@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { PostcardReportStatus } from '@prisma/client';
 import { isManagerOrAboveRole } from '@/lib/api-auth';
 import { requireApprovedActor } from '@/lib/api-guards';
 import {
@@ -8,6 +9,7 @@ import {
   postcardUpdateSchema,
   softDeletePostcard
 } from '@/lib/postcards/manage';
+import { findAdminEditableReportCaseStateByPostcardId } from '@/lib/postcards/report-workflow';
 import { recordUserAction } from '@/lib/user-action-log';
 
 type RouteContext = {
@@ -64,6 +66,15 @@ async function withApprovedPostcardRouteContext(
 export async function PATCH(request: Request, context: RouteContext) {
   return withApprovedPostcardRouteContext(context, async ({ actor, id }) => {
     const canEditAny = isManagerOrAboveRole(actor.role);
+    if (canEditAny) {
+      const reportCaseStatus = await findAdminEditableReportCaseStateByPostcardId(id);
+      if (reportCaseStatus && reportCaseStatus !== PostcardReportStatus.IN_PROGRESS) {
+        return NextResponse.json(
+          { error: 'Admin can edit reported postcards only when report status is IN_PROGRESS.' },
+          { status: 403 }
+        );
+      }
+    }
 
     try {
       const body = await request.json();

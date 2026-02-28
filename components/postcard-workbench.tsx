@@ -99,7 +99,9 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
           onSearchChange={explore.setSearchText}
           onSortChange={explore.setExploreSort}
           onLimitChange={explore.setExploreLimit}
-          onSubmitFeedback={(postcardId, action) => void explore.submitExploreFeedback(postcardId, action)}
+          onSubmitFeedback={(postcardId, action, reportInput) =>
+            void explore.submitExploreFeedback(postcardId, action, reportInput)
+          }
           onSignIn={() => signIn('google')}
           mapNode={
             <OpenMap
@@ -159,6 +161,7 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
           isAuthenticated={isAuthenticated}
           jobs={dashboard.jobs}
           myPostcards={dashboard.myPostcards}
+          myReports={dashboard.myReports}
           postcardDrafts={dashboard.postcardDrafts}
           savingJobId={dashboard.savingJobId}
           savingPostcardId={dashboard.savingPostcardId}
@@ -167,8 +170,10 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
           editingCropOriginalUrl={dashboard.editingCropOriginalUrl}
           cropDraft={dashboard.cropDraft}
           savingCropPostcardId={dashboard.savingCropPostcardId}
+          cancelingReportId={dashboard.cancelingReportId}
           isLoadingJobs={dashboard.isLoadingJobs}
           isLoadingMine={dashboard.isLoadingMine}
+          isLoadingReports={dashboard.isLoadingReports}
           isLoadingProfile={dashboard.isLoadingProfile}
           isSavingProfile={dashboard.isSavingProfile}
           profileEmail={dashboard.profileEmail}
@@ -189,6 +194,7 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
           onCloseCropEditor={dashboard.closeCropEditor}
           onSoftDelete={(postcard) => void dashboard.softDeletePostcard(postcard)}
           onCropChange={dashboard.updateCropDraft}
+          onCancelReport={(report) => void dashboard.cancelReport(report)}
         />
       ) : null}
     </section>

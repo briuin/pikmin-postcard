@@ -1,9 +1,14 @@
-import { FeedbackAction, Prisma } from '@prisma/client';
+import { FeedbackAction, PostcardReportReason, PostcardReportStatus, Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { toViewerFeedback, type ViewerFeedback } from '@/lib/postcards/feedback';
 
-export type FeedbackInputAction = 'like' | 'dislike' | 'report_wrong_location';
+export type FeedbackInputAction = 'like' | 'dislike' | 'report' | 'report_wrong_location';
 export type FeedbackResult = 'added' | 'removed' | 'switched' | 'already_reported';
+export type FeedbackReportReasonInput =
+  | 'wrong_location'
+  | 'spam'
+  | 'illegal_image'
+  | 'other';
 
 export type FeedbackMutationResult = {
   id: string;
@@ -11,18 +16,68 @@ export type FeedbackMutationResult = {
   dislikeCount: number;
   wrongLocationReports: number;
   result: FeedbackResult;
-  action: FeedbackInputAction;
+  action: 'like' | 'dislike' | 'report';
   viewerFeedback: ViewerFeedback;
 };
 
-function toFeedbackAction(action: FeedbackInputAction): FeedbackAction {
+function toVoteFeedbackAction(action: FeedbackInputAction): FeedbackAction {
   if (action === 'like') {
     return FeedbackAction.LIKE;
   }
-  if (action === 'dislike') {
-    return FeedbackAction.DISLIKE;
+  return FeedbackAction.DISLIKE;
+}
+
+function toReportReason(reason: FeedbackReportReasonInput): PostcardReportReason {
+  if (reason === 'spam') {
+    return PostcardReportReason.SPAM;
   }
-  return FeedbackAction.REPORT_WRONG_LOCATION;
+  if (reason === 'illegal_image') {
+    return PostcardReportReason.ILLEGAL_IMAGE;
+  }
+  if (reason === 'other') {
+    return PostcardReportReason.OTHER;
+  }
+  return PostcardReportReason.WRONG_LOCATION;
+}
+
+async function loadViewerFeedback(
+  tx: Prisma.TransactionClient,
+  params: {
+    postcardId: string;
+    userId: string;
+    reportVersion: number;
+  }
+): Promise<ViewerFeedback> {
+  const [voteRows, reportRow] = await Promise.all([
+    tx.postcardFeedback.findMany({
+      where: {
+        postcardId: params.postcardId,
+        userId: params.userId,
+        action: {
+          in: [FeedbackAction.LIKE, FeedbackAction.DISLIKE]
+        }
+      },
+      select: {
+        action: true
+      }
+    }),
+    tx.postcardReport.findFirst({
+      where: {
+        postcardId: params.postcardId,
+        reporterUserId: params.userId,
+        version: params.reportVersion
+      },
+      select: {
+        id: true
+      }
+    })
+  ]);
+
+  const viewerFeedback = toViewerFeedback(voteRows.map((row) => row.action));
+  return {
+    ...viewerFeedback,
+    reportedWrongLocation: Boolean(reportRow)
+  };
 }
 
 async function incrementActionCount(
@@ -75,33 +130,70 @@ export async function submitPostcardFeedback(params: {
   postcardId: string;
   userId: string;
   action: FeedbackInputAction;
+  reportReason?: FeedbackReportReasonInput;
+  reportDescription?: string | null;
 }): Promise<FeedbackMutationResult | null> {
-  const action = toFeedbackAction(params.action);
-
   return prisma.$transaction(async (tx) => {
-    const exists = await tx.postcard.findFirst({
+    const postcard = await tx.postcard.findFirst({
       where: {
         id: params.postcardId,
         deletedAt: null
       },
-      select: { id: true }
+      select: {
+        id: true,
+        reportVersion: true
+      }
     });
 
-    if (!exists) {
+    if (!postcard) {
       return null;
     }
 
     let result: FeedbackResult = 'added';
-    if (action === FeedbackAction.REPORT_WRONG_LOCATION) {
+    if (params.action === 'report' || params.action === 'report_wrong_location') {
+      const reason = toReportReason(params.reportReason ?? 'wrong_location');
+      const normalizedDescription =
+        typeof params.reportDescription === 'string'
+          ? params.reportDescription.trim() || null
+          : null;
+
+      const reportCase = await tx.postcardReportCase.upsert({
+        where: {
+          postcardId_version: {
+            postcardId: params.postcardId,
+            version: postcard.reportVersion
+          }
+        },
+        create: {
+          postcardId: params.postcardId,
+          version: postcard.reportVersion,
+          status: PostcardReportStatus.PENDING
+        },
+        update: {},
+        select: {
+          id: true
+        }
+      });
+
       try {
-        await tx.postcardFeedback.create({
+        await tx.postcardReport.create({
           data: {
             postcardId: params.postcardId,
-            userId: params.userId,
-            action
+            version: postcard.reportVersion,
+            caseId: reportCase.id,
+            reporterUserId: params.userId,
+            reason,
+            description: normalizedDescription
           }
         });
-        await incrementActionCount(tx, params.postcardId, action);
+        await tx.postcard.update({
+          where: { id: params.postcardId },
+          data: {
+            wrongLocationReports: {
+              increment: 1
+            }
+          }
+        });
       } catch (error) {
         if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
           result = 'already_reported';
@@ -110,6 +202,7 @@ export async function submitPostcardFeedback(params: {
         }
       }
     } else {
+      const action = toVoteFeedbackAction(params.action);
       const existingVotes = await tx.postcardFeedback.findMany({
         where: {
           postcardId: params.postcardId,
@@ -163,7 +256,8 @@ export async function submitPostcardFeedback(params: {
         id: true,
         likeCount: true,
         dislikeCount: true,
-        wrongLocationReports: true
+        wrongLocationReports: true,
+        reportVersion: true
       }
     });
 
@@ -171,21 +265,23 @@ export async function submitPostcardFeedback(params: {
       return null;
     }
 
-    const feedbackRows = await tx.postcardFeedback.findMany({
-      where: {
-        postcardId: params.postcardId,
-        userId: params.userId
-      },
-      select: {
-        action: true
-      }
+    const viewerFeedback = await loadViewerFeedback(tx, {
+      postcardId: params.postcardId,
+      userId: params.userId,
+      reportVersion: counts.reportVersion
     });
 
     return {
-      ...counts,
+      id: counts.id,
+      likeCount: counts.likeCount,
+      dislikeCount: counts.dislikeCount,
+      wrongLocationReports: counts.wrongLocationReports,
       result,
-      action: params.action,
-      viewerFeedback: toViewerFeedback(feedbackRows.map((item) => item.action))
+      action:
+        params.action === 'report' || params.action === 'report_wrong_location'
+          ? 'report'
+          : params.action,
+      viewerFeedback
     };
   });
 }

@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { safeParseRequestQuery, withManagerParsedQuery } from '@/lib/admin/route-helpers';
 import { serializePostcards } from '@/lib/postcards/list';
+import { findActiveReportCaseDetailMapForPostcards } from '@/lib/postcards/report-workflow';
 import { buildPostcardSearchFilter } from '@/lib/postcards/query';
 import { findPostcardsForList } from '@/lib/postcards/repository';
 import { recordUserAction } from '@/lib/user-action-log';
@@ -35,11 +36,13 @@ export async function GET(request: Request) {
         }
       });
 
-      const whereAnd: Prisma.PostcardWhereInput[] = [{ deletedAt: null }];
+      const whereAnd: Prisma.PostcardWhereInput[] = query.reportedOnly
+        ? []
+        : [{ deletedAt: null }];
       if (query.reportedOnly) {
         whereAnd.push({
-          wrongLocationReports: {
-            gt: 0
+          reportCases: {
+            some: {}
           }
         });
       }
@@ -54,7 +57,40 @@ export async function GET(request: Request) {
       });
 
       const serialized = serializePostcards(items, { includeOriginalImageUrl: true });
-      return NextResponse.json(serialized, { status: 200 });
+      const activeCaseMap = await findActiveReportCaseDetailMapForPostcards(
+        serialized.map((item) => String(item.id))
+      );
+
+      const withActiveCase = serialized
+        .map((item) => {
+          const activeCase = activeCaseMap.get(String(item.id));
+          return {
+            ...item,
+            activeReportCaseId: activeCase?.caseId ?? null,
+            activeReportCaseStatus: activeCase?.status ?? null,
+            activeReportCaseUpdatedAt: activeCase?.updatedAt.toISOString() ?? null,
+            activeReportAdminNote: activeCase?.adminNote ?? null,
+            activeReportCount: activeCase?.reportCount ?? 0,
+            activeReportReasonCounts: activeCase?.reasonCounts ?? {},
+            activeReportReports:
+              activeCase?.reports.map((report) => ({
+                ...report,
+                createdAt: report.createdAt.toISOString()
+              })) ?? []
+          };
+        })
+        .filter((item) => {
+          if (!query.reportedOnly) {
+            return true;
+          }
+          const reportCount =
+            typeof (item as { wrongLocationReports?: unknown }).wrongLocationReports === 'number'
+              ? ((item as { wrongLocationReports?: number }).wrongLocationReports ?? 0)
+              : 0;
+          return item.activeReportCaseId !== null || reportCount > 0;
+        });
+
+      return NextResponse.json(withActiveCase, { status: 200 });
     }
   );
 }

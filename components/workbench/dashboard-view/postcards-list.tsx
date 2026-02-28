@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Image from 'next/image';
 import ReactCrop from 'react-image-crop';
 import type { WorkbenchText } from '@/lib/i18n';
@@ -63,6 +64,11 @@ export function DashboardPostcardsList({
   onCropChange,
   onPreviewImage
 }: DashboardPostcardsListProps) {
+  const [confirmDeletePostcardId, setConfirmDeletePostcardId] = useState<string | null>(null);
+  const pendingDeletePostcard = confirmDeletePostcardId
+    ? myPostcards.find((item) => item.id === confirmDeletePostcardId) ?? null
+    : null;
+
   return (
     <>
       <h3 className="mt-1">{text.myPostcardsTitle}</h3>
@@ -175,7 +181,7 @@ export function DashboardPostcardsList({
               <button
                 type="button"
                 className={actionButtonClassName}
-                onClick={() => onSoftDelete(postcard)}
+                onClick={() => setConfirmDeletePostcardId(postcard.id)}
                 disabled={
                   deletingPostcardId === postcard.id ||
                   savingCropPostcardId === postcard.id ||
@@ -232,6 +238,38 @@ export function DashboardPostcardsList({
           </article>
         ))}
       </div>
+
+      {pendingDeletePostcard ? (
+        <div className="fixed inset-0 z-[1300] grid place-items-center bg-[rgba(16,28,22,0.58)] px-3">
+          <article className="grid w-full max-w-[420px] gap-2.5 rounded-[16px] border border-[#dcead8] bg-[#fbfffb] p-3.5 shadow-[0_16px_32px_rgba(20,42,30,0.24)]">
+            <strong className="text-[1.02rem] text-[#1f3a2d]">{text.removeConfirmTitle}</strong>
+            <small className={smallMutedClassName}>{text.removeConfirm(pendingDeletePostcard.title)}</small>
+            <div className="flex flex-wrap justify-end gap-1.5">
+              <button
+                type="button"
+                className={actionButtonClassName}
+                onClick={() => setConfirmDeletePostcardId(null)}
+                disabled={deletingPostcardId === pendingDeletePostcard.id}
+              >
+                {text.buttonCancel}
+              </button>
+              <button
+                type="button"
+                className={actionButtonClassName}
+                onClick={() => {
+                  onSoftDelete(pendingDeletePostcard);
+                  setConfirmDeletePostcardId(null);
+                }}
+                disabled={deletingPostcardId === pendingDeletePostcard.id}
+              >
+                {deletingPostcardId === pendingDeletePostcard.id
+                  ? text.buttonRemoving
+                  : text.buttonRemoveSoftDelete}
+              </button>
+            </div>
+          </article>
+        </div>
+      ) : null}
     </>
   );
 }

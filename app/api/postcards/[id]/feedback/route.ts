@@ -2,13 +2,24 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireApprovedVoter, withGuardedValue } from '@/lib/api-guards';
 import {
+  type FeedbackReportReasonInput,
   submitPostcardFeedback,
   type FeedbackInputAction
 } from '@/lib/postcards/feedback-mutations';
 import { recordUserAction } from '@/lib/user-action-log';
 
 const feedbackSchema = z.object({
-  action: z.enum(['like', 'dislike', 'report_wrong_location'])
+  action: z.enum(['like', 'dislike', 'report', 'report_wrong_location']),
+  reason: z.enum(['wrong_location', 'spam', 'illegal_image', 'other']).optional(),
+  description: z.string().trim().max(1200).optional()
+}).superRefine((payload, ctx) => {
+  if ((payload.action === 'report' || payload.action === 'report_wrong_location') && !payload.reason) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['reason'],
+      message: 'Reason is required when reporting.'
+    });
+  }
 });
 
 type RouteContext = {
@@ -25,6 +36,8 @@ export async function POST(request: Request, context: RouteContext) {
     try {
       const body = feedbackSchema.parse(await request.json()) as {
         action: FeedbackInputAction;
+        reason?: FeedbackReportReasonInput;
+        description?: string;
       };
       await recordUserAction({
         request,
@@ -32,14 +45,17 @@ export async function POST(request: Request, context: RouteContext) {
         action: 'POSTCARD_FEEDBACK',
         metadata: {
           postcardId: id,
-          feedbackAction: body.action
+          feedbackAction: body.action,
+          reportReason: body.reason ?? null
         }
       });
 
       const postcard = await submitPostcardFeedback({
         postcardId: id,
         userId: actor.id,
-        action: body.action
+        action: body.action,
+        reportReason: body.reason,
+        reportDescription: body.description ?? null
       });
 
       if (!postcard) {

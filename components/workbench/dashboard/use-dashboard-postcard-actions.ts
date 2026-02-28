@@ -215,11 +215,6 @@ export function useDashboardPostcardActions({
         return;
       }
 
-      const confirmed = window.confirm(text.removeConfirm(postcard.title));
-      if (!confirmed) {
-        return;
-      }
-
       setDeletingPostcardId(postcard.id);
       setDashboardStatus(text.removeRunning);
 

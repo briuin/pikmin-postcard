@@ -4,6 +4,7 @@ import type { AdminText, WorkbenchText } from '@/lib/i18n';
 import type {
   AdminFeedbackRecord,
   AdminPostcardEditDraft,
+  AdminReportStatusDraft,
   AdminTabKey,
   AdminUserRecord,
   UserAccessDraft
@@ -61,8 +62,12 @@ export type AdminPostcardsPanelProps = {
   postcards: PostcardRecord[];
   postcardDrafts: Record<string, AdminPostcardEditDraft>;
   setPostcardDrafts: Dispatch<SetStateAction<Record<string, AdminPostcardEditDraft>>>;
+  reportStatusDrafts: Record<string, AdminReportStatusDraft>;
+  setReportStatusDrafts: Dispatch<SetStateAction<Record<string, AdminReportStatusDraft>>>;
   isLoadingPostcards: boolean;
   savingPostcardId: string | null;
+  savingReportCaseId: string | null;
   onSavePostcard: (postcard: PostcardRecord) => void;
+  onSaveReportedStatus: (postcard: PostcardRecord) => void;
   dateLocale: 'zh-TW' | 'en-US';
 };

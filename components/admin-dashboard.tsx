@@ -47,6 +47,8 @@ export function AdminDashboard({ locale }: AdminDashboardProps) {
     setUserAccessDrafts,
     postcardDrafts,
     setPostcardDrafts,
+    reportStatusDrafts,
+    setReportStatusDrafts,
     searchText,
     setSearchText,
     userSearchText,
@@ -58,10 +60,12 @@ export function AdminDashboard({ locale }: AdminDashboardProps) {
     isLoadingFeedbacks,
     savingUserAccessId,
     savingPostcardId,
+    savingReportCaseId,
     statusText,
     refreshAll,
     saveUserAccess,
-    savePostcard
+    savePostcard,
+    saveReportedPostcardStatus
   } = useAdminDashboardController({
     text,
     parseText,
@@ -179,9 +183,13 @@ export function AdminDashboard({ locale }: AdminDashboardProps) {
           postcards={cardsToRender}
           postcardDrafts={postcardDrafts}
           setPostcardDrafts={setPostcardDrafts}
+          reportStatusDrafts={reportStatusDrafts}
+          setReportStatusDrafts={setReportStatusDrafts}
           isLoadingPostcards={isLoadingPostcards}
           savingPostcardId={savingPostcardId}
+          savingReportCaseId={savingReportCaseId}
           onSavePostcard={(postcard) => void savePostcard(postcard)}
+          onSaveReportedStatus={(postcard) => void saveReportedPostcardStatus(postcard)}
           dateLocale={dateLocale}
         />
       ) : null}

@@ -21,10 +21,12 @@ export function useDashboardController({
   const {
     jobs,
     myPostcards,
+    myReports,
     postcardDrafts,
     setPostcardDrafts,
     isLoadingJobs,
     isLoadingMine,
+    isLoadingReports,
     isLoadingProfile,
     profileEmail,
     profileDisplayName,
@@ -43,6 +45,7 @@ export function useDashboardController({
     editingCropOriginalUrl,
     cropDraft,
     savingCropPostcardId,
+    cancelingReportId,
     isSavingProfile,
     dashboardViewMode,
     setDashboardViewMode,
@@ -55,7 +58,8 @@ export function useDashboardController({
     closeCropEditor,
     saveCropEdit,
     softDeletePostcard,
-    updateCropDraft
+    updateCropDraft,
+    cancelReport
   } = useDashboardMutations({
     text,
     ensureAuthenticated,
@@ -72,6 +76,7 @@ export function useDashboardController({
   return {
     jobs,
     myPostcards,
+    myReports,
     postcardDrafts,
     savingJobId,
     savingPostcardId,
@@ -80,8 +85,10 @@ export function useDashboardController({
     editingCropOriginalUrl,
     cropDraft,
     savingCropPostcardId,
+    cancelingReportId,
     isLoadingJobs,
     isLoadingMine,
+    isLoadingReports,
     isLoadingProfile,
     isSavingProfile,
     profileEmail,
@@ -100,6 +107,7 @@ export function useDashboardController({
     saveCropEdit,
     closeCropEditor,
     softDeletePostcard,
-    updateCropDraft
+    updateCropDraft,
+    cancelReport
   };
 }

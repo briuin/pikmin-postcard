@@ -4,12 +4,14 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { signIn, signOut, useSession } from 'next-auth/react';
 import { AdminDashboard } from '@/components/admin-dashboard';
+import { AdminReportDetailPage } from '@/components/admin-report-detail-page';
 import { FeedbackSection } from '@/components/feedback-section';
 import { detectLocale, localeStorageKey, messages, supportedLocales, type Locale } from '@/lib/i18n';
 import { PostcardWorkbench } from '@/components/postcard-workbench';
 
 type HomeShellProps = {
-  page: 'explore' | 'create' | 'dashboard' | 'feedback' | 'admin';
+  page: 'explore' | 'create' | 'dashboard' | 'feedback' | 'admin' | 'admin-report';
+  reportCaseId?: string;
 };
 
 function formatSessionText(
@@ -34,7 +36,7 @@ function formatSessionText(
   return text.signedIn;
 }
 
-export function HomeShell({ page }: HomeShellProps) {
+export function HomeShell({ page, reportCaseId }: HomeShellProps) {
   const [locale, setLocale] = useState<Locale>('en');
   const { data: session, status } = useSession();
   const isAuthenticated = status === 'authenticated';
@@ -121,7 +123,14 @@ export function HomeShell({ page }: HomeShellProps) {
               {homeText.navFeedback}
             </Link>
             {canAccessAdmin ? (
-              <Link href="/admin" className={page === 'admin' ? `${navTabClassName} ${navTabActiveClassName}` : navTabClassName}>
+              <Link
+                href="/admin"
+                className={
+                  page === 'admin' || page === 'admin-report'
+                    ? `${navTabClassName} ${navTabActiveClassName}`
+                    : navTabClassName
+                }
+              >
                 {homeText.navAdmin}
               </Link>
             ) : null}
@@ -155,6 +164,8 @@ export function HomeShell({ page }: HomeShellProps) {
                             ? '/feedback'
                           : page === 'admin'
                             ? '/admin'
+                            : page === 'admin-report'
+                              ? '/admin'
                             : '/'
                   })
                 }
@@ -171,10 +182,14 @@ export function HomeShell({ page }: HomeShellProps) {
       </div>
       {page === 'admin' ? (
         <AdminDashboard locale={locale} />
+      ) : page === 'admin-report' && reportCaseId ? (
+        <AdminReportDetailPage caseId={reportCaseId} />
       ) : page === 'feedback' ? (
         <FeedbackSection locale={locale} />
-      ) : (
+      ) : page === 'explore' || page === 'create' || page === 'dashboard' ? (
         <PostcardWorkbench mode={page} locale={locale} />
+      ) : (
+        <PostcardWorkbench mode="explore" locale={locale} />
       )}
     </div>
   );
