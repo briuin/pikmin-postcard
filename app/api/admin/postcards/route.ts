@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
-import { withManagerParsedQuery } from '@/lib/admin/route-helpers';
+import { safeParseRequestQuery, withManagerParsedQuery } from '@/lib/admin/route-helpers';
 import { serializePostcards } from '@/lib/postcards/list';
 import { buildPostcardSearchFilter } from '@/lib/postcards/query';
 import { findPostcardsForList } from '@/lib/postcards/repository';
@@ -16,14 +16,14 @@ const adminPostcardQuerySchema = z.object({
 export async function GET(request: Request) {
   return withManagerParsedQuery(
     request,
-    () => {
-      const url = new URL(request.url);
-      return adminPostcardQuerySchema.safeParse({
-        q: url.searchParams.get('q') ?? undefined,
-        reportedOnly: url.searchParams.get('reportedOnly') === '1',
-        limit: url.searchParams.get('limit') ?? undefined
-      });
-    },
+    () =>
+      safeParseRequestQuery(request, (searchParams) =>
+        adminPostcardQuerySchema.safeParse({
+          q: searchParams.get('q') ?? undefined,
+          reportedOnly: searchParams.get('reportedOnly') === '1',
+          limit: searchParams.get('limit') ?? undefined
+        })
+      ),
     async ({ actor, query }) => {
       await recordUserAction({
         request,

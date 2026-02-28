@@ -10,6 +10,7 @@ import {
   type CropDraft
 } from '@/components/workbench/utils';
 import { buildPostcardDraft, DEFAULT_CROP_DRAFT } from '@/components/workbench/dashboard/shared';
+import { parseJsonResponseOrThrow } from '@/lib/http-response';
 
 type UseDashboardPostcardActionsArgs = {
   text: WorkbenchText;
@@ -122,11 +123,7 @@ export function useDashboardPostcardActions({
             longitude
           })
         });
-
-        const payload = (await response.json()) as { error?: string };
-        if (!response.ok) {
-          throw new Error(payload.error ?? text.editPostcardFailed);
-        }
+        await parseJsonResponseOrThrow(response, text.editPostcardFailed);
 
         await Promise.all([loadDashboardData(), loadPublicPostcards()]);
         setDashboardStatus(text.editPostcardSaved);
@@ -187,11 +184,7 @@ export function useDashboardPostcardActions({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ crop: toNormalizedCrop(cropDraft) })
         });
-
-        const payload = (await response.json()) as { error?: string };
-        if (!response.ok) {
-          throw new Error(payload.error ?? text.cropSaveFailed);
-        }
+        await parseJsonResponseOrThrow(response, text.cropSaveFailed);
 
         await Promise.all([loadDashboardData(), loadPublicPostcards()]);
         closeCropEditor();
@@ -234,11 +227,7 @@ export function useDashboardPostcardActions({
         const response = await fetch(`/api/postcards/${postcard.id}`, {
           method: 'DELETE'
         });
-
-        const payload = (await response.json()) as { error?: string };
-        if (!response.ok) {
-          throw new Error(payload.error ?? text.removeFailed);
-        }
+        await parseJsonResponseOrThrow(response, text.removeFailed);
 
         if (editingCropPostcardId === postcard.id) {
           closeCropEditor();

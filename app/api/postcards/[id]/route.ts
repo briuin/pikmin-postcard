@@ -46,102 +46,110 @@ async function resolveApprovedPostcardRouteContext(
   };
 }
 
-export async function PATCH(request: Request, context: RouteContext) {
+async function withApprovedPostcardRouteContext(
+  context: RouteContext,
+  run: (routeContext: { actor: ApprovedActor; id: string }) => Promise<NextResponse>
+): Promise<NextResponse> {
   const routeContext = await resolveApprovedPostcardRouteContext(context);
   if (!routeContext.ok) {
     return routeContext.response;
   }
-  const { actor, id } = routeContext;
-  const canEditAny = isManagerOrAboveRole(actor.role);
 
-  try {
-    const body = await request.json();
+  return run({
+    actor: routeContext.actor,
+    id: routeContext.id
+  });
+}
+
+export async function PATCH(request: Request, context: RouteContext) {
+  return withApprovedPostcardRouteContext(context, async ({ actor, id }) => {
+    const canEditAny = isManagerOrAboveRole(actor.role);
+
+    try {
+      const body = await request.json();
+      await recordUserAction({
+        request,
+        userId: actor.id,
+        action: body && typeof body === 'object' && 'crop' in body ? 'POSTCARD_CROP_EDIT' : 'POSTCARD_EDIT',
+        metadata: {
+          postcardId: id
+        }
+      });
+
+      if (body && typeof body === 'object' && 'crop' in body) {
+        const payload = cropUpdateSchema.parse(body);
+        const result = await applyPostcardCropUpdate({
+          postcardId: id,
+          actorId: actor.id,
+          canEditAny,
+          crop: payload.crop
+        });
+
+        if (result.kind === 'not_found') {
+          return NextResponse.json({ error: 'Postcard not found.' }, { status: 404 });
+        }
+        if (result.kind === 'missing_source') {
+          return NextResponse.json(
+            { error: 'No image source is available for crop edit.' },
+            { status: 400 }
+          );
+        }
+
+        return NextResponse.json(
+          {
+            ok: true,
+            imageUrl: result.imageUrl,
+            originalImageUrl: result.originalImageUrl
+          },
+          { status: 200 }
+        );
+      }
+
+      const payload = postcardUpdateSchema.parse(body);
+      const updated = await applyPostcardDetailsUpdate({
+        postcardId: id,
+        actorId: actor.id,
+        canEditAny,
+        payload
+      });
+
+      if (!updated) {
+        return NextResponse.json({ error: 'Postcard not found.' }, { status: 404 });
+      }
+
+      return NextResponse.json(updated, { status: 200 });
+    } catch (error) {
+      return NextResponse.json(
+        {
+          error: 'Failed to update postcard.',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        },
+        { status: 400 }
+      );
+    }
+  });
+}
+
+export async function DELETE(request: Request, context: RouteContext) {
+  return withApprovedPostcardRouteContext(context, async ({ actor, id }) => {
     await recordUserAction({
       request,
       userId: actor.id,
-      action: body && typeof body === 'object' && 'crop' in body ? 'POSTCARD_CROP_EDIT' : 'POSTCARD_EDIT',
+      action: 'POSTCARD_SOFT_DELETE',
       metadata: {
         postcardId: id
       }
     });
 
-    if (body && typeof body === 'object' && 'crop' in body) {
-      const payload = cropUpdateSchema.parse(body);
-      const result = await applyPostcardCropUpdate({
-        postcardId: id,
-        actorId: actor.id,
-        canEditAny,
-        crop: payload.crop
-      });
-
-      if (result.kind === 'not_found') {
-        return NextResponse.json({ error: 'Postcard not found.' }, { status: 404 });
-      }
-      if (result.kind === 'missing_source') {
-        return NextResponse.json(
-          { error: 'No image source is available for crop edit.' },
-          { status: 400 }
-        );
-      }
-
-      return NextResponse.json(
-        {
-          ok: true,
-          imageUrl: result.imageUrl,
-          originalImageUrl: result.originalImageUrl
-        },
-        { status: 200 }
-      );
-    }
-
-    const payload = postcardUpdateSchema.parse(body);
-    const updated = await applyPostcardDetailsUpdate({
+    const deleted = await softDeletePostcard({
       postcardId: id,
-      actorId: actor.id,
-      canEditAny,
-      payload
+      actorId: actor.id
     });
 
-    if (!updated) {
+    if (!deleted) {
       return NextResponse.json({ error: 'Postcard not found.' }, { status: 404 });
     }
 
-    return NextResponse.json(updated, { status: 200 });
-  } catch (error) {
-    return NextResponse.json(
-      {
-        error: 'Failed to update postcard.',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 400 }
-    );
-  }
-}
-
-export async function DELETE(request: Request, context: RouteContext) {
-  const routeContext = await resolveApprovedPostcardRouteContext(context);
-  if (!routeContext.ok) {
-    return routeContext.response;
-  }
-  const { actor, id } = routeContext;
-
-  await recordUserAction({
-    request,
-    userId: actor.id,
-    action: 'POSTCARD_SOFT_DELETE',
-    metadata: {
-      postcardId: id
-    }
+    return NextResponse.json({ ok: true }, { status: 200 });
   });
-
-  const deleted = await softDeletePostcard({
-    postcardId: id,
-    actorId: actor.id
-  });
-
-  if (!deleted) {
-    return NextResponse.json({ error: 'Postcard not found.' }, { status: 404 });
-  }
-
-  return NextResponse.json({ ok: true }, { status: 200 });
 }

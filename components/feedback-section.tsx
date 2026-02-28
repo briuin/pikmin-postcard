@@ -4,6 +4,7 @@ import { signIn, useSession } from 'next-auth/react';
 import { useState } from 'react';
 import type { Locale } from '@/lib/i18n';
 import { messages } from '@/lib/i18n';
+import { parseJsonResponseOrThrow } from '@/lib/http-response';
 
 type FeedbackSectionProps = {
   locale: Locale;
@@ -38,10 +39,7 @@ export function FeedbackSection({ locale }: FeedbackSectionProps) {
           message
         })
       });
-      const payload = (await response.json()) as { error?: string };
-      if (!response.ok) {
-        throw new Error(payload.error ?? text.failed);
-      }
+      await parseJsonResponseOrThrow(response, text.failed);
 
       setSubject('');
       setMessage('');

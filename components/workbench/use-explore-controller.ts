@@ -11,6 +11,7 @@ import {
 } from '@/components/workbench/explore/shared';
 import { useExploreGeolocationController } from '@/components/workbench/explore/use-geolocation-controller';
 import type { WorkbenchText } from '@/lib/i18n';
+import { parseJsonResponseOrThrow } from '@/lib/http-response';
 import type {
   ExploreSort,
   PostcardRecord,
@@ -122,14 +123,11 @@ export function useExploreController({ text, isAuthenticated, showExplore }: Use
           body: JSON.stringify({ action })
         });
 
-        const payload = (await response.json()) as {
+        const payload = await parseJsonResponseOrThrow<{
           error?: string;
           result?: 'added' | 'removed' | 'switched' | 'already_reported';
           action?: ExploreFeedbackAction;
-        };
-        if (!response.ok) {
-          throw new Error(payload.error ?? text.feedbackFailed);
-        }
+        }>(response, text.feedbackFailed);
 
         const feedbackAction = payload.action ?? action;
         const result = payload.result ?? 'added';

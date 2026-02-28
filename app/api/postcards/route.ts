@@ -2,7 +2,11 @@ import { LocationStatus, PostcardType } from '@prisma/client';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getAuthenticatedUserId } from '@/lib/api-auth';
-import { requireApprovedCreator, requireAuthenticatedUserId } from '@/lib/api-guards';
+import {
+  requireApprovedCreator,
+  requireAuthenticatedUserId,
+  withGuardedValue
+} from '@/lib/api-guards';
 import { prisma } from '@/lib/prisma';
 import {
   attachViewerFeedback,
@@ -39,34 +43,33 @@ export async function GET(request: Request) {
   const viewerUserId = await getAuthenticatedUserId();
 
   if (mineOnly) {
-    const guard = await requireAuthenticatedUserId({ createIfMissing: true });
-    if (!guard.ok) {
-      return guard.response;
-    }
-    const userId = guard.value;
+    return withGuardedValue(
+      requireAuthenticatedUserId({ createIfMissing: true }),
+      async (userId) => {
+        await recordUserAction({
+          request,
+          userId,
+          action: 'MY_POSTCARD_LIST'
+        });
 
-    await recordUserAction({
-      request,
-      userId,
-      action: 'MY_POSTCARD_LIST'
-    });
+        const postcards = await findPostcardsForList({
+          where: {
+            userId,
+            deletedAt: null
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 200
+        });
 
-    const postcards = await findPostcardsForList({
-      where: {
-        userId,
-        deletedAt: null
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 200
-    });
+        const serialized = serializePostcards(postcards, { includeOriginalImageUrl: true });
+        const feedbackRows = await findViewerFeedbackRowsForPostcards(
+          viewerUserId,
+          serialized.map((item) => item.id)
+        );
 
-    const serialized = serializePostcards(postcards, { includeOriginalImageUrl: true });
-    const feedbackRows = await findViewerFeedbackRowsForPostcards(
-      viewerUserId,
-      serialized.map((item) => item.id)
+        return NextResponse.json(attachViewerFeedback(serialized, feedbackRows), { status: 200 });
+      }
     );
-
-    return NextResponse.json(attachViewerFeedback(serialized, feedbackRows), { status: 200 });
   }
 
   const queryParse = parsePublicQuery(url);
@@ -114,69 +117,65 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  try {
-    const guard = await requireApprovedCreator();
-    if (!guard.ok) {
-      return guard.response;
-    }
-    const actor = guard.value;
-
-    const body = postcardCreateSchema.parse(await request.json());
-    await recordUserAction({
-      request,
-      userId: actor.id,
-      action: 'POSTCARD_CREATE',
-      metadata: {
-        postcardType: body.postcardType,
-        locationStatus: body.locationStatus ?? LocationStatus.AUTO
-      }
-    });
-
-    const baseData = {
-      userId: actor.id,
-      title: body.title,
-      postcardType: body.postcardType,
-      notes: body.notes,
-      imageUrl: body.imageUrl,
-      city: body.city,
-      country: body.country,
-      placeName: body.placeName,
-      latitude: body.latitude,
-      longitude: body.longitude,
-      aiLatitude: body.aiLatitude,
-      aiLongitude: body.aiLongitude,
-      aiConfidence: body.aiConfidence,
-      aiPlaceGuess: body.aiPlaceGuess,
-      locationStatus: body.locationStatus ?? LocationStatus.AUTO,
-      locationModelVersion: body.locationModelVersion ?? process.env.GEMINI_MODEL ?? 'unknown'
-    };
-
-    let postcard;
+  return withGuardedValue(requireApprovedCreator(), async (actor) => {
     try {
-      postcard = await prisma.postcard.create({
-        data: {
-          ...baseData,
-          originalImageUrl: body.originalImageUrl
+      const body = postcardCreateSchema.parse(await request.json());
+      await recordUserAction({
+        request,
+        userId: actor.id,
+        action: 'POSTCARD_CREATE',
+        metadata: {
+          postcardType: body.postcardType,
+          locationStatus: body.locationStatus ?? LocationStatus.AUTO
         }
       });
-    } catch (error) {
-      if (!hasMissingOriginalImageColumnError(error)) {
-        throw error;
+
+      const baseData = {
+        userId: actor.id,
+        title: body.title,
+        postcardType: body.postcardType,
+        notes: body.notes,
+        imageUrl: body.imageUrl,
+        city: body.city,
+        country: body.country,
+        placeName: body.placeName,
+        latitude: body.latitude,
+        longitude: body.longitude,
+        aiLatitude: body.aiLatitude,
+        aiLongitude: body.aiLongitude,
+        aiConfidence: body.aiConfidence,
+        aiPlaceGuess: body.aiPlaceGuess,
+        locationStatus: body.locationStatus ?? LocationStatus.AUTO,
+        locationModelVersion: body.locationModelVersion ?? process.env.GEMINI_MODEL ?? 'unknown'
+      };
+
+      let postcard;
+      try {
+        postcard = await prisma.postcard.create({
+          data: {
+            ...baseData,
+            originalImageUrl: body.originalImageUrl
+          }
+        });
+      } catch (error) {
+        if (!hasMissingOriginalImageColumnError(error)) {
+          throw error;
+        }
+
+        postcard = await prisma.postcard.create({
+          data: baseData
+        });
       }
 
-      postcard = await prisma.postcard.create({
-        data: baseData
-      });
+      return NextResponse.json(postcard, { status: 201 });
+    } catch (error) {
+      return NextResponse.json(
+        {
+          error: 'Invalid postcard payload.',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        },
+        { status: 400 }
+      );
     }
-
-    return NextResponse.json(postcard, { status: 201 });
-  } catch (error) {
-    return NextResponse.json(
-      {
-        error: 'Invalid postcard payload.',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 400 }
-    );
-  }
+  });
 }

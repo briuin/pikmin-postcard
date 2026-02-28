@@ -5,6 +5,7 @@ import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react'
 import type { WorkbenchText } from '@/lib/i18n';
 import type { PostcardType } from '@/components/workbench/types';
 import { parseLocationInput } from '@/components/workbench/utils';
+import { parseJsonResponseOrThrow } from '@/lib/http-response';
 
 type UseCreateControllerArgs = {
   text: WorkbenchText;
@@ -73,16 +74,11 @@ export function useCreateController({ text, isAuthenticated, loadPublicPostcards
           throw new Error(text.aiUnauthorized);
         }
 
-        const payload = (await response.json()) as {
+        const payload = await parseJsonResponseOrThrow<{
           id?: string;
           imageUrl?: string;
-          error?: string;
           message?: string;
-        };
-
-        if (!response.ok) {
-          throw new Error(payload.error ?? text.aiSubmitFailed);
-        }
+        }>(response, text.aiSubmitFailed);
 
         setAiFile(null);
         setAiInputVersion((current) => current + 1);
@@ -145,9 +141,12 @@ export function useCreateController({ text, isAuthenticated, loadPublicPostcards
         throw new Error(text.aiUnauthorized);
       }
 
-      const uploadPayload = (await uploadResponse.json()) as { imageUrl?: string; error?: string };
-      if (!uploadResponse.ok || !uploadPayload.imageUrl) {
-        throw new Error(uploadPayload.error ?? text.manualImageUploadFailed);
+      const uploadPayload = await parseJsonResponseOrThrow<{ imageUrl?: string }>(
+        uploadResponse,
+        text.manualImageUploadFailed
+      );
+      if (!uploadPayload.imageUrl) {
+        throw new Error(text.manualImageUploadFailed);
       }
 
       setCreateStatus(text.manualSaving);
@@ -166,15 +165,10 @@ export function useCreateController({ text, isAuthenticated, loadPublicPostcards
         })
       });
 
-      const createPayload = (await createResponse.json()) as { error?: string };
-
       if (createResponse.status === 401) {
         throw new Error(text.aiUnauthorized);
       }
-
-      if (!createResponse.ok) {
-        throw new Error(createPayload.error ?? text.manualCreateFailed);
-      }
+      await parseJsonResponseOrThrow(createResponse, text.manualCreateFailed);
 
       setManualTitle('');
       setManualPostcardType('');

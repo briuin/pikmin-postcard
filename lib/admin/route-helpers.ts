@@ -20,9 +20,19 @@ type ManagerQueryResult<T> =
   | { ok: true; actor: ManagerActor; query: T }
   | { ok: false; response: NextResponse };
 
+type QueryParseResult<T> = { success: true; data: T } | { success: false; error: ZodError };
+
+export function safeParseRequestQuery<T>(
+  request: Request,
+  parse: (searchParams: URLSearchParams) => QueryParseResult<T>
+): QueryParseResult<T> {
+  const searchParams = new URL(request.url).searchParams;
+  return parse(searchParams);
+}
+
 export async function requireManagerAndParseQuery<T>(
   request: Request,
-  parse: () => { success: true; data: T } | { success: false; error: ZodError }
+  parse: () => QueryParseResult<T>
 ): Promise<ManagerQueryResult<T>> {
   const guard = await requireManagerActor();
   if (!guard.ok) {
@@ -43,7 +53,7 @@ export async function requireManagerAndParseQuery<T>(
 
 export async function withManagerParsedQuery<T>(
   request: Request,
-  parse: () => { success: true; data: T } | { success: false; error: ZodError },
+  parse: () => QueryParseResult<T>,
   run: (context: { actor: ManagerActor; query: T }) => Promise<NextResponse>
 ): Promise<NextResponse> {
   const requestContext = await requireManagerAndParseQuery(request, parse);

@@ -1,7 +1,7 @@
 import { FeedbackMessageStatus } from '@prisma/client';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { withManagerParsedQuery } from '@/lib/admin/route-helpers';
+import { safeParseRequestQuery, withManagerParsedQuery } from '@/lib/admin/route-helpers';
 import { prisma } from '@/lib/prisma';
 import { recordUserAction } from '@/lib/user-action-log';
 
@@ -14,14 +14,14 @@ const adminFeedbackQuerySchema = z.object({
 export async function GET(request: Request) {
   return withManagerParsedQuery(
     request,
-    () => {
-      const url = new URL(request.url);
-      return adminFeedbackQuerySchema.safeParse({
-        q: url.searchParams.get('q') ?? undefined,
-        status: url.searchParams.get('status') ?? undefined,
-        limit: url.searchParams.get('limit') ?? undefined
-      });
-    },
+    () =>
+      safeParseRequestQuery(request, (searchParams) =>
+        adminFeedbackQuerySchema.safeParse({
+          q: searchParams.get('q') ?? undefined,
+          status: searchParams.get('status') ?? undefined,
+          limit: searchParams.get('limit') ?? undefined
+        })
+      ),
     async ({ actor, query }) => {
       await recordUserAction({
         request,

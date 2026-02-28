@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import type { WorkbenchText } from '@/lib/i18n';
 import type { DetectionJobRecord, PostcardRecord } from '@/components/workbench/types';
 import { deriveOriginalImageUrl } from '@/components/workbench/utils';
+import { parseJsonResponseOrThrow } from '@/lib/http-response';
 
 type UseDashboardJobActionsArgs = {
   text: WorkbenchText;
@@ -70,11 +71,7 @@ export function useDashboardJobActions({
             locationModelVersion: job.modelVersion ?? undefined
           })
         });
-
-        const payload = (await response.json()) as { error?: string };
-        if (!response.ok) {
-          throw new Error(payload.error ?? text.aiSaveFailed);
-        }
+        await parseJsonResponseOrThrow(response, text.aiSaveFailed);
 
         await Promise.all([loadDashboardData(), loadPublicPostcards()]);
         setDashboardStatus(text.aiSaveDone);

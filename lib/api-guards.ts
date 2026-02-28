@@ -10,6 +10,18 @@ import {
 type AuthActor = NonNullable<Awaited<ReturnType<typeof getAuthenticatedUser>>>;
 type GuardResult<T> = { ok: true; value: T } | { ok: false; response: NextResponse };
 
+export async function withGuardedValue<T>(
+  guardPromise: Promise<GuardResult<T>>,
+  run: (value: T) => Promise<NextResponse>
+): Promise<NextResponse> {
+  const guard = await guardPromise;
+  if (!guard.ok) {
+    return guard.response;
+  }
+
+  return run(guard.value);
+}
+
 function unauthorizedResponse() {
   return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
 }
@@ -71,45 +83,56 @@ export async function requireApprovedActor(options: {
   return actor;
 }
 
-export async function requireApprovedCreator(): Promise<GuardResult<AuthActor>> {
+async function requireApprovedActorCapability(params: {
+  canAccess: (actor: AuthActor) => boolean;
+  forbiddenMessage: string;
+}): Promise<GuardResult<AuthActor>> {
   const actor = await requireApprovedActor({ createIfMissing: true });
   if (!actor.ok) {
     return actor;
   }
-  if (!actor.value.canCreatePostcard) {
+  if (!params.canAccess(actor.value)) {
     return {
       ok: false,
-      response: forbiddenResponse('You are not allowed to create postcards.')
+      response: forbiddenResponse(params.forbiddenMessage)
     };
   }
 
   return actor;
+}
+
+export async function requireApprovedCreator(): Promise<GuardResult<AuthActor>> {
+  return requireApprovedActorCapability({
+    canAccess: (actor) => actor.canCreatePostcard,
+    forbiddenMessage: 'You are not allowed to create postcards.'
+  });
 }
 
 export async function requireApprovedVoter(): Promise<GuardResult<AuthActor>> {
-  const actor = await requireApprovedActor({ createIfMissing: true });
-  if (!actor.ok) {
-    return actor;
-  }
-  if (!actor.value.canVote) {
-    return {
-      ok: false,
-      response: forbiddenResponse('You are not allowed to vote or report locations.')
-    };
-  }
-
-  return actor;
+  return requireApprovedActorCapability({
+    canAccess: (actor) => actor.canVote,
+    forbiddenMessage: 'You are not allowed to vote or report locations.'
+  });
 }
 
 export async function requireApprovedDetectionSubmitter(): Promise<GuardResult<AuthActor>> {
-  const actor = await requireApprovedActor({ createIfMissing: true });
+  return requireApprovedActorCapability({
+    canAccess: (actor) => actor.canSubmitDetection,
+    forbiddenMessage: 'You are not allowed to submit AI detection jobs.'
+  });
+}
+
+async function requireRoleActor(
+  roleCheck: (role: AuthActor['role']) => boolean
+): Promise<GuardResult<AuthActor>> {
+  const actor = await requireAuthenticatedActor({ createIfMissing: true });
   if (!actor.ok) {
     return actor;
   }
-  if (!actor.value.canSubmitDetection) {
+  if (!roleCheck(actor.value.role)) {
     return {
       ok: false,
-      response: forbiddenResponse('You are not allowed to submit AI detection jobs.')
+      response: forbiddenResponse()
     };
   }
 
@@ -117,31 +140,9 @@ export async function requireApprovedDetectionSubmitter(): Promise<GuardResult<A
 }
 
 export async function requireManagerActor(): Promise<GuardResult<AuthActor>> {
-  const actor = await requireAuthenticatedActor({ createIfMissing: true });
-  if (!actor.ok) {
-    return actor;
-  }
-  if (!isManagerOrAboveRole(actor.value.role)) {
-    return {
-      ok: false,
-      response: forbiddenResponse()
-    };
-  }
-
-  return actor;
+  return requireRoleActor((role) => isManagerOrAboveRole(role));
 }
 
 export async function requireAdminActor(): Promise<GuardResult<AuthActor>> {
-  const actor = await requireAuthenticatedActor({ createIfMissing: true });
-  if (!actor.ok) {
-    return actor;
-  }
-  if (!isAdminRole(actor.value.role)) {
-    return {
-      ok: false,
-      response: forbiddenResponse()
-    };
-  }
-
-  return actor;
+  return requireRoleActor((role) => isAdminRole(role));
 }

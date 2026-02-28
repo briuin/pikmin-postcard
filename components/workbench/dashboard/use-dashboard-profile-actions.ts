@@ -1,5 +1,6 @@
 import { useCallback, useState, type Dispatch, type SetStateAction } from 'react';
 import type { WorkbenchText } from '@/lib/i18n';
+import { parseJsonResponseOrThrow } from '@/lib/http-response';
 
 type UseDashboardProfileActionsArgs = {
   text: WorkbenchText;
@@ -40,10 +41,10 @@ export function useDashboardProfileActions({
         body: JSON.stringify({ displayName })
       });
 
-      const payload = (await response.json()) as { error?: string; displayName?: string };
-      if (!response.ok) {
-        throw new Error(payload.error ?? text.profileSaveFailed);
-      }
+      const payload = await parseJsonResponseOrThrow<{ displayName?: string }>(
+        response,
+        text.profileSaveFailed
+      );
 
       setProfileDisplayName(payload.displayName ?? displayName);
       setDashboardStatus(text.profileSaved);

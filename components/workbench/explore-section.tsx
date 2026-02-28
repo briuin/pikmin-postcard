@@ -12,6 +12,7 @@ import { ExploreSummary } from '@/components/workbench/explore-view/summary';
 import { ExploreToastBanner } from '@/components/workbench/explore-view/toast';
 import type { ExploreToast } from '@/components/workbench/explore-view/types';
 import { useAutoDismiss } from '@/components/use-auto-dismiss';
+import { useBodyScrollLock } from '@/components/use-body-scroll-lock';
 import type { WorkbenchText } from '@/lib/i18n';
 import type { ExploreSort, PostcardRecord } from '@/components/workbench/types';
 
@@ -75,18 +76,7 @@ export function ExploreSection({
   }, [selectedPostcardId, selectedPostcard]);
   const clearToast = useCallback(() => setToast(null), []);
   useAutoDismiss(toast, clearToast);
-
-  useEffect(() => {
-    if (!selectedPostcard) {
-      return;
-    }
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [selectedPostcard]);
+  useBodyScrollLock(Boolean(selectedPostcard));
 
   function showToast(message: string, tone: 'success' | 'error') {
     setToast({ message, tone });

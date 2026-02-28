@@ -14,6 +14,11 @@ import {
 } from '@/components/admin-dashboard-types';
 import { parseLocationInput } from '@/components/workbench/utils';
 import type { PostcardRecord } from '@/components/workbench/types';
+import {
+  getErrorMessageFromPayload,
+  parseJsonPayload,
+  parseJsonResponseOrThrow
+} from '@/lib/http-response';
 
 type UseAdminDashboardControllerArgs = {
   text: AdminText;
@@ -70,15 +75,15 @@ export function useAdminDashboardController({
       }
       url.searchParams.set('limit', '500');
       const response = await fetch(url.toString(), { cache: 'no-store' });
-      const payload = (await response.json()) as AdminUserRecord[] | { error?: string };
+      const payload = await parseJsonPayload(response);
       if (!response.ok || !Array.isArray(payload)) {
-        throw new Error((payload as { error?: string }).error ?? text.roleSaveFailed);
+        throw new Error(getErrorMessageFromPayload(payload) ?? text.roleSaveFailed);
       }
 
-      setUsers(payload);
+      setUsers(payload as AdminUserRecord[]);
       setUserAccessDrafts((current) => {
         const next = { ...current };
-        for (const user of payload) {
+        for (const user of payload as AdminUserRecord[]) {
           next[user.id] = buildUserAccessDraft(user);
         }
         return next;
@@ -103,12 +108,12 @@ export function useAdminDashboardController({
       }
       url.searchParams.set('limit', '300');
       const response = await fetch(url.toString(), { cache: 'no-store' });
-      const payload = (await response.json()) as AdminFeedbackRecord[] | { error?: string };
+      const payload = await parseJsonPayload(response);
       if (!response.ok || !Array.isArray(payload)) {
-        throw new Error((payload as { error?: string }).error ?? text.feedbackEmpty);
+        throw new Error(getErrorMessageFromPayload(payload) ?? text.feedbackEmpty);
       }
 
-      setFeedbacks(payload);
+      setFeedbacks(payload as AdminFeedbackRecord[]);
     } catch (error) {
       setStatusText(error instanceof Error ? error.message : text.feedbackEmpty);
     } finally {
@@ -134,20 +139,21 @@ export function useAdminDashboardController({
         url.searchParams.set('limit', '260');
 
         const response = await fetch(url.toString(), { cache: 'no-store' });
-        const payload = (await response.json()) as PostcardRecord[] | { error?: string };
+        const payload = await parseJsonPayload(response);
         if (!response.ok || !Array.isArray(payload)) {
-          throw new Error((payload as { error?: string }).error ?? text.savePostcardFailed);
+          throw new Error(getErrorMessageFromPayload(payload) ?? text.savePostcardFailed);
         }
+        const postcards = payload as PostcardRecord[];
 
         if (reportedOnly) {
-          setReportedPostcards(payload);
+          setReportedPostcards(postcards);
         } else {
-          setAllPostcards(payload);
+          setAllPostcards(postcards);
         }
 
         setPostcardDrafts((current) => {
           const next = { ...current };
-          for (const postcard of payload) {
+          for (const postcard of postcards) {
             next[postcard.id] = buildAdminPostcardDraft(postcard);
           }
           return next;
@@ -204,10 +210,7 @@ export function useAdminDashboardController({
             canVote: draft.canVote
           })
         });
-        const payload = (await response.json()) as { error?: string };
-        if (!response.ok) {
-          throw new Error(payload.error ?? text.roleSaveFailed);
-        }
+        await parseJsonResponseOrThrow(response, text.roleSaveFailed);
 
         setStatusText(text.roleSaved);
         await loadUsers();
@@ -240,10 +243,7 @@ export function useAdminDashboardController({
             longitude: parsed.longitude
           })
         });
-        const payload = (await response.json()) as { error?: string };
-        if (!response.ok) {
-          throw new Error(payload.error ?? text.savePostcardFailed);
-        }
+        await parseJsonResponseOrThrow(response, text.savePostcardFailed);
 
         setStatusText(text.savePostcardDone);
         await Promise.all([loadPostcards(false), loadPostcards(true)]);

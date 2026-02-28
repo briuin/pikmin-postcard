@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { DashboardAiJobsList } from '@/components/workbench/dashboard-view/ai-jobs-list';
 import { DashboardAuthCallout } from '@/components/workbench/dashboard-view/auth-callout';
 import { DashboardCategoryTabs } from '@/components/workbench/dashboard-view/category-tabs';
@@ -19,6 +19,7 @@ import type {
   PreviewImage
 } from '@/components/workbench/dashboard-view/types';
 import { DashboardToolbar } from '@/components/workbench/dashboard-view/toolbar';
+import { useBodyScrollLock } from '@/components/use-body-scroll-lock';
 
 export function DashboardSection({
   text,
@@ -58,18 +59,7 @@ export function DashboardSection({
 }: DashboardSectionProps) {
   const [previewImage, setPreviewImage] = useState<PreviewImage | null>(null);
   const [activeCategory, setActiveCategory] = useState<DashboardCategory>('ai');
-
-  useEffect(() => {
-    if (!previewImage) {
-      return;
-    }
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [previewImage]);
+  useBodyScrollLock(Boolean(previewImage));
 
   const dashboardListClassName = getDashboardListClassName(dashboardViewMode);
 
