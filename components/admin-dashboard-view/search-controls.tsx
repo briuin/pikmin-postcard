@@ -35,9 +35,9 @@ export function AdminSearchControls({
             onChange={(event) => onUserRoleFilterChange(event.target.value as 'ALL' | UserRole)}
           >
             <option value="ALL">{text.userRoleFilterAll}</option>
-            <option value={UserRole.ADMIN}>ADMIN</option>
-            <option value={UserRole.MANAGER}>MANAGER</option>
-            <option value={UserRole.MEMBER}>MEMBER</option>
+            <option value={UserRole.ADMIN}>{text.roleOptionAdmin}</option>
+            <option value={UserRole.MANAGER}>{text.roleOptionManager}</option>
+            <option value={UserRole.MEMBER}>{text.roleOptionMember}</option>
           </select>
         </label>
       </div>

@@ -16,6 +16,7 @@ import { serializePostcards } from '@/lib/postcards/list';
 import { buildPublicOrderBy, buildPublicWhere, parsePublicQuery } from '@/lib/postcards/query';
 import { findPostcardsForList } from '@/lib/postcards/repository';
 import { hasMissingOriginalImageColumnError } from '@/lib/postcards/shared';
+import { reverseGeocodeCoordinates } from '@/lib/reverse-geocode';
 import { recordUserAction } from '@/lib/user-action-log';
 
 const postcardCreateSchema = z.object({
@@ -25,6 +26,7 @@ const postcardCreateSchema = z.object({
   imageUrl: z.string().url().optional(),
   originalImageUrl: z.string().url().optional(),
   city: z.string().max(120).optional(),
+  state: z.string().max(120).optional(),
   country: z.string().max(120).optional(),
   placeName: z.string().max(180).optional(),
   latitude: z.number().min(-90).max(90).optional(),
@@ -120,6 +122,11 @@ export async function POST(request: Request) {
   return withGuardedValue(requireApprovedCreator(), async (actor) => {
     try {
       const body = postcardCreateSchema.parse(await request.json());
+      const reverseLocation =
+        typeof body.latitude === 'number' && typeof body.longitude === 'number'
+          ? await reverseGeocodeCoordinates(body.latitude, body.longitude)
+          : null;
+
       await recordUserAction({
         request,
         userId: actor.id,
@@ -136,8 +143,9 @@ export async function POST(request: Request) {
         postcardType: body.postcardType,
         notes: body.notes,
         imageUrl: body.imageUrl,
-        city: body.city,
-        country: body.country,
+        city: reverseLocation?.city ?? body.city,
+        state: reverseLocation?.state ?? body.state,
+        country: reverseLocation?.country ?? body.country,
         placeName: body.placeName,
         latitude: body.latitude,
         longitude: body.longitude,

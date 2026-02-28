@@ -8,6 +8,9 @@ export type PostcardRecord = {
   postcardType: PostcardType;
   notes: string | null;
   placeName: string | null;
+  city: string | null;
+  state: string | null;
+  country: string | null;
   imageUrl: string | null;
   originalImageUrl?: string | null;
   latitude: number | null;

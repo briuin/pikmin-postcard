@@ -84,6 +84,7 @@ model Postcard {
   originalImageUrl     String?
   capturedAt           DateTime?
   city                 String?
+  state                String?
   country              String?
   placeName            String?
   latitude             Float?

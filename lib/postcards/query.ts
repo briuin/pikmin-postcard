@@ -80,6 +80,9 @@ export function buildPostcardSearchFilter(
     { title: { contains: searchText, mode: 'insensitive' } },
     { notes: { contains: searchText, mode: 'insensitive' } },
     { placeName: { contains: searchText, mode: 'insensitive' } },
+    { city: { contains: searchText, mode: 'insensitive' } },
+    { state: { contains: searchText, mode: 'insensitive' } },
+    { country: { contains: searchText, mode: 'insensitive' } },
     { aiPlaceGuess: { contains: searchText, mode: 'insensitive' } }
   ];
 

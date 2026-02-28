@@ -229,7 +229,11 @@ export const en = {
     tabPostcards: 'All Postcards',
     tabReported: 'Reported',
     tabFeedback: 'Feedback',
-    roleBadge: (role: 'ADMIN' | 'MANAGER' | 'MEMBER') => `Role: ${role}`,
+    roleBadge: (role: 'ADMIN' | 'MANAGER' | 'MEMBER') =>
+      `Role: ${role === 'ADMIN' ? 'Admin' : role === 'MANAGER' ? 'Manager' : 'Member'}`,
+    roleOptionAdmin: 'Admin',
+    roleOptionManager: 'Manager',
+    roleOptionMember: 'Member',
     buttonRefresh: 'Refresh',
     usersTitle: 'User Management',
     usersHint: 'Admin can update user role, approval status, and action permissions.',

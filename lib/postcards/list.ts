@@ -10,6 +10,7 @@ const postcardListSelectBase = {
   imageUrl: true,
   capturedAt: true,
   city: true,
+  state: true,
   country: true,
   placeName: true,
   latitude: true,

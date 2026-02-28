@@ -7,6 +7,7 @@ import {
   toNullableText,
   type EditablePostcard
 } from '@/lib/postcards/edit-history';
+import { reverseGeocodeCoordinates } from '@/lib/reverse-geocode';
 import { deriveOriginalImageUrl } from '@/lib/postcards/shared';
 import { prisma } from '@/lib/prisma';
 
@@ -26,6 +27,7 @@ export const postcardUpdateSchema = z
     notes: z.string().max(2000).nullable().optional(),
     placeName: z.string().max(180).nullable().optional(),
     city: z.string().max(120).nullable().optional(),
+    state: z.string().max(120).nullable().optional(),
     country: z.string().max(120).nullable().optional(),
     imageUrl: z.string().url().nullable().optional(),
     originalImageUrl: z.string().url().nullable().optional(),
@@ -112,6 +114,9 @@ function buildPostcardUpdateData(payload: PostcardUpdatePayload): Prisma.Postcar
   }
   if (payload.city !== undefined) {
     updateData.city = toNullableText(payload.city);
+  }
+  if (payload.state !== undefined) {
+    updateData.state = toNullableText(payload.state);
   }
   if (payload.country !== undefined) {
     updateData.country = toNullableText(payload.country);
@@ -228,9 +233,26 @@ export async function applyPostcardDetailsUpdate(params: {
         canEditAny: params.canEditAny
       },
       async (before) => {
+        const nextLatitude =
+          params.payload.latitude !== undefined ? params.payload.latitude : before.latitude;
+        const nextLongitude =
+          params.payload.longitude !== undefined ? params.payload.longitude : before.longitude;
+
+        const reverseLocation =
+          typeof nextLatitude === 'number' && typeof nextLongitude === 'number'
+            ? await reverseGeocodeCoordinates(nextLatitude, nextLongitude)
+            : null;
+
+        const updateData = buildPostcardUpdateData(params.payload);
+        if (reverseLocation) {
+          updateData.city = reverseLocation.city;
+          updateData.state = reverseLocation.state;
+          updateData.country = reverseLocation.country;
+        }
+
         const after = await tx.postcard.update({
           where: { id: params.postcardId },
-          data: buildPostcardUpdateData(params.payload),
+          data: updateData,
           select: postcardEditSelect
         });
 

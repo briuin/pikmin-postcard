@@ -230,7 +230,11 @@ export const zhTW: EnLocaleMessages = {
     tabPostcards: '全部明信片',
     tabReported: '已回報',
     tabFeedback: '回饋',
-    roleBadge: (role: 'ADMIN' | 'MANAGER' | 'MEMBER') => `角色：${role}`,
+    roleBadge: (role: 'ADMIN' | 'MANAGER' | 'MEMBER') =>
+      `角色：${role === 'ADMIN' ? '管理員' : role === 'MANAGER' ? '經理' : '成員'}`,
+    roleOptionAdmin: '管理員',
+    roleOptionManager: '經理',
+    roleOptionMember: '成員',
     buttonRefresh: '重新整理',
     usersTitle: '使用者管理',
     usersHint: '只有 admin 可調整使用者角色、審核狀態與操作權限。',

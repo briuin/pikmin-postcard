@@ -1,6 +1,7 @@
 import { DetectionJobStatus, PostcardType } from '@prisma/client';
 import { buildCroppedPostcardImage } from '@/lib/location-detection/crop';
 import { detectWithGemini, type GeminiDetectionSuccess } from '@/lib/location-detection/gemini';
+import { reverseGeocodeCoordinates, type ReverseGeocodeResult } from '@/lib/reverse-geocode';
 import { hasMissingOriginalImageColumnError } from '@/lib/postcards/shared';
 import { prisma } from '@/lib/prisma';
 import {
@@ -38,7 +39,12 @@ export type QueueDetectionJobResult = {
   processParams: ProcessDetectionJobParams;
 };
 
-function buildAutoPostcardData(params: CreateAutoPostcardParams & { includeOriginalImageUrl: boolean }) {
+function buildAutoPostcardData(
+  params: CreateAutoPostcardParams & {
+    includeOriginalImageUrl: boolean;
+    reverseLocation: ReverseGeocodeResult | null;
+  }
+) {
   const title = params.detection.location.place_guess?.trim()
     ? `AI: ${params.detection.location.place_guess}`
     : 'AI detected postcard';
@@ -50,6 +56,9 @@ function buildAutoPostcardData(params: CreateAutoPostcardParams & { includeOrigi
     notes: 'Auto-created from AI detection upload.',
     imageUrl: params.imageUrl,
     ...(params.includeOriginalImageUrl ? { originalImageUrl: params.originalImageUrl } : {}),
+    city: params.reverseLocation?.city,
+    state: params.reverseLocation?.state,
+    country: params.reverseLocation?.country,
     placeName: params.detection.location.place_guess,
     latitude: params.detection.location.latitude,
     longitude: params.detection.location.longitude,
@@ -63,11 +72,17 @@ function buildAutoPostcardData(params: CreateAutoPostcardParams & { includeOrigi
 }
 
 async function createAutoPostcard(params: CreateAutoPostcardParams): Promise<void> {
+  const reverseLocation = await reverseGeocodeCoordinates(
+    params.detection.location.latitude,
+    params.detection.location.longitude
+  );
+
   try {
     await prisma.postcard.create({
       data: buildAutoPostcardData({
         ...params,
-        includeOriginalImageUrl: true
+        includeOriginalImageUrl: true,
+        reverseLocation
       })
     });
   } catch (error) {
@@ -78,7 +93,8 @@ async function createAutoPostcard(params: CreateAutoPostcardParams): Promise<voi
     await prisma.postcard.create({
       data: buildAutoPostcardData({
         ...params,
-        includeOriginalImageUrl: false
+        includeOriginalImageUrl: false,
+        reverseLocation
       })
     });
   }
