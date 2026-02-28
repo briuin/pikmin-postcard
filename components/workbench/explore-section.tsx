@@ -89,11 +89,13 @@ export function ExploreSection({
   const exploreResultsClassName =
     'flex min-h-0 flex-col gap-2 overflow-auto pr-1 max-[1080px]:max-h-none max-[1080px]:overflow-visible max-[1080px]:pr-0';
   const smallMutedClassName = 'text-[0.82rem] text-[#5f736c]';
-  const actionButtonClassName =
-    'rounded-[10px] bg-[linear-gradient(135deg,#56b36a,#2f9e58)] px-2.5 py-1.5 text-[0.83rem] font-bold text-white shadow-[0_4px_10px_rgba(47,158,88,0.18)] disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none';
-  const actionButtonWarnClassName =
-    'rounded-[10px] bg-[linear-gradient(135deg,#f4c742,#e5a634)] px-2.5 py-1.5 text-[0.83rem] font-bold text-[#25361f] shadow-[0_4px_10px_rgba(229,166,52,0.25)] disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none';
-  const cardThumbClassName = 'h-auto max-h-[160px] w-full rounded-[10px] border border-[#deeadb] object-cover';
+  const cardThumbClassName = 'h-auto max-h-[320px] w-full rounded-[14px] border border-[#d7e8df] bg-[#eef6f2] object-cover shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]';
+  const modalChipClassName =
+    'inline-flex items-center rounded-full border border-[#d5e8d8] bg-[#f6fff7] px-2.5 py-1 text-[0.78rem] font-semibold text-[#355848]';
+  const modalActionButtonClassName =
+    'rounded-xl border border-[#cde5cf] bg-[linear-gradient(135deg,#58b96d,#369d5a)] px-3 py-2 text-[0.86rem] font-bold text-white shadow-[0_6px_14px_rgba(53,156,89,0.22)] transition hover:enabled:-translate-y-px disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none';
+  const modalActionWarnButtonClassName =
+    'rounded-xl border border-[#e9c782] bg-[linear-gradient(135deg,#f2cf6a,#e3b84f)] px-3 py-2 text-[0.86rem] font-bold text-[#34402f] shadow-[0_6px_14px_rgba(220,170,67,0.2)] transition hover:enabled:-translate-y-px disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none';
 
   async function copyCoordinates(postcard: PostcardRecord) {
     if (typeof postcard.latitude !== 'number' || typeof postcard.longitude !== 'number') {
@@ -226,21 +228,29 @@ export function ExploreSection({
 
       {selectedPostcard ? (
         <div
-          className="fixed inset-0 z-[1200] grid place-items-center bg-[rgba(18,34,27,0.46)] p-3"
+          className="fixed inset-0 z-[1200] grid place-items-center bg-[radial-gradient(circle_at_16%_8%,rgba(244,199,66,0.26),transparent_38%),radial-gradient(circle_at_86%_18%,rgba(78,142,247,0.22),transparent_40%),rgba(14,28,22,0.58)] p-3 backdrop-blur-[2px]"
           onClick={() => {
             setSelectedPostcardId(null);
             setCopyStatus('');
           }}
         >
           <article
-            className="grid max-h-[92vh] w-full max-w-[640px] gap-2 overflow-auto rounded-2xl border border-[#d9ead6] bg-[#fafffa] p-3 shadow-[0_16px_34px_rgba(31,52,42,0.28)]"
+            className="relative grid max-h-[92vh] w-full max-w-[680px] gap-3 overflow-auto rounded-[26px] border border-[#d8e9d7] bg-[radial-gradient(circle_at_12%_8%,rgba(244,199,66,0.22),transparent_34%),radial-gradient(circle_at_88%_14%,rgba(78,142,247,0.18),transparent_36%),linear-gradient(170deg,#fbfffc,#f2fff5)] p-3.5 shadow-[0_24px_48px_rgba(21,42,33,0.34),inset_0_1px_0_rgba(255,255,255,0.75)]"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className={postcardItemHeadClassName}>
-              <strong>{selectedPostcard.title}</strong>
+            <div className="pointer-events-none absolute -right-12 -top-16 h-32 w-32 rounded-full bg-[radial-gradient(circle,rgba(86,179,106,0.28),rgba(86,179,106,0))]" />
+            <div className="pointer-events-none absolute -left-8 bottom-16 h-24 w-24 rounded-full bg-[radial-gradient(circle,rgba(244,199,66,0.28),rgba(244,199,66,0))]" />
+
+            <div className={`${postcardItemHeadClassName} relative z-10`}>
+              <div className="grid min-w-0 gap-1">
+                <span className="inline-flex w-fit items-center rounded-full border border-[#d4e7d3] bg-[#f4fff4] px-2.5 py-1 text-[0.72rem] font-black uppercase tracking-[0.08em] text-[#2b6442]">
+                  {text.exploreTitle}
+                </span>
+                <strong className="text-[1.1rem] leading-tight text-[#1a3428] max-[580px]:text-[1rem]">{selectedPostcard.title}</strong>
+              </div>
               <button
                 type="button"
-                className="rounded-lg border border-[#d2e3d0] bg-white px-2 py-1 text-[0.8rem] font-bold text-[#345447]"
+                className="rounded-full border border-[#d2e4d2] bg-white/90 px-3 py-1 text-[0.8rem] font-bold text-[#325445] shadow-[0_4px_10px_rgba(40,73,57,0.12)]"
                 onClick={() => {
                   setSelectedPostcardId(null);
                   setCopyStatus('');
@@ -251,25 +261,30 @@ export function ExploreSection({
             </div>
 
             {selectedPostcard.imageUrl ? (
-              <Image
-                className={cardThumbClassName}
-                src={selectedPostcard.imageUrl}
-                alt={selectedPostcard.title}
-                width={960}
-                height={680}
-              />
+              <div className="relative z-10 grid gap-2 rounded-[18px] border border-[#d9e9dd] bg-[#f8fffb] p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
+                <Image
+                  className={cardThumbClassName}
+                  src={selectedPostcard.imageUrl}
+                  alt={selectedPostcard.title}
+                  width={960}
+                  height={680}
+                />
+                <div className="flex flex-wrap gap-1.5">
+                  <span className={modalChipClassName}>{selectedPostcard.placeName || text.exploreUnknownPlace}</span>
+                  {selectedPostcard.uploaderName ? <span className={modalChipClassName}>{text.exploreUploaderBy(selectedPostcard.uploaderName)}</span> : null}
+                  <span className={modalChipClassName}>{new Date(selectedPostcard.createdAt).toLocaleDateString(text.dateLocale)}</span>
+                </div>
+              </div>
             ) : null}
 
-            <small className={smallMutedClassName}>{selectedPostcard.placeName || text.exploreUnknownPlace}</small>
-            {selectedPostcard.uploaderName ? <small className={smallMutedClassName}>{text.exploreUploaderBy(selectedPostcard.uploaderName)}</small> : null}
-            <small className={smallMutedClassName}>
-              {new Date(selectedPostcard.createdAt).toLocaleString(text.dateLocale)}
-            </small>
-            <small className={smallMutedClassName}>
-              👍 {selectedPostcard.likeCount} · 👎 {selectedPostcard.dislikeCount} · ⚠️ {selectedPostcard.wrongLocationReports}
-            </small>
+            <div className="relative z-10 flex flex-wrap gap-1.5">
+              <span className={modalChipClassName}>👍 {selectedPostcard.likeCount}</span>
+              <span className={modalChipClassName}>👎 {selectedPostcard.dislikeCount}</span>
+              <span className={modalChipClassName}>⚠️ {selectedPostcard.wrongLocationReports}</span>
+              <span className={modalChipClassName}>{new Date(selectedPostcard.createdAt).toLocaleString(text.dateLocale)}</span>
+            </div>
 
-            <div className="grid gap-1 rounded-xl border border-[#e0ebe0] bg-[#f4fbf5] p-2">
+            <div className="relative z-10 grid gap-1.5 rounded-[14px] border border-[#d8e8d9] bg-[linear-gradient(145deg,#f2fff5,#edf7ff)] p-2.5">
               <small className={smallMutedClassName}>
                 {typeof selectedPostcard.latitude === 'number' && typeof selectedPostcard.longitude === 'number'
                   ? `${selectedPostcard.latitude.toFixed(6)}, ${selectedPostcard.longitude.toFixed(6)}`
@@ -278,26 +293,28 @@ export function ExploreSection({
               <div className="flex flex-wrap gap-1.5">
                 <button
                   type="button"
-                  className={actionButtonClassName}
+                  className={modalActionButtonClassName}
                   onClick={() => void copyCoordinates(selectedPostcard)}
+                  aria-label={text.exploreCopyCoordinates}
+                  title={text.exploreCopyCoordinates}
                 >
-                  {text.exploreCopyCoordinates}
+                  ⧉
                 </button>
                 {copyStatus ? <small className={smallMutedClassName}>{copyStatus}</small> : null}
               </div>
             </div>
 
             {selectedPostcard.notes ? (
-              <p className="m-0 rounded-xl border border-[#e2ece1] bg-[#f7fff8] px-2.5 py-2 text-[0.91rem] text-[#365247]">
+              <p className="relative z-10 m-0 rounded-[14px] border border-[#dbe9dc] bg-[linear-gradient(160deg,#f9fffb,#f2fbf5)] px-3 py-2.5 text-[0.91rem] leading-relaxed text-[#355347] shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
                 {selectedPostcard.notes}
               </p>
             ) : null}
 
-            <div className="flex flex-wrap gap-1.5">
+            <div className="relative z-10 grid gap-1.5 min-[520px]:grid-cols-3">
               {!isAuthenticated ? (
                 <button
                   type="button"
-                  className={actionButtonClassName}
+                  className={`${modalActionButtonClassName} min-[520px]:col-span-3`}
                   onClick={onSignIn}
                 >
                   {text.buttonSignInGoogle}
@@ -307,8 +324,8 @@ export function ExploreSection({
                 type="button"
                 className={
                   selectedPostcard.viewerFeedback?.liked
-                    ? `${actionButtonClassName} ring-2 ring-[rgba(47,158,88,0.32)]`
-                    : actionButtonClassName
+                    ? `${modalActionButtonClassName} ring-2 ring-[rgba(47,158,88,0.35)]`
+                    : modalActionButtonClassName
                 }
                 onClick={() => onSubmitFeedback(selectedPostcard.id, 'like')}
                 disabled={
@@ -328,8 +345,8 @@ export function ExploreSection({
                 type="button"
                 className={
                   selectedPostcard.viewerFeedback?.disliked
-                    ? `${actionButtonClassName} ring-2 ring-[rgba(47,158,88,0.32)]`
-                    : actionButtonClassName
+                    ? `${modalActionButtonClassName} ring-2 ring-[rgba(47,158,88,0.35)]`
+                    : modalActionButtonClassName
                 }
                 onClick={() => onSubmitFeedback(selectedPostcard.id, 'dislike')}
                 disabled={
@@ -347,7 +364,7 @@ export function ExploreSection({
               </button>
               <button
                 type="button"
-                className={actionButtonWarnClassName}
+                className={modalActionWarnButtonClassName}
                 onClick={() => onSubmitFeedback(selectedPostcard.id, 'report_wrong_location')}
                 disabled={
                   !isAuthenticated ||
