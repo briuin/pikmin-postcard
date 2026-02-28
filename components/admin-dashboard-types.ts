@@ -1,4 +1,5 @@
 import { UserApprovalStatus, UserRole } from '@prisma/client';
+import { buildPostcardDraftValues } from '@/components/workbench/postcard-draft';
 import type { PostcardRecord, PostcardType } from '@/components/workbench/types';
 
 export type AdminUserRecord = {
@@ -43,16 +44,7 @@ export type AdminFeedbackRecord = {
 export type AdminTabKey = 'users' | 'postcards' | 'reported' | 'feedback';
 
 export function buildAdminPostcardDraft(postcard: PostcardRecord): AdminPostcardEditDraft {
-  return {
-    title: postcard.title ?? '',
-    postcardType: postcard.postcardType ?? 'UNKNOWN',
-    notes: postcard.notes ?? '',
-    placeName: postcard.placeName ?? '',
-    locationInput:
-      typeof postcard.latitude === 'number' && typeof postcard.longitude === 'number'
-        ? `${postcard.latitude.toFixed(6)}, ${postcard.longitude.toFixed(6)}`
-        : ''
-  };
+  return buildPostcardDraftValues(postcard);
 }
 
 export function buildUserAccessDraft(user: AdminUserRecord): UserAccessDraft {

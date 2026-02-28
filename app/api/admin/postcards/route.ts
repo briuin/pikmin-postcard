@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
-import { getAuthenticatedUser, isManagerOrAboveRole } from '@/lib/api-auth';
+import { invalidQueryResponse, requireManagerActor } from '@/lib/admin/route-helpers';
 import { serializePostcards } from '@/lib/postcards/list';
 import { findPostcardsForList } from '@/lib/postcards/repository';
 import { recordUserAction } from '@/lib/user-action-log';
@@ -13,13 +13,11 @@ const adminPostcardQuerySchema = z.object({
 });
 
 export async function GET(request: Request) {
-  const actor = await getAuthenticatedUser({ createIfMissing: true });
-  if (!actor) {
-    return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+  const guard = await requireManagerActor();
+  if (!guard.ok) {
+    return guard.response;
   }
-  if (!isManagerOrAboveRole(actor.role)) {
-    return NextResponse.json({ error: 'Forbidden.' }, { status: 403 });
-  }
+  const { actor } = guard;
 
   const url = new URL(request.url);
   const parse = adminPostcardQuerySchema.safeParse({
@@ -29,13 +27,7 @@ export async function GET(request: Request) {
   });
 
   if (!parse.success) {
-    return NextResponse.json(
-      {
-        error: 'Invalid query.',
-        details: parse.error.issues.map((item) => item.message).join('; ')
-      },
-      { status: 400 }
-    );
+    return invalidQueryResponse(parse.error);
   }
 
   const query = parse.data;

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import type { FormEvent } from 'react';
 import type { WorkbenchText } from '@/lib/i18n';
+import { PostcardTypeOptions } from '@/components/workbench/postcard-type-options';
 import type { PostcardType } from '@/components/workbench/types';
 
 type CreateSectionProps = {
@@ -149,11 +150,11 @@ export function CreateSection({
             onChange={(event) => onManualPostcardTypeChange(event.target.value as PostcardType | '')}
             disabled={!isAuthenticated || isSavingManual || isSubmittingAi}
           >
-            <option value="">{text.postcardTypeSelectPlaceholder}</option>
-            <option value="MUSHROOM">{text.postcardTypeMushroom}</option>
-            <option value="FLOWER">{text.postcardTypeFlower}</option>
-            <option value="EXPLORATION">{text.postcardTypeExploration}</option>
-            <option value="UNKNOWN">{text.postcardTypeUnknown}</option>
+            <PostcardTypeOptions
+              text={text}
+              includePlaceholder
+              placeholderLabel={text.postcardTypeSelectPlaceholder}
+            />
           </select>
         </label>
         <label className={inlineFieldClassName}>

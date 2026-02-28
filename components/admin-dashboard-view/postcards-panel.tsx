@@ -2,6 +2,7 @@ import Image from 'next/image';
 import { buildAdminPostcardDraft } from '@/components/admin-dashboard-types';
 import { mutedTextClassName } from '@/components/admin-dashboard-view/styles';
 import type { AdminPostcardsPanelProps } from '@/components/admin-dashboard-view/types';
+import { PostcardTypeOptions } from '@/components/workbench/postcard-type-options';
 import type { PostcardType } from '@/components/workbench/types';
 
 export function AdminPostcardsPanel({
@@ -78,10 +79,7 @@ export function AdminPostcardsPanel({
                     }))
                   }
                 >
-                  <option value="MUSHROOM">{workbenchText.postcardTypeMushroom}</option>
-                  <option value="FLOWER">{workbenchText.postcardTypeFlower}</option>
-                  <option value="EXPLORATION">{workbenchText.postcardTypeExploration}</option>
-                  <option value="UNKNOWN">{workbenchText.postcardTypeUnknown}</option>
+                  <PostcardTypeOptions text={workbenchText} />
                 </select>
               </label>
               <label className="grid gap-1 text-[0.86rem] font-bold text-[#39604f]">

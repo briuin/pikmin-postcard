@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getAuthenticatedUser, isApprovedUser } from '@/lib/api-auth';
+import { requireApprovedCreator } from '@/lib/api-guards';
 import { assertSupportedImage, buildObjectKey, uploadBytesToStorage } from '@/lib/storage';
 import { recordUserAction } from '@/lib/user-action-log';
 
@@ -7,19 +7,11 @@ export const runtime = 'nodejs';
 
 export async function POST(request: Request) {
   try {
-    const actor = await getAuthenticatedUser({ createIfMissing: true });
-    if (!actor) {
-      return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+    const guard = await requireApprovedCreator();
+    if (!guard.ok) {
+      return guard.response;
     }
-    if (!isApprovedUser(actor)) {
-      return NextResponse.json({ error: 'Account pending approval.' }, { status: 403 });
-    }
-    if (!actor.canCreatePostcard) {
-      return NextResponse.json(
-        { error: 'You are not allowed to create postcards.' },
-        { status: 403 }
-      );
-    }
+    const { actor } = guard;
 
     const formData = await request.formData();
     const file = formData.get('image');

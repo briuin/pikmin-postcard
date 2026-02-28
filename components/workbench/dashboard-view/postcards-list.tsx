@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import ReactCrop from 'react-image-crop';
 import type { WorkbenchText } from '@/lib/i18n';
+import { PostcardTypeOptions } from '@/components/workbench/postcard-type-options';
 import type { PostcardEditDraft, PostcardRecord } from '@/components/workbench/types';
 import type { CropDraft } from '@/components/workbench/utils';
 import {
@@ -116,10 +117,7 @@ export function DashboardPostcardsList({
                 }
                 disabled={savingPostcardId === postcard.id || deletingPostcardId === postcard.id}
               >
-                <option value="MUSHROOM">{text.postcardTypeMushroom}</option>
-                <option value="FLOWER">{text.postcardTypeFlower}</option>
-                <option value="EXPLORATION">{text.postcardTypeExploration}</option>
-                <option value="UNKNOWN">{text.postcardTypeUnknown}</option>
+                <PostcardTypeOptions text={text} />
               </select>
             </label>
             <label className={inlineFieldClassName}>

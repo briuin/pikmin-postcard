@@ -2,10 +2,9 @@ import { LocationStatus, PostcardType } from '@prisma/client';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import {
-  getAuthenticatedUser,
-  getAuthenticatedUserId,
-  isApprovedUser
+  getAuthenticatedUserId
 } from '@/lib/api-auth';
+import { requireApprovedCreator } from '@/lib/api-guards';
 import { prisma } from '@/lib/prisma';
 import {
   attachViewerFeedback,
@@ -117,19 +116,11 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const actor = await getAuthenticatedUser({ createIfMissing: true });
-    if (!actor) {
-      return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+    const guard = await requireApprovedCreator();
+    if (!guard.ok) {
+      return guard.response;
     }
-    if (!isApprovedUser(actor)) {
-      return NextResponse.json({ error: 'Account pending approval.' }, { status: 403 });
-    }
-    if (!actor.canCreatePostcard) {
-      return NextResponse.json(
-        { error: 'You are not allowed to create postcards.' },
-        { status: 403 }
-      );
-    }
+    const { actor } = guard;
 
     const body = postcardCreateSchema.parse(await request.json());
     await recordUserAction({

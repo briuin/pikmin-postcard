@@ -1,3 +1,4 @@
+import { buildPostcardDraftValues } from '@/components/workbench/postcard-draft';
 import type { PostcardEditDraft, PostcardRecord } from '@/components/workbench/types';
 import type { CropDraft } from '@/components/workbench/utils';
 
@@ -10,14 +11,5 @@ export const DEFAULT_CROP_DRAFT: CropDraft = {
 };
 
 export function buildPostcardDraft(postcard: PostcardRecord): PostcardEditDraft {
-  return {
-    title: postcard.title ?? '',
-    postcardType: postcard.postcardType ?? 'UNKNOWN',
-    notes: postcard.notes ?? '',
-    placeName: postcard.placeName ?? '',
-    locationInput:
-      typeof postcard.latitude === 'number' && typeof postcard.longitude === 'number'
-        ? `${postcard.latitude.toFixed(6)}, ${postcard.longitude.toFixed(6)}`
-        : ''
-  };
+  return buildPostcardDraftValues(postcard);
 }
