@@ -1,4 +1,4 @@
-import { FeedbackAction, LocationStatus } from '@prisma/client';
+import { LocationStatus } from '@prisma/client';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import {
@@ -7,6 +7,10 @@ import {
   getUserIdByEmail
 } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import {
+  attachViewerFeedback,
+  findViewerFeedbackRowsForPostcards
+} from '@/lib/postcards/feedback';
 import { serializePostcards } from '@/lib/postcards/list';
 import { buildPublicOrderBy, buildPublicWhere, parsePublicQuery } from '@/lib/postcards/query';
 import { findPostcardsForList } from '@/lib/postcards/repository';
@@ -29,42 +33,6 @@ const postcardCreateSchema = z.object({
   locationStatus: z.nativeEnum(LocationStatus).optional(),
   locationModelVersion: z.string().max(100).optional()
 });
-
-function attachViewerFeedback(
-  postcards: Array<{ id: string; [key: string]: unknown }>,
-  feedbackRows: Array<{ postcardId: string; action: FeedbackAction }>
-) {
-  if (postcards.length === 0 || feedbackRows.length === 0) {
-    return postcards.map((postcard) => ({
-      ...postcard,
-      viewerFeedback: {
-        liked: false,
-        disliked: false,
-        reportedWrongLocation: false
-      }
-    }));
-  }
-
-  const feedbackMap = new Map<string, Set<FeedbackAction>>();
-  for (const row of feedbackRows) {
-    if (!feedbackMap.has(row.postcardId)) {
-      feedbackMap.set(row.postcardId, new Set());
-    }
-    feedbackMap.get(row.postcardId)?.add(row.action);
-  }
-
-  return postcards.map((postcard) => {
-    const actions = feedbackMap.get(postcard.id) ?? new Set<FeedbackAction>();
-    return {
-      ...postcard,
-      viewerFeedback: {
-        liked: actions.has(FeedbackAction.LIKE),
-        disliked: actions.has(FeedbackAction.DISLIKE),
-        reportedWrongLocation: actions.has(FeedbackAction.REPORT_WRONG_LOCATION)
-      }
-    };
-  });
-}
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -93,21 +61,10 @@ export async function GET(request: Request) {
     });
 
     const serialized = serializePostcards(postcards, { includeOriginalImageUrl: true });
-    const feedbackRows =
-      viewerUserId && serialized.length > 0
-        ? await prisma.postcardFeedback.findMany({
-            where: {
-              userId: viewerUserId,
-              postcardId: {
-                in: serialized.map((item) => String(item.id))
-              }
-            },
-            select: {
-              postcardId: true,
-              action: true
-            }
-          })
-        : [];
+    const feedbackRows = await findViewerFeedbackRowsForPostcards(
+      viewerUserId,
+      serialized.map((item) => item.id)
+    );
 
     return NextResponse.json(attachViewerFeedback(serialized, feedbackRows), { status: 200 });
   }
@@ -139,21 +96,10 @@ export async function GET(request: Request) {
   const hasMore = postcards.length > query.limit;
   const items = hasMore ? postcards.slice(0, query.limit) : postcards;
   const serialized = serializePostcards(items);
-  const feedbackRows =
-    viewerUserId && serialized.length > 0
-      ? await prisma.postcardFeedback.findMany({
-          where: {
-            userId: viewerUserId,
-            postcardId: {
-              in: serialized.map((item) => String(item.id))
-            }
-          },
-          select: {
-            postcardId: true,
-            action: true
-          }
-        })
-      : [];
+  const feedbackRows = await findViewerFeedbackRowsForPostcards(
+    viewerUserId,
+    serialized.map((item) => item.id)
+  );
 
   return NextResponse.json(
     {

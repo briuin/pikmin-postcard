@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { FeedbackAction, Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { getAuthenticatedUserId } from '@/lib/api-auth';
+import { toViewerFeedback } from '@/lib/postcards/feedback';
 import { prisma } from '@/lib/prisma';
 
 const feedbackSchema = z.object({
@@ -195,17 +196,12 @@ export async function POST(request: Request, context: RouteContext) {
           action: true
         }
       });
-      const feedbackSet = new Set(feedbackRows.map((item) => item.action));
 
       return {
         ...counts,
         result,
         action: body.action,
-        viewerFeedback: {
-          liked: feedbackSet.has(FeedbackAction.LIKE),
-          disliked: feedbackSet.has(FeedbackAction.DISLIKE),
-          reportedWrongLocation: feedbackSet.has(FeedbackAction.REPORT_WRONG_LOCATION)
-        }
+        viewerFeedback: toViewerFeedback(feedbackRows.map((item) => item.action))
       };
     });
 

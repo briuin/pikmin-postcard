@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getAuthenticatedUser, isManagerOrAboveRole } from '@/lib/api-auth';
 import { findPostcardCropSource, recropPostcardAndUpload } from '@/lib/postcards/crop-service';
+import { postcardEditSelect, toEditSnapshot, toNullableText } from '@/lib/postcards/edit-history';
 import { deriveOriginalImageUrl } from '@/lib/postcards/shared';
 import { prisma } from '@/lib/prisma';
 
@@ -45,40 +46,43 @@ const postcardUpdateSchema = z
     }
   );
 
-function toNullableText(value: string | null | undefined): string | null | undefined {
-  if (value === undefined || value === null) {
-    return value;
-  }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
+type PostcardUpdatePayload = z.infer<typeof postcardUpdateSchema>;
 
-function toEditSnapshot(postcard: {
-  title: string;
-  notes: string | null;
-  placeName: string | null;
-  city: string | null;
-  country: string | null;
-  imageUrl: string | null;
-  originalImageUrl?: string | null;
-  latitude: number | null;
-  longitude: number | null;
-  locationStatus: LocationStatus;
-  deletedAt?: Date | null;
-}): Prisma.JsonObject {
-  return {
-    title: postcard.title,
-    notes: postcard.notes,
-    placeName: postcard.placeName,
-    city: postcard.city,
-    country: postcard.country,
-    imageUrl: postcard.imageUrl,
-    originalImageUrl: postcard.originalImageUrl ?? null,
-    latitude: postcard.latitude,
-    longitude: postcard.longitude,
-    locationStatus: postcard.locationStatus,
-    deletedAt: postcard.deletedAt?.toISOString() ?? null
-  };
+function buildPostcardUpdateData(payload: PostcardUpdatePayload): Prisma.PostcardUpdateInput {
+  const updateData: Prisma.PostcardUpdateInput = {};
+
+  if (payload.title !== undefined) {
+    updateData.title = payload.title;
+  }
+  if (payload.notes !== undefined) {
+    updateData.notes = toNullableText(payload.notes);
+  }
+  if (payload.placeName !== undefined) {
+    updateData.placeName = toNullableText(payload.placeName);
+  }
+  if (payload.city !== undefined) {
+    updateData.city = toNullableText(payload.city);
+  }
+  if (payload.country !== undefined) {
+    updateData.country = toNullableText(payload.country);
+  }
+  if (payload.imageUrl !== undefined) {
+    updateData.imageUrl = payload.imageUrl;
+  }
+  if (payload.originalImageUrl !== undefined) {
+    updateData.originalImageUrl = payload.originalImageUrl;
+  }
+  if (payload.latitude !== undefined) {
+    updateData.latitude = payload.latitude;
+  }
+  if (payload.longitude !== undefined) {
+    updateData.longitude = payload.longitude;
+  }
+  if (payload.locationStatus !== undefined) {
+    updateData.locationStatus = payload.locationStatus;
+  }
+
+  return updateData;
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
@@ -135,20 +139,7 @@ export async function PATCH(request: Request, context: RouteContext) {
             ...(canEditAny ? {} : { userId: actor.id }),
             deletedAt: null
           },
-          select: {
-            id: true,
-            title: true,
-            notes: true,
-            placeName: true,
-            city: true,
-            country: true,
-            imageUrl: true,
-            originalImageUrl: true,
-            latitude: true,
-            longitude: true,
-            locationStatus: true,
-            deletedAt: true
-          }
+          select: postcardEditSelect
         });
         if (!before) {
           return null;
@@ -164,20 +155,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         const after = await tx.postcard.update({
           where: { id },
           data: updateData,
-          select: {
-            id: true,
-            title: true,
-            notes: true,
-            placeName: true,
-            city: true,
-            country: true,
-            imageUrl: true,
-            originalImageUrl: true,
-            latitude: true,
-            longitude: true,
-            locationStatus: true,
-            deletedAt: true
-          }
+          select: postcardEditSelect
         });
 
         await tx.postcardEditHistory.create({
@@ -218,75 +196,16 @@ export async function PATCH(request: Request, context: RouteContext) {
           ...(canEditAny ? {} : { userId: actor.id }),
           deletedAt: null
         },
-        select: {
-          id: true,
-          title: true,
-          notes: true,
-          placeName: true,
-          city: true,
-          country: true,
-          imageUrl: true,
-          originalImageUrl: true,
-          latitude: true,
-          longitude: true,
-          locationStatus: true,
-          deletedAt: true
-        }
+        select: postcardEditSelect
       });
       if (!before) {
         return null;
       }
 
-      const updateData: Prisma.PostcardUpdateInput = {};
-
-      if (payload.title !== undefined) {
-        updateData.title = payload.title;
-      }
-      if (payload.notes !== undefined) {
-        updateData.notes = toNullableText(payload.notes);
-      }
-      if (payload.placeName !== undefined) {
-        updateData.placeName = toNullableText(payload.placeName);
-      }
-      if (payload.city !== undefined) {
-        updateData.city = toNullableText(payload.city);
-      }
-      if (payload.country !== undefined) {
-        updateData.country = toNullableText(payload.country);
-      }
-      if (payload.imageUrl !== undefined) {
-        updateData.imageUrl = payload.imageUrl;
-      }
-      if (payload.originalImageUrl !== undefined) {
-        updateData.originalImageUrl = payload.originalImageUrl;
-      }
-      if (payload.latitude !== undefined) {
-        updateData.latitude = payload.latitude;
-      }
-      if (payload.longitude !== undefined) {
-        updateData.longitude = payload.longitude;
-      }
-      if (payload.locationStatus !== undefined) {
-        updateData.locationStatus = payload.locationStatus;
-      }
-
       const after = await tx.postcard.update({
         where: { id },
-        data: updateData,
-        select: {
-          id: true,
-          title: true,
-          notes: true,
-          placeName: true,
-          city: true,
-          country: true,
-          imageUrl: true,
-          originalImageUrl: true,
-          latitude: true,
-          longitude: true,
-          locationStatus: true,
-          deletedAt: true
-        }
+        data: buildPostcardUpdateData(payload),
+        select: postcardEditSelect
       });
 
       await tx.postcardEditHistory.create({
@@ -337,20 +256,7 @@ export async function DELETE(_: Request, context: RouteContext) {
         userId: actor.id,
         deletedAt: null
       },
-      select: {
-        id: true,
-        title: true,
-        notes: true,
-        placeName: true,
-        city: true,
-        country: true,
-        imageUrl: true,
-        originalImageUrl: true,
-        latitude: true,
-        longitude: true,
-        locationStatus: true,
-        deletedAt: true
-      }
+      select: postcardEditSelect
     });
 
     if (!before) {
@@ -362,20 +268,7 @@ export async function DELETE(_: Request, context: RouteContext) {
       data: {
         deletedAt: now
       },
-      select: {
-        id: true,
-        title: true,
-        notes: true,
-        placeName: true,
-        city: true,
-        country: true,
-        imageUrl: true,
-        originalImageUrl: true,
-        latitude: true,
-        longitude: true,
-        locationStatus: true,
-        deletedAt: true
-      }
+      select: postcardEditSelect
     });
 
     await tx.postcardEditHistory.create({
