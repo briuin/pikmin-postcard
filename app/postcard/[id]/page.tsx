@@ -1,6 +1,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { PostcardCoordinateCopy } from '@/components/postcard-coordinate-copy';
 import { findPostcardsForList } from '@/lib/postcards/repository';
 import { maskEmail } from '@/lib/postcards/shared';
 
@@ -32,6 +33,10 @@ export default async function PostcardSharePage({ params }: PageProps) {
   const uploaderName =
     postcard.user?.displayName?.trim() || maskEmail(postcard.user?.email);
   const createdAt = postcard.createdAt;
+  const coordinateText =
+    typeof postcard.latitude === 'number' && typeof postcard.longitude === 'number'
+      ? `${postcard.latitude.toFixed(6)}, ${postcard.longitude.toFixed(6)}`
+      : null;
 
   return (
     <main className="mx-auto grid w-full max-w-[820px] gap-3 px-3 py-4">
@@ -80,11 +85,12 @@ export default async function PostcardSharePage({ params }: PageProps) {
 
         <div className="grid gap-1.5 rounded-[14px] border border-[#d8e8da] bg-[linear-gradient(145deg,#f3fff5,#edf8ff)] p-2.5">
           <strong className="text-[0.9rem] text-[#2c4d3f]">Location</strong>
-          <small className="text-[0.86rem] text-[#47665a]">
-            {typeof postcard.latitude === 'number' && typeof postcard.longitude === 'number'
-              ? `${postcard.latitude.toFixed(6)}, ${postcard.longitude.toFixed(6)}`
-              : 'No coordinates available'}
-          </small>
+          <div className="flex items-center gap-2 max-[560px]:flex-wrap">
+            <small className="min-w-0 break-all text-[0.86rem] text-[#47665a]">
+              {coordinateText ?? 'No coordinates available'}
+            </small>
+            <PostcardCoordinateCopy coordinates={coordinateText} />
+          </div>
         </div>
 
         {postcard.notes ? (

@@ -125,6 +125,15 @@ export function ExploreSection({
     }
   }
 
+  function isAiDetected(postcard: PostcardRecord): boolean {
+    return (
+      postcard.locationStatus === 'AUTO' ||
+      postcard.locationStatus === 'USER_CONFIRMED' ||
+      typeof postcard.aiConfidence === 'number' ||
+      Boolean(postcard.aiPlaceGuess)
+    );
+  }
+
   return (
     <article className={`${panelClassName} grid min-h-0 grid-cols-[minmax(320px,390px)_minmax(0,1fr)] items-stretch gap-2 max-[1080px]:grid-cols-1`}>
       <aside className="grid min-h-0 content-stretch grid-rows-[auto_auto_auto_minmax(0,1fr)] gap-2 max-[1080px]:order-2 max-[1080px]:grid-rows-[auto_auto_auto_auto]">
@@ -224,7 +233,14 @@ export function ExploreSection({
                     />
                   ) : null}
                   <div className="min-w-0 flex-1 grid gap-0.5">
-                    <strong className="truncate">{postcard.title}</strong>
+                    <div className="flex items-center gap-1.5">
+                      <strong className="truncate">{postcard.title}</strong>
+                      {isAiDetected(postcard) ? (
+                        <span className="inline-flex shrink-0 items-center rounded-full border border-[#c6d9ff] bg-[#e9f1ff] px-1.5 py-0.5 text-[0.65rem] font-black uppercase tracking-[0.06em] text-[#365da6]">
+                          AI
+                        </span>
+                      ) : null}
+                    </div>
                     <small className={smallMutedClassName}>
                       {new Date(postcard.createdAt).toLocaleDateString(text.dateLocale)}
                     </small>
@@ -240,7 +256,7 @@ export function ExploreSection({
 
       {selectedPostcard ? (
         <div
-          className="fixed inset-0 z-[1200] grid place-items-center bg-[radial-gradient(circle_at_16%_8%,rgba(244,199,66,0.26),transparent_38%),radial-gradient(circle_at_86%_18%,rgba(78,142,247,0.22),transparent_40%),rgba(14,28,22,0.58)] p-3 backdrop-blur-[2px]"
+          className="fixed inset-0 z-[1200] grid place-items-center bg-[radial-gradient(circle_at_16%_8%,rgba(244,199,66,0.26),transparent_38%),radial-gradient(circle_at_86%_18%,rgba(78,142,247,0.22),transparent_40%),rgba(14,28,22,0.58)] p-3 backdrop-blur-[2px] max-[780px]:place-items-end max-[780px]:p-0"
           onClick={() => {
             setSelectedPostcardId(null);
             setCopyStatus('');
@@ -248,29 +264,38 @@ export function ExploreSection({
           }}
         >
           <article
-            className="relative grid max-h-[92vh] w-full max-w-[680px] gap-3 overflow-auto rounded-[26px] border border-[#d8e9d7] bg-[radial-gradient(circle_at_12%_8%,rgba(244,199,66,0.22),transparent_34%),radial-gradient(circle_at_88%_14%,rgba(78,142,247,0.18),transparent_36%),linear-gradient(170deg,#fbfffc,#f2fff5)] p-3.5 shadow-[0_24px_48px_rgba(21,42,33,0.34),inset_0_1px_0_rgba(255,255,255,0.75)]"
+            className="relative grid max-h-[92vh] w-full max-w-[680px] gap-3 overflow-auto overflow-x-hidden rounded-[26px] border border-[#d8e9d7] bg-[radial-gradient(circle_at_12%_8%,rgba(244,199,66,0.22),transparent_34%),radial-gradient(circle_at_88%_14%,rgba(78,142,247,0.18),transparent_36%),linear-gradient(170deg,#fbfffc,#f2fff5)] p-3.5 shadow-[0_24px_48px_rgba(21,42,33,0.34),inset_0_1px_0_rgba(255,255,255,0.75)] max-[780px]:max-h-[100dvh] max-[780px]:max-w-none max-[780px]:rounded-none max-[780px]:border-x-0 max-[780px]:border-b-0 max-[780px]:px-3 max-[780px]:pb-[max(1rem,env(safe-area-inset-bottom))]"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="pointer-events-none absolute -right-12 -top-16 h-32 w-32 rounded-full bg-[radial-gradient(circle,rgba(86,179,106,0.28),rgba(86,179,106,0))]" />
-            <div className="pointer-events-none absolute -left-8 bottom-16 h-24 w-24 rounded-full bg-[radial-gradient(circle,rgba(244,199,66,0.28),rgba(244,199,66,0))]" />
+            <div className="pointer-events-none absolute -right-12 -top-16 h-32 w-32 rounded-full bg-[radial-gradient(circle,rgba(86,179,106,0.28),rgba(86,179,106,0))] max-[780px]:hidden" />
+            <div className="pointer-events-none absolute -left-8 bottom-16 h-24 w-24 rounded-full bg-[radial-gradient(circle,rgba(244,199,66,0.28),rgba(244,199,66,0))] max-[780px]:hidden" />
 
             <div className={`${postcardItemHeadClassName} relative z-10`}>
               <div className="grid min-w-0 gap-1">
                 <span className="inline-flex w-fit items-center rounded-full border border-[#d4e7d3] bg-[#f4fff4] px-2.5 py-1 text-[0.72rem] font-black uppercase tracking-[0.08em] text-[#2b6442]">
                   {text.exploreTitle}
                 </span>
-                <strong className="text-[1.1rem] leading-tight text-[#1a3428] max-[580px]:text-[1rem]">{selectedPostcard.title}</strong>
+                <div className="flex items-center gap-1.5">
+                  <strong className="text-[1.1rem] leading-tight text-[#1a3428] max-[580px]:text-[1rem]">{selectedPostcard.title}</strong>
+                  {isAiDetected(selectedPostcard) ? (
+                    <span className="inline-flex shrink-0 items-center rounded-full border border-[#c6d9ff] bg-[#e9f1ff] px-1.5 py-0.5 text-[0.65rem] font-black uppercase tracking-[0.06em] text-[#365da6]">
+                      AI
+                    </span>
+                  ) : null}
+                </div>
               </div>
               <button
                 type="button"
-                className="rounded-full border border-[#d2e4d2] bg-white/90 px-3 py-1 text-[0.8rem] font-bold text-[#325445] shadow-[0_4px_10px_rgba(40,73,57,0.12)]"
+                className="h-8 w-8 shrink-0 rounded-full border border-[#d2e4d2] bg-white/90 text-[1rem] font-bold leading-none text-[#325445] shadow-[0_4px_10px_rgba(40,73,57,0.12)]"
                 onClick={() => {
                   setSelectedPostcardId(null);
                   setCopyStatus('');
                   setShareStatus('');
                 }}
+                aria-label={text.buttonCancel}
+                title={text.buttonCancel}
               >
-                {text.buttonCancel}
+                ×
               </button>
             </div>
 
@@ -299,31 +324,33 @@ export function ExploreSection({
             </div>
 
             <div className="relative z-10 grid gap-1.5 rounded-[14px] border border-[#d8e8d9] bg-[linear-gradient(145deg,#f2fff5,#edf7ff)] p-2.5">
-              <small className={smallMutedClassName}>
-                {typeof selectedPostcard.latitude === 'number' && typeof selectedPostcard.longitude === 'number'
-                  ? `${selectedPostcard.latitude.toFixed(6)}, ${selectedPostcard.longitude.toFixed(6)}`
-                  : text.exploreNoCoordinates}
-              </small>
-              <div className="flex flex-wrap gap-1.5">
-                <button
-                  type="button"
-                  className={modalActionButtonClassName}
-                  onClick={() => void copyCoordinates(selectedPostcard)}
-                  aria-label={text.exploreCopyCoordinates}
-                  title={text.exploreCopyCoordinates}
-                >
-                  ⧉
-                </button>
-                <button
-                  type="button"
-                  className={modalActionButtonClassName}
-                  onClick={() => void copyShareLink(selectedPostcard)}
-                >
-                  {text.exploreSharePostcard}
-                </button>
-                {copyStatus ? <small className={smallMutedClassName}>{copyStatus}</small> : null}
-                {shareStatus ? <small className={smallMutedClassName}>{shareStatus}</small> : null}
+              <div className="flex items-center gap-2 max-[560px]:flex-wrap">
+                <small className={`${smallMutedClassName} min-w-0 break-all`}>
+                  {typeof selectedPostcard.latitude === 'number' && typeof selectedPostcard.longitude === 'number'
+                    ? `${selectedPostcard.latitude.toFixed(6)}, ${selectedPostcard.longitude.toFixed(6)}`
+                    : text.exploreNoCoordinates}
+                </small>
+                <div className="ml-auto flex shrink-0 items-center gap-1.5">
+                  <button
+                    type="button"
+                    className={`${modalActionButtonClassName} h-10 w-10 px-0 py-0 text-[1.05rem]`}
+                    onClick={() => void copyCoordinates(selectedPostcard)}
+                    aria-label={text.exploreCopyCoordinates}
+                    title={text.exploreCopyCoordinates}
+                  >
+                    ⧉
+                  </button>
+                  <button
+                    type="button"
+                    className={modalActionButtonClassName}
+                    onClick={() => void copyShareLink(selectedPostcard)}
+                  >
+                    {text.exploreSharePostcard}
+                  </button>
+                </div>
               </div>
+              {copyStatus ? <small className={smallMutedClassName}>{copyStatus}</small> : null}
+              {shareStatus ? <small className={smallMutedClassName}>{shareStatus}</small> : null}
             </div>
 
             {selectedPostcard.notes ? (

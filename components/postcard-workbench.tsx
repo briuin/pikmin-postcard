@@ -12,7 +12,6 @@ import { CreateSection } from '@/components/workbench/create-section';
 import { DashboardSection } from '@/components/workbench/dashboard-section';
 import type {
   DashboardViewMode,
-  DetectionDraft,
   DetectionJobRecord,
   DeviceLocation,
   ExploreSort,
@@ -104,7 +103,6 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
 
   const [jobs, setJobs] = useState<DetectionJobRecord[]>([]);
   const [myPostcards, setMyPostcards] = useState<PostcardRecord[]>([]);
-  const [jobDrafts, setJobDrafts] = useState<Record<string, DetectionDraft>>({});
   const [postcardDrafts, setPostcardDrafts] = useState<Record<string, PostcardEditDraft>>({});
   const [savingJobId, setSavingJobId] = useState<string | null>(null);
   const [savingPostcardId, setSavingPostcardId] = useState<string | null>(null);
@@ -354,32 +352,6 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showDashboard, isAuthenticated]);
 
-  useEffect(() => {
-    setJobDrafts((current) => {
-      const next = { ...current };
-      let changed = false;
-
-      for (const job of jobs) {
-        if (next[job.id]) {
-          continue;
-        }
-
-        if (job.status !== 'SUCCEEDED' || job.latitude === null || job.longitude === null) {
-          continue;
-        }
-
-        next[job.id] = {
-          title: job.placeGuess?.trim() ? `AI: ${job.placeGuess}` : text.aiDetectedPostcardTitle,
-          notes: '',
-          locationInput: `${job.latitude.toFixed(6)}, ${job.longitude.toFixed(6)}`
-        };
-        changed = true;
-      }
-
-      return changed ? next : current;
-    });
-  }, [jobs, text.aiDetectedPostcardTitle]);
-
   async function submitExploreFeedback(
     postcardId: string,
     action: 'like' | 'dislike' | 'report_wrong_location'
@@ -608,20 +580,6 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
     }
   }
 
-  function updateJobDraft(jobId: string, patch: Partial<DetectionDraft>) {
-    setJobDrafts((current) => ({
-      ...current,
-      [jobId]: {
-        ...(current[jobId] ?? {
-          title: '',
-          notes: '',
-          locationInput: ''
-        }),
-        ...patch
-      }
-    }));
-  }
-
   function updatePostcardDraft(postcardId: string, patch: Partial<PostcardEditDraft>) {
     setPostcardDrafts((current) => ({
       ...current,
@@ -656,24 +614,7 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
       return;
     }
 
-    const draft = jobDrafts[job.id] ?? {
-      title: job.placeGuess?.trim() ? `AI: ${job.placeGuess}` : text.aiDetectedPostcardTitle,
-      notes: '',
-      locationInput: `${job.latitude.toFixed(6)}, ${job.longitude.toFixed(6)}`
-    };
-
-    if (!draft.title.trim()) {
-      setDashboardStatus(text.aiSaveNameRequired);
-      return;
-    }
-
-    let coords: { latitude: number; longitude: number };
-    try {
-      coords = parseLocationInput(draft.locationInput, text);
-    } catch (error) {
-      setDashboardStatus(error instanceof Error ? error.message : text.aiSaveInvalidLocation);
-      return;
-    }
+    const title = job.placeGuess?.trim() ? `AI: ${job.placeGuess}` : text.aiDetectedPostcardTitle;
 
     setSavingJobId(job.id);
     setDashboardStatus(text.aiSaveSaving);
@@ -683,13 +624,12 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: draft.title.trim(),
-          notes: draft.notes.trim() ? draft.notes.trim() : undefined,
+          title,
           imageUrl: job.imageUrl,
           originalImageUrl: deriveOriginalImageUrl(job.imageUrl) ?? undefined,
           placeName: job.placeGuess ?? undefined,
-          latitude: coords.latitude,
-          longitude: coords.longitude,
+          latitude: job.latitude,
+          longitude: job.longitude,
           aiLatitude: job.latitude,
           aiLongitude: job.longitude,
           aiConfidence: job.confidence ?? undefined,
@@ -1006,7 +946,6 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
           isAuthenticated={isAuthenticated}
           jobs={jobs}
           myPostcards={myPostcards}
-          jobDrafts={jobDrafts}
           postcardDrafts={postcardDrafts}
           savingJobId={savingJobId}
           savingPostcardId={savingPostcardId}
@@ -1028,7 +967,6 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
           onSaveProfileDisplayName={() => void saveProfileDisplayName()}
           onSetDashboardViewMode={setDashboardViewMode}
           onRefresh={() => void loadDashboardData()}
-          onUpdateJobDraft={updateJobDraft}
           onUpdatePostcardDraft={updatePostcardDraft}
           onSaveDetectedJob={(job) => void saveDetectedJobAsPostcard(job)}
           onSavePostcard={(postcard) => void savePostcardEdits(postcard)}

@@ -56,12 +56,6 @@ export type DeviceLocation = {
   accuracy: number;
 };
 
-export type DetectionDraft = {
-  title: string;
-  notes: string;
-  locationInput: string;
-};
-
 export type PostcardEditDraft = {
   title: string;
   notes: string;
