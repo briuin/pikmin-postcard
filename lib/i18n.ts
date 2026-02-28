@@ -29,6 +29,8 @@ const en = {
     navExplore: 'Explore',
     navCreate: 'Create',
     navDashboard: 'Dashboard',
+    navFeedback: 'Feedback',
+    navAdmin: 'Admin',
     signIn: 'Sign in',
     signOut: 'Sign out',
     localeSwitchAriaLabel: 'Language'
@@ -37,6 +39,19 @@ const en = {
     checking: 'Checking session...',
     guest: 'Guest mode',
     signedIn: 'Signed in'
+  },
+  feedback: {
+    title: 'Contact & Feedback',
+    subtitle: 'Tell us issues, ideas, or feature requests.',
+    authRequired: 'Sign in with Google to submit feedback.',
+    fieldSubject: 'Subject',
+    fieldMessage: 'Message',
+    subjectPlaceholder: 'Bug report / suggestion',
+    messagePlaceholder: 'Describe what happened or what you need...',
+    submit: 'Send Feedback',
+    submitting: 'Sending...',
+    submitted: 'Feedback sent. Thanks!',
+    failed: 'Failed to send feedback.'
   },
   workbench: {
     parseLocationTwoNumbers:
@@ -219,6 +234,48 @@ const en = {
     editPostcardFailed: 'Failed to save postcard changes.',
     editPostcardUnknownError: 'Unknown postcard edit error.',
     dateLocale: 'en-US'
+  },
+  admin: {
+    title: 'Admin Dashboard',
+    subtitle: 'Manage users, moderate reports, and edit all postcards.',
+    authRequired: 'Sign in with Google to access admin dashboard.',
+    forbidden: 'Only manager/admin can access this page.',
+    tabUsers: 'Users',
+    tabPostcards: 'All Postcards',
+    tabReported: 'Reported',
+    tabFeedback: 'Feedback',
+    roleBadge: (role: 'ADMIN' | 'MANAGER' | 'MEMBER') => `Role: ${role}`,
+    buttonRefresh: 'Refresh',
+    usersTitle: 'User Management',
+    usersHint: 'Admin can update user roles.',
+    usersLoading: 'Loading users...',
+    usersEmpty: 'No users found.',
+    userRoleLabel: 'Role',
+    saveRole: 'Save Role',
+    savingRole: 'Saving...',
+    roleSaved: 'User role updated.',
+    roleSaveFailed: 'Failed to update role.',
+    postcardsTitle: 'Postcards',
+    postcardsLoading: 'Loading postcards...',
+    postcardsEmpty: 'No postcards found.',
+    reportedTitle: 'Reported Postcards',
+    reportedEmpty: 'No reported postcards.',
+    feedbackTitle: 'User Feedback',
+    feedbackLoading: 'Loading feedback...',
+    feedbackEmpty: 'No feedback yet.',
+    feedbackStatusOpen: 'Open',
+    feedbackStatusClosed: 'Closed',
+    fieldTitle: 'Title',
+    fieldPlaceName: 'Place',
+    fieldDescription: 'Description',
+    fieldLocation: 'Location (lat,lon or lon,lat)',
+    savePostcard: 'Save Postcard',
+    savingPostcard: 'Saving...',
+    savePostcardDone: 'Postcard updated.',
+    savePostcardFailed: 'Failed to update postcard.',
+    searchLabel: 'Search',
+    searchPlaceholder: 'Title, place, note, uploader',
+    uploaderLabel: (name: string) => `Uploader: ${name}`
   }
 };
 
@@ -231,6 +288,8 @@ const zhTW: typeof en = {
     navExplore: '探索',
     navCreate: '建立',
     navDashboard: '儀表板',
+    navFeedback: '回饋',
+    navAdmin: '管理',
     signIn: '登入',
     signOut: '登出',
     localeSwitchAriaLabel: '語言'
@@ -239,6 +298,19 @@ const zhTW: typeof en = {
     checking: '正在檢查登入狀態...',
     guest: '訪客模式',
     signedIn: '已登入'
+  },
+  feedback: {
+    title: '聯絡與回饋',
+    subtitle: '告訴我們問題、想法或功能建議。',
+    authRequired: '請先使用 Google 登入才能送出回饋。',
+    fieldSubject: '主旨',
+    fieldMessage: '內容',
+    subjectPlaceholder: '錯誤回報 / 功能建議',
+    messagePlaceholder: '請描述你遇到的情況或需求...',
+    submit: '送出回饋',
+    submitting: '送出中...',
+    submitted: '已送出回饋，謝謝你！',
+    failed: '送出回饋失敗。'
   },
   workbench: {
     parseLocationTwoNumbers: '座標必須是兩個數字並用逗號分隔，例如：25.033, 121.565 或 121.565, 25.033',
@@ -420,6 +492,48 @@ const zhTW: typeof en = {
     editPostcardFailed: '儲存明信片變更失敗。',
     editPostcardUnknownError: '明信片編輯發生未知錯誤。',
     dateLocale: 'zh-TW'
+  },
+  admin: {
+    title: '管理後台',
+    subtitle: '管理使用者、檢視回報、編輯所有明信片。',
+    authRequired: '請先使用 Google 登入以使用管理後台。',
+    forbidden: '僅 manager/admin 可存取此頁。',
+    tabUsers: '使用者',
+    tabPostcards: '全部明信片',
+    tabReported: '已回報',
+    tabFeedback: '回饋',
+    roleBadge: (role: 'ADMIN' | 'MANAGER' | 'MEMBER') => `角色：${role}`,
+    buttonRefresh: '重新整理',
+    usersTitle: '使用者管理',
+    usersHint: '只有 admin 可變更使用者角色。',
+    usersLoading: '正在載入使用者...',
+    usersEmpty: '目前沒有使用者。',
+    userRoleLabel: '角色',
+    saveRole: '儲存角色',
+    savingRole: '儲存中...',
+    roleSaved: '角色已更新。',
+    roleSaveFailed: '更新角色失敗。',
+    postcardsTitle: '明信片',
+    postcardsLoading: '正在載入明信片...',
+    postcardsEmpty: '查無明信片。',
+    reportedTitle: '被回報的明信片',
+    reportedEmpty: '目前沒有被回報的明信片。',
+    feedbackTitle: '使用者回饋',
+    feedbackLoading: '正在載入回饋...',
+    feedbackEmpty: '目前沒有回饋。',
+    feedbackStatusOpen: '處理中',
+    feedbackStatusClosed: '已結案',
+    fieldTitle: '標題',
+    fieldPlaceName: '地點',
+    fieldDescription: '描述',
+    fieldLocation: '座標（lat,lon 或 lon,lat）',
+    savePostcard: '儲存明信片',
+    savingPostcard: '儲存中...',
+    savePostcardDone: '明信片已更新。',
+    savePostcardFailed: '更新明信片失敗。',
+    searchLabel: '搜尋',
+    searchPlaceholder: '標題、地點、描述、上傳者',
+    uploaderLabel: (name: string) => `上傳者：${name}`
   }
 };
 
@@ -430,4 +544,6 @@ export const messages = {
 
 export type HomeText = typeof messages.en.home;
 export type SessionText = typeof messages.en.session;
+export type FeedbackText = typeof messages.en.feedback;
 export type WorkbenchText = typeof messages.en.workbench;
+export type AdminText = typeof messages.en.admin;

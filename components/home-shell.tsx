@@ -3,11 +3,13 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { signIn, signOut, useSession } from 'next-auth/react';
+import { AdminDashboard } from '@/components/admin-dashboard';
+import { FeedbackSection } from '@/components/feedback-section';
 import { detectLocale, localeStorageKey, messages, supportedLocales, type Locale } from '@/lib/i18n';
 import { PostcardWorkbench } from '@/components/postcard-workbench';
 
 type HomeShellProps = {
-  page: 'explore' | 'create' | 'dashboard';
+  page: 'explore' | 'create' | 'dashboard' | 'feedback' | 'admin';
 };
 
 function formatSessionText(
@@ -37,6 +39,8 @@ export function HomeShell({ page }: HomeShellProps) {
   const { data: session, status } = useSession();
   const isAuthenticated = status === 'authenticated';
   const isLoading = status === 'loading';
+  const sessionRole = (session?.user as { role?: 'ADMIN' | 'MANAGER' | 'MEMBER' } | undefined)?.role;
+  const canAccessAdmin = sessionRole === 'ADMIN' || sessionRole === 'MANAGER';
   const homeText = messages[locale].home;
   const sessionText = formatSessionText(
     session?.user?.name ?? null,
@@ -101,7 +105,7 @@ export function HomeShell({ page }: HomeShellProps) {
             </div>
           </div>
           <nav
-            className="inline-flex w-auto justify-self-start gap-1 rounded-full border border-[#d7e8d7] bg-[rgba(246,255,245,0.92)] p-1 max-[780px]:order-3 max-[780px]:col-span-2 max-[780px]:grid max-[780px]:w-full max-[780px]:grid-cols-3 max-[780px]:rounded-xl"
+            className={`inline-flex w-auto justify-self-start gap-1 rounded-full border border-[#d7e8d7] bg-[rgba(246,255,245,0.92)] p-1 max-[780px]:order-3 max-[780px]:col-span-2 max-[780px]:grid max-[780px]:w-full ${canAccessAdmin ? 'max-[780px]:grid-cols-5' : 'max-[780px]:grid-cols-4'} max-[780px]:rounded-xl`}
             aria-label="Primary"
           >
             <Link href="/" className={page === 'explore' ? `${navTabClassName} ${navTabActiveClassName}` : navTabClassName}>
@@ -113,6 +117,14 @@ export function HomeShell({ page }: HomeShellProps) {
             <Link href="/dashboard" className={page === 'dashboard' ? `${navTabClassName} ${navTabActiveClassName}` : navTabClassName}>
               {homeText.navDashboard}
             </Link>
+            <Link href="/feedback" className={page === 'feedback' ? `${navTabClassName} ${navTabActiveClassName}` : navTabClassName}>
+              {homeText.navFeedback}
+            </Link>
+            {canAccessAdmin ? (
+              <Link href="/admin" className={page === 'admin' ? `${navTabClassName} ${navTabActiveClassName}` : navTabClassName}>
+                {homeText.navAdmin}
+              </Link>
+            ) : null}
           </nav>
           <div className="flex min-w-0 items-center justify-self-end gap-2 max-[780px]:gap-1.5">
             <small className="m-0 max-w-[200px] truncate rounded-full border border-[#d5e7d5] bg-[rgba(255,255,255,0.88)] px-[0.58rem] py-[0.3rem] text-[0.79rem] max-[780px]:hidden">{sessionText}</small>
@@ -132,7 +144,20 @@ export function HomeShell({ page }: HomeShellProps) {
               <button
                 type="button"
                 className={authButtonClassName}
-                onClick={() => signOut({ callbackUrl: page === 'create' ? '/create' : page === 'dashboard' ? '/dashboard' : '/' })}
+                onClick={() =>
+                  signOut({
+                    callbackUrl:
+                      page === 'create'
+                        ? '/create'
+                        : page === 'dashboard'
+                          ? '/dashboard'
+                          : page === 'feedback'
+                            ? '/feedback'
+                          : page === 'admin'
+                            ? '/admin'
+                            : '/'
+                  })
+                }
               >
                 {homeText.signOut}
               </button>
@@ -144,7 +169,13 @@ export function HomeShell({ page }: HomeShellProps) {
           </div>
         </header>
       </div>
-      <PostcardWorkbench mode={page} locale={locale} />
+      {page === 'admin' ? (
+        <AdminDashboard locale={locale} />
+      ) : page === 'feedback' ? (
+        <FeedbackSection locale={locale} />
+      ) : (
+        <PostcardWorkbench mode={page} locale={locale} />
+      )}
     </div>
   );
 }

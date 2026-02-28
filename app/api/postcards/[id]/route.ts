@@ -1,7 +1,7 @@
 import { LocationStatus, PostcardEditAction, type Prisma } from '@prisma/client';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getAuthenticatedUserId } from '@/lib/api-auth';
+import { getAuthenticatedUser, isManagerOrAboveRole } from '@/lib/api-auth';
 import { findPostcardCropSource, recropPostcardAndUpload } from '@/lib/postcards/crop-service';
 import { deriveOriginalImageUrl } from '@/lib/postcards/shared';
 import { prisma } from '@/lib/prisma';
@@ -82,10 +82,11 @@ function toEditSnapshot(postcard: {
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
-  const userId = await getAuthenticatedUserId();
-  if (!userId) {
+  const actor = await getAuthenticatedUser();
+  if (!actor) {
     return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   }
+  const canEditAny = isManagerOrAboveRole(actor.role);
 
   const { id } = await context.params;
   if (!id) {
@@ -99,7 +100,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       const payload = cropUpdateSchema.parse(body);
       const postcard = await findPostcardCropSource({
         postcardId: id,
-        userId
+        userId: canEditAny ? undefined : actor.id
       });
 
       if (!postcard) {
@@ -131,7 +132,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         const before = await tx.postcard.findFirst({
           where: {
             id,
-            userId,
+            ...(canEditAny ? {} : { userId: actor.id }),
             deletedAt: null
           },
           select: {
@@ -182,7 +183,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         await tx.postcardEditHistory.create({
           data: {
             postcardId: id,
-            userId,
+            userId: actor.id,
             action: PostcardEditAction.CROP_UPDATED,
             beforeData: toEditSnapshot(before),
             afterData: {
@@ -214,7 +215,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       const before = await tx.postcard.findFirst({
         where: {
           id,
-          userId,
+          ...(canEditAny ? {} : { userId: actor.id }),
           deletedAt: null
         },
         select: {
@@ -291,7 +292,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       await tx.postcardEditHistory.create({
         data: {
           postcardId: id,
-          userId,
+          userId: actor.id,
           action: PostcardEditAction.DETAILS_UPDATED,
           beforeData: toEditSnapshot(before),
           afterData: toEditSnapshot(after)
@@ -318,8 +319,8 @@ export async function PATCH(request: Request, context: RouteContext) {
 }
 
 export async function DELETE(_: Request, context: RouteContext) {
-  const userId = await getAuthenticatedUserId();
-  if (!userId) {
+  const actor = await getAuthenticatedUser();
+  if (!actor) {
     return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   }
 
@@ -333,7 +334,7 @@ export async function DELETE(_: Request, context: RouteContext) {
     const before = await tx.postcard.findFirst({
       where: {
         id,
-        userId,
+        userId: actor.id,
         deletedAt: null
       },
       select: {
@@ -380,7 +381,7 @@ export async function DELETE(_: Request, context: RouteContext) {
     await tx.postcardEditHistory.create({
       data: {
         postcardId: id,
-        userId,
+        userId: actor.id,
         action: PostcardEditAction.SOFT_DELETED,
         beforeData: toEditSnapshot(before),
         afterData: toEditSnapshot(after)

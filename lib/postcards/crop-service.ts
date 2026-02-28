@@ -22,13 +22,15 @@ function clamp(value: number, min: number, max: number): number {
 
 export async function findPostcardCropSource(params: {
   postcardId: string;
-  userId: string;
+  userId?: string;
 }): Promise<PostcardCropSource | null> {
+  const ownershipFilter = params.userId ? { userId: params.userId } : {};
+
   try {
     return await prisma.postcard.findFirst({
       where: {
         id: params.postcardId,
-        userId: params.userId,
+        ...ownershipFilter,
         deletedAt: null
       },
       select: {
@@ -45,7 +47,7 @@ export async function findPostcardCropSource(params: {
     const fallback = await prisma.postcard.findFirst({
       where: {
         id: params.postcardId,
-        userId: params.userId,
+        ...ownershipFilter,
         deletedAt: null
       },
       select: {
