@@ -10,6 +10,22 @@ import {
 } from '@/components/workbench/explore-view/styles';
 import type { ExplorePostcardModalProps } from '@/components/workbench/explore-view/types';
 
+function getPostcardTypeLabel(
+  postcardType: ExplorePostcardModalProps['postcard']['postcardType'],
+  text: ExplorePostcardModalProps['text']
+): string {
+  if (postcardType === 'MUSHROOM') {
+    return text.postcardTypeMushroom;
+  }
+  if (postcardType === 'FLOWER') {
+    return text.postcardTypeFlower;
+  }
+  if (postcardType === 'EXPLORATION') {
+    return text.postcardTypeExploration;
+  }
+  return text.postcardTypeUnknown;
+}
+
 export function ExplorePostcardModal({
   text,
   isAuthenticated,
@@ -70,6 +86,9 @@ export function ExplorePostcardModal({
               height={680}
             />
             <div className="flex flex-wrap gap-1.5">
+              <span className={modalChipClassName}>
+                {text.fieldPostcardType}: {getPostcardTypeLabel(postcard.postcardType, text)}
+              </span>
               <span className={modalChipClassName}>{postcard.placeName || text.exploreUnknownPlace}</span>
               {postcard.uploaderName ? (
                 <span className={modalChipClassName}>{text.exploreUploaderBy(postcard.uploaderName)}</span>

@@ -11,6 +11,19 @@ type PageProps = {
 
 export const dynamic = 'force-dynamic';
 
+function getPostcardTypeLabel(postcardType: string): string {
+  if (postcardType === 'MUSHROOM') {
+    return 'Mushroom';
+  }
+  if (postcardType === 'FLOWER') {
+    return 'Flower';
+  }
+  if (postcardType === 'EXPLORATION') {
+    return 'Exploration';
+  }
+  return 'Unknown';
+}
+
 export default async function PostcardSharePage({ params }: PageProps) {
   const { id } = await params;
   if (!id) {
@@ -67,6 +80,9 @@ export default async function PostcardSharePage({ params }: PageProps) {
         ) : null}
 
         <div className="flex flex-wrap gap-1.5">
+          <span className="inline-flex items-center rounded-full border border-[#d5e8d8] bg-[#f6fff7] px-2.5 py-1 text-[0.8rem] font-semibold text-[#36594a]">
+            Type: {getPostcardTypeLabel(postcard.postcardType)}
+          </span>
           <span className="inline-flex items-center rounded-full border border-[#d5e8d8] bg-[#f6fff7] px-2.5 py-1 text-[0.8rem] font-semibold text-[#36594a]">
             {postcard.placeName || 'Unknown place'}
           </span>
