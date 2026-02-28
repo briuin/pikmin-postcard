@@ -3,11 +3,17 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireManagerActor, withGuardedValue } from '@/lib/api-guards';
 import {
+  saveAdminReportCaseStatus,
+  withAdminReportStatusPatch
+} from '@/lib/admin/report-route-helpers';
+import {
   requireManagerAndParseQuery,
   safeParseRequestQuery
 } from '@/lib/admin/route-helpers';
-import { prisma } from '@/lib/prisma';
-import { updateReportCaseStatus } from '@/lib/postcards/report-workflow';
+import {
+  listAdminReportCases,
+  serializeAdminReportCaseRecord
+} from '@/lib/postcards/report-workflow';
 import { recordUserAction } from '@/lib/user-action-log';
 
 const adminReportsQuerySchema = z.object({
@@ -48,169 +54,28 @@ export async function GET(request: Request) {
     }
   });
 
-  const where = {
-    ...(query.status ? { status: query.status } : {}),
-    ...(query.q
-      ? {
-          OR: [
-            { postcard: { title: { contains: query.q, mode: 'insensitive' as const } } },
-            { postcard: { placeName: { contains: query.q, mode: 'insensitive' as const } } },
-            {
-              reports: {
-                some: {
-                  description: { contains: query.q, mode: 'insensitive' as const }
-                }
-              }
-            },
-            {
-              reports: {
-                some: {
-                  reporter: {
-                    email: { contains: query.q, mode: 'insensitive' as const }
-                  }
-                }
-              }
-            },
-            {
-              reports: {
-                some: {
-                  reporter: {
-                    displayName: { contains: query.q, mode: 'insensitive' as const }
-                  }
-                }
-              }
-            }
-          ]
-        }
-      : {})
-  };
-
-  const rows = await prisma.postcardReportCase.findMany({
-    where,
-    orderBy: [{ updatedAt: 'desc' }],
-    take: query.limit,
-    include: {
-      postcard: {
-        select: {
-          id: true,
-          title: true,
-          imageUrl: true,
-          placeName: true,
-          deletedAt: true,
-          wrongLocationReports: true,
-          reportVersion: true,
-          user: {
-            select: {
-              email: true,
-              displayName: true
-            }
-          }
-        }
-      },
-      reports: {
-        orderBy: [{ createdAt: 'desc' }],
-        take: 30,
-        select: {
-          id: true,
-          reason: true,
-          description: true,
-          createdAt: true,
-          reporter: {
-            select: {
-              email: true,
-              displayName: true
-            }
-          }
-        }
-      }
-    }
+  const rows = await listAdminReportCases({
+    status: query.status,
+    search: query.q,
+    limit: query.limit
   });
-
-  const payload = rows.map((row) => {
-    const reasonCounts = row.reports.reduce<Record<string, number>>((acc, report) => {
-      acc[report.reason] = (acc[report.reason] ?? 0) + 1;
-      return acc;
-    }, {});
-
-    return {
-      caseId: row.id,
-      postcardId: row.postcardId,
-      version: row.version,
-      status: row.status,
-      adminNote: row.adminNote,
-      createdAt: row.createdAt.toISOString(),
-      updatedAt: row.updatedAt.toISOString(),
-      resolvedAt: row.resolvedAt?.toISOString() ?? null,
-      postcard: {
-        id: row.postcard.id,
-        title: row.postcard.title,
-        imageUrl: row.postcard.imageUrl,
-        placeName: row.postcard.placeName,
-        deletedAt: row.postcard.deletedAt?.toISOString() ?? null,
-        wrongLocationReports: row.postcard.wrongLocationReports,
-        reportVersion: row.postcard.reportVersion,
-        uploaderName: row.postcard.user.displayName || row.postcard.user.email
-      },
-      reportCount: row.reports.length,
-      reasonCounts,
-      reports: row.reports.map((report) => ({
-        id: report.id,
-        reason: report.reason,
-        description: report.description,
-        createdAt: report.createdAt.toISOString(),
-        reporterName: report.reporter.displayName || report.reporter.email
-      }))
-    };
-  });
+  const payload = rows.map((row) => serializeAdminReportCaseRecord(row));
 
   return NextResponse.json(payload, { status: 200 });
 }
 
 export async function PATCH(request: Request) {
   return withGuardedValue(requireManagerActor(), async (actor) => {
-    try {
-      const body = adminReportStatusPatchSchema.parse(await request.json());
-
-      await recordUserAction({
-        request,
-        userId: actor.id,
-        action: 'ADMIN_POSTCARD_REPORT_STATUS_UPDATE',
-        metadata: {
+    return withAdminReportStatusPatch(
+      () => request.json().then((payload) => adminReportStatusPatchSchema.parse(payload)),
+      async (body) =>
+        saveAdminReportCaseStatus({
+          request,
+          actorId: actor.id,
           caseId: body.caseId,
-          status: body.status
-        }
-      });
-
-      const updated = await updateReportCaseStatus({
-        caseId: body.caseId,
-        nextStatus: body.status,
-        adminNote: body.adminNote ?? null,
-        resolverUserId: actor.id
-      });
-
-      if (!updated) {
-        return NextResponse.json({ error: 'Report case not found.' }, { status: 404 });
-      }
-
-      return NextResponse.json(
-        {
-          caseId: updated.caseId,
-          postcardId: updated.postcardId,
-          status: updated.status,
-          reportVersion: updated.reportVersion,
-          wrongLocationReports: updated.wrongLocationReports,
-          postcardDeletedAt: updated.postcardDeletedAt?.toISOString() ?? null
-        },
-        { status: 200 }
-      );
-    } catch (error) {
-      return NextResponse.json(
-        {
-          error: 'Failed to update report status.',
-          details: error instanceof Error ? error.message : 'Unknown error'
-        },
-        { status: 400 }
-      );
-    }
+          status: body.status,
+          adminNote: body.adminNote ?? null
+        })
+    );
   });
 }

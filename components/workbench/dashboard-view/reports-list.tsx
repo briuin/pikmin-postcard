@@ -5,6 +5,7 @@ import Image from 'next/image';
 import type { WorkbenchText } from '@/lib/i18n';
 import type { DashboardReportRecord } from '@/components/workbench/types';
 import { smallMutedClassName } from '@/components/workbench/dashboard-view/styles';
+import { getReportReasonLabel, getReportStatusLabel } from '@/lib/postcards/report-label';
 
 type DashboardReportsListProps = {
   text: WorkbenchText;
@@ -15,36 +16,22 @@ type DashboardReportsListProps = {
   onCancelReport: (report: DashboardReportRecord) => void;
 };
 
-function reportReasonLabel(
-  text: WorkbenchText,
-  reason: DashboardReportRecord['reportReason']
-): string {
-  if (reason === 'SPAM') {
-    return text.exploreReportReasonSpam;
-  }
-  if (reason === 'ILLEGAL_IMAGE') {
-    return text.exploreReportReasonIllegalImage;
-  }
-  if (reason === 'OTHER') {
-    return text.exploreReportReasonOther;
-  }
-  return text.exploreReportReasonWrongLocation;
+function reportReasonLabel(text: WorkbenchText, reason: DashboardReportRecord['reportReason']): string {
+  return getReportReasonLabel(reason, {
+    wrongLocation: text.exploreReportReasonWrongLocation,
+    spam: text.exploreReportReasonSpam,
+    illegalImage: text.exploreReportReasonIllegalImage,
+    other: text.exploreReportReasonOther
+  });
 }
 
-function reportStatusLabel(
-  text: WorkbenchText,
-  status: DashboardReportRecord['status']
-): string {
-  if (status === 'IN_PROGRESS') {
-    return text.reportStatusInProgress;
-  }
-  if (status === 'VERIFIED') {
-    return text.reportStatusVerified;
-  }
-  if (status === 'REMOVED') {
-    return text.reportStatusRemoved;
-  }
-  return text.reportStatusPending;
+function reportStatusLabel(text: WorkbenchText, status: DashboardReportRecord['status']): string {
+  return getReportStatusLabel(status, {
+    pending: text.reportStatusPending,
+    inProgress: text.reportStatusInProgress,
+    verified: text.reportStatusVerified,
+    removed: text.reportStatusRemoved
+  });
 }
 
 export function DashboardReportsList({

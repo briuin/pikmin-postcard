@@ -38,6 +38,259 @@ export type DashboardReportListItem = {
   statusUpdatedAt: Date;
 };
 
+type PostcardVersionRow = {
+  id: string;
+  reportVersion: number;
+};
+
+type ReporterProfileRow = {
+  email: string;
+  displayName: string | null;
+};
+
+type ReportItemRow = {
+  id: string;
+  reason: string;
+  description: string | null;
+  createdAt: Date;
+  reporter: ReporterProfileRow;
+};
+
+type ReportCasePostcardBase = {
+  id: string;
+  title: string;
+  imageUrl: string | null;
+  placeName: string | null;
+  deletedAt: Date | null;
+  wrongLocationReports: number;
+  reportVersion: number;
+};
+
+type AdminReportCaseRow = {
+  id: string;
+  postcardId: string;
+  version: number;
+  status: PostcardReportStatus;
+  adminNote: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  resolvedAt: Date | null;
+  postcard: ReportCasePostcardBase & {
+    user: ReporterProfileRow;
+  };
+  reports: ReportItemRow[];
+};
+
+export type AdminReportCaseRecord = {
+  caseId: string;
+  postcardId: string;
+  version: number;
+  status: PostcardReportStatus;
+  adminNote: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  resolvedAt: Date | null;
+  postcard: ReportCasePostcardBase & {
+    uploaderName: string;
+  };
+  reportCount: number;
+  reasonCounts: Record<string, number>;
+  reports: Array<{
+    id: string;
+    reason: string;
+    description: string | null;
+    createdAt: Date;
+    reporterName: string;
+  }>;
+};
+
+export type SerializedAdminReportCaseRecord = Omit<
+  AdminReportCaseRecord,
+  'createdAt' | 'updatedAt' | 'resolvedAt' | 'postcard' | 'reports'
+> & {
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt: string | null;
+  postcard: Omit<AdminReportCaseRecord['postcard'], 'deletedAt'> & {
+    deletedAt: string | null;
+  };
+  reports: Array<Omit<AdminReportCaseRecord['reports'][number], 'createdAt'> & { createdAt: string }>;
+};
+
+export type ReportCaseStatusUpdateResult = {
+  caseId: string;
+  postcardId: string;
+  status: PostcardReportStatus;
+  reportVersion: number;
+  wrongLocationReports: number;
+  postcardDeletedAt: Date | null;
+};
+
+function getReporterName(reporter: ReporterProfileRow): string {
+  return reporter.displayName || reporter.email;
+}
+
+function buildReasonCounts(reports: Array<{ reason: string }>): Record<string, number> {
+  return reports.reduce<Record<string, number>>((acc, report) => {
+    acc[report.reason] = (acc[report.reason] ?? 0) + 1;
+    return acc;
+  }, {});
+}
+
+function toAdminReportCaseRecord(row: AdminReportCaseRow): AdminReportCaseRecord {
+  return {
+    caseId: row.id,
+    postcardId: row.postcardId,
+    version: row.version,
+    status: row.status,
+    adminNote: row.adminNote,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    resolvedAt: row.resolvedAt,
+    postcard: {
+      id: row.postcard.id,
+      title: row.postcard.title,
+      imageUrl: row.postcard.imageUrl,
+      placeName: row.postcard.placeName,
+      deletedAt: row.postcard.deletedAt,
+      wrongLocationReports: row.postcard.wrongLocationReports,
+      reportVersion: row.postcard.reportVersion,
+      uploaderName: getReporterName(row.postcard.user)
+    },
+    reportCount: row.reports.length,
+    reasonCounts: buildReasonCounts(row.reports),
+    reports: row.reports.map((report) => ({
+      id: report.id,
+      reason: report.reason,
+      description: report.description,
+      createdAt: report.createdAt,
+      reporterName: getReporterName(report.reporter)
+    }))
+  };
+}
+
+export function serializeAdminReportCaseRecord(
+  record: AdminReportCaseRecord
+): SerializedAdminReportCaseRecord {
+  return {
+    ...record,
+    createdAt: record.createdAt.toISOString(),
+    updatedAt: record.updatedAt.toISOString(),
+    resolvedAt: record.resolvedAt?.toISOString() ?? null,
+    postcard: {
+      ...record.postcard,
+      deletedAt: record.postcard.deletedAt?.toISOString() ?? null
+    },
+    reports: record.reports.map((item) => ({
+      ...item,
+      createdAt: item.createdAt.toISOString()
+    }))
+  };
+}
+
+export function serializeReportCaseStatusUpdate(result: ReportCaseStatusUpdateResult) {
+  return {
+    caseId: result.caseId,
+    postcardId: result.postcardId,
+    status: result.status,
+    reportVersion: result.reportVersion,
+    wrongLocationReports: result.wrongLocationReports,
+    postcardDeletedAt: result.postcardDeletedAt?.toISOString() ?? null
+  };
+}
+
+function buildReportInclude(reportTake?: number): Prisma.PostcardReportCaseInclude {
+  return {
+    postcard: {
+      select: {
+        id: true,
+        title: true,
+        imageUrl: true,
+        placeName: true,
+        deletedAt: true,
+        wrongLocationReports: true,
+        reportVersion: true,
+        user: {
+          select: {
+            email: true,
+            displayName: true
+          }
+        }
+      }
+    },
+    reports: {
+      orderBy: [{ createdAt: 'desc' }],
+      ...(typeof reportTake === 'number' ? { take: reportTake } : {}),
+      select: {
+        id: true,
+        reason: true,
+        description: true,
+        createdAt: true,
+        reporter: {
+          select: {
+            email: true,
+            displayName: true
+          }
+        }
+      }
+    }
+  };
+}
+
+async function findPostcardVersionMap(postcardIds: string[]): Promise<Map<string, number>> {
+  if (postcardIds.length === 0) {
+    return new Map();
+  }
+
+  const postcards: PostcardVersionRow[] = await prisma.postcard.findMany({
+    where: {
+      id: {
+        in: postcardIds
+      }
+    },
+    select: {
+      id: true,
+      reportVersion: true
+    }
+  });
+
+  return new Map(postcards.map((postcard) => [postcard.id, postcard.reportVersion]));
+}
+
+function getTrackedPostcardIds(versionByPostcardId: Map<string, number>): string[] {
+  return [...versionByPostcardId.keys()];
+}
+
+type ActiveCaseScope = {
+  versionByPostcardId: Map<string, number>;
+  trackedPostcardIds: string[];
+};
+
+async function resolveActiveCaseScope(postcardIds: string[]): Promise<ActiveCaseScope | null> {
+  const versionByPostcardId = await findPostcardVersionMap(postcardIds);
+  if (versionByPostcardId.size === 0) {
+    return null;
+  }
+
+  return {
+    versionByPostcardId,
+    trackedPostcardIds: getTrackedPostcardIds(versionByPostcardId)
+  };
+}
+
+function forEachCurrentVersionCase<T extends { postcardId: string; version: number }>(
+  cases: T[],
+  versionByPostcardId: Map<string, number>,
+  run: (item: T) => void
+) {
+  for (const item of cases) {
+    if (versionByPostcardId.get(item.postcardId) !== item.version) {
+      continue;
+    }
+    run(item);
+  }
+}
+
 export async function listDashboardReportsByReporter(userId: string): Promise<DashboardReportListItem[]> {
   const rows = await prisma.postcardReport.findMany({
     where: {
@@ -84,88 +337,18 @@ export async function listDashboardReportsByReporter(userId: string): Promise<Da
   }));
 }
 
-export async function findActiveReportCaseMapForPostcards(
-  postcardIds: string[]
-): Promise<Map<string, ActiveReportCaseSummary>> {
-  if (postcardIds.length === 0) {
-    return new Map();
-  }
-
-  const postcards = await prisma.postcard.findMany({
-    where: {
-      id: {
-        in: postcardIds
-      }
-    },
-    select: {
-      id: true,
-      reportVersion: true
-    }
-  });
-
-  if (postcards.length === 0) {
-    return new Map();
-  }
-
-  const versionByPostcardId = new Map(postcards.map((postcard) => [postcard.id, postcard.reportVersion]));
-  const cases = await prisma.postcardReportCase.findMany({
-    where: {
-      postcardId: {
-        in: postcards.map((postcard) => postcard.id)
-      }
-    },
-    select: {
-      id: true,
-      postcardId: true,
-      version: true,
-      status: true,
-      updatedAt: true
-    }
-  });
-
-  const summaryByPostcardId = new Map<string, ActiveReportCaseSummary>();
-  for (const item of cases) {
-    if (versionByPostcardId.get(item.postcardId) !== item.version) {
-      continue;
-    }
-    summaryByPostcardId.set(item.postcardId, {
-      postcardId: item.postcardId,
-      caseId: item.id,
-      status: item.status,
-      updatedAt: item.updatedAt
-    });
-  }
-
-  return summaryByPostcardId;
-}
-
 export async function findActiveReportCaseDetailMapForPostcards(
   postcardIds: string[]
 ): Promise<Map<string, ActiveReportCaseDetail>> {
-  if (postcardIds.length === 0) {
+  const activeCaseScope = await resolveActiveCaseScope(postcardIds);
+  if (!activeCaseScope) {
     return new Map();
   }
-
-  const postcards = await prisma.postcard.findMany({
-    where: {
-      id: {
-        in: postcardIds
-      }
-    },
-    select: {
-      id: true,
-      reportVersion: true
-    }
-  });
-  if (postcards.length === 0) {
-    return new Map();
-  }
-
-  const versionByPostcardId = new Map(postcards.map((postcard) => [postcard.id, postcard.reportVersion]));
+  const { versionByPostcardId, trackedPostcardIds } = activeCaseScope;
   const cases = await prisma.postcardReportCase.findMany({
     where: {
       postcardId: {
-        in: postcards.map((postcard) => postcard.id)
+        in: trackedPostcardIds
       }
     },
     include: {
@@ -188,16 +371,7 @@ export async function findActiveReportCaseDetailMapForPostcards(
   });
 
   const detailByPostcardId = new Map<string, ActiveReportCaseDetail>();
-  for (const item of cases) {
-    if (versionByPostcardId.get(item.postcardId) !== item.version) {
-      continue;
-    }
-
-    const reasonCounts = item.reports.reduce<Record<string, number>>((acc, report) => {
-      acc[report.reason] = (acc[report.reason] ?? 0) + 1;
-      return acc;
-    }, {});
-
+  forEachCurrentVersionCase(cases, versionByPostcardId, (item) => {
     detailByPostcardId.set(item.postcardId, {
       postcardId: item.postcardId,
       caseId: item.id,
@@ -205,18 +379,71 @@ export async function findActiveReportCaseDetailMapForPostcards(
       updatedAt: item.updatedAt,
       adminNote: item.adminNote,
       reportCount: item.reports.length,
-      reasonCounts,
+      reasonCounts: buildReasonCounts(item.reports),
       reports: item.reports.map((report) => ({
         id: report.id,
         reason: report.reason,
         description: report.description,
-        reporterName: report.reporter.displayName || report.reporter.email,
+        reporterName: getReporterName(report.reporter),
         createdAt: report.createdAt
       }))
     });
-  }
+  });
 
   return detailByPostcardId;
+}
+
+export async function listAdminReportCases(params: {
+  status?: PostcardReportStatus;
+  search?: string;
+  limit: number;
+  reportTake?: number;
+}): Promise<AdminReportCaseRecord[]> {
+  const where: Prisma.PostcardReportCaseWhereInput = {
+    ...(params.status ? { status: params.status } : {}),
+    ...(params.search
+      ? {
+          OR: [
+            { postcard: { title: { contains: params.search, mode: 'insensitive' } } },
+            { postcard: { placeName: { contains: params.search, mode: 'insensitive' } } },
+            {
+              reports: {
+                some: {
+                  description: { contains: params.search, mode: 'insensitive' }
+                }
+              }
+            },
+            {
+              reports: {
+                some: {
+                  reporter: {
+                    email: { contains: params.search, mode: 'insensitive' }
+                  }
+                }
+              }
+            },
+            {
+              reports: {
+                some: {
+                  reporter: {
+                    displayName: { contains: params.search, mode: 'insensitive' }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      : {})
+  };
+
+  const rows = (await prisma.postcardReportCase.findMany({
+    where,
+    orderBy: [{ updatedAt: 'desc' }],
+    take: params.limit,
+    include: buildReportInclude(params.reportTake ?? 30)
+  })) as unknown as AdminReportCaseRow[];
+
+  return rows.map((row) => toAdminReportCaseRecord(row));
 }
 
 export async function findAdminEditableReportCaseState(params: {
@@ -271,14 +498,7 @@ type UpdateReportCaseStatusParams = {
 
 export async function updateReportCaseStatus(
   params: UpdateReportCaseStatusParams
-): Promise<{
-  caseId: string;
-  postcardId: string;
-  status: PostcardReportStatus;
-  reportVersion: number;
-  wrongLocationReports: number;
-  postcardDeletedAt: Date | null;
-} | null> {
+): Promise<ReportCaseStatusUpdateResult | null> {
   return prisma.$transaction(async (tx) => {
     const reportCase = await tx.postcardReportCase.findUnique({
       where: {
@@ -389,83 +609,17 @@ export async function updateReportCaseStatus(
   });
 }
 
-export async function findAdminReportCaseById(caseId: string) {
-  const row = await prisma.postcardReportCase.findUnique({
+export async function findAdminReportCaseById(caseId: string): Promise<AdminReportCaseRecord | null> {
+  const row = (await prisma.postcardReportCase.findUnique({
     where: {
       id: caseId
     },
-    include: {
-      postcard: {
-        select: {
-          id: true,
-          title: true,
-          imageUrl: true,
-          placeName: true,
-          deletedAt: true,
-          wrongLocationReports: true,
-          reportVersion: true,
-          user: {
-            select: {
-              email: true,
-              displayName: true
-            }
-          }
-        }
-      },
-      reports: {
-        orderBy: [{ createdAt: 'desc' }],
-        select: {
-          id: true,
-          reason: true,
-          description: true,
-          createdAt: true,
-          reporter: {
-            select: {
-              email: true,
-              displayName: true
-            }
-          }
-        }
-      }
-    }
-  });
+    include: buildReportInclude()
+  })) as AdminReportCaseRow | null;
 
   if (!row) {
     return null;
   }
 
-  const reasonCounts = row.reports.reduce<Record<string, number>>((acc, report) => {
-    acc[report.reason] = (acc[report.reason] ?? 0) + 1;
-    return acc;
-  }, {});
-
-  return {
-    caseId: row.id,
-    postcardId: row.postcardId,
-    version: row.version,
-    status: row.status,
-    adminNote: row.adminNote,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-    resolvedAt: row.resolvedAt,
-    postcard: {
-      id: row.postcard.id,
-      title: row.postcard.title,
-      imageUrl: row.postcard.imageUrl,
-      placeName: row.postcard.placeName,
-      deletedAt: row.postcard.deletedAt,
-      wrongLocationReports: row.postcard.wrongLocationReports,
-      reportVersion: row.postcard.reportVersion,
-      uploaderName: row.postcard.user.displayName || row.postcard.user.email
-    },
-    reportCount: row.reports.length,
-    reasonCounts,
-    reports: row.reports.map((report) => ({
-      id: report.id,
-      reason: report.reason,
-      description: report.description,
-      createdAt: report.createdAt,
-      reporterName: report.reporter.displayName || report.reporter.email
-    }))
-  };
+  return toAdminReportCaseRecord(row);
 }

@@ -3,8 +3,12 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireManagerActor, withGuardedValue } from '@/lib/api-guards';
 import {
+  saveAdminReportCaseStatus,
+  withAdminReportStatusPatch
+} from '@/lib/admin/report-route-helpers';
+import {
   findAdminReportCaseById,
-  updateReportCaseStatus
+  serializeAdminReportCaseRecord
 } from '@/lib/postcards/report-workflow';
 import { recordUserAction } from '@/lib/user-action-log';
 
@@ -17,97 +21,70 @@ type RouteContext = {
   params: Promise<{ caseId: string }>;
 };
 
+type RouteCaseIdResult =
+  | { ok: true; caseId: string }
+  | { ok: false; response: NextResponse };
+
+async function resolveCaseId(context: RouteContext): Promise<RouteCaseIdResult> {
+  const { caseId } = await context.params;
+  if (!caseId) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: 'Missing report case id.' }, { status: 400 })
+    };
+  }
+
+  return { ok: true, caseId };
+}
+
+async function withResolvedCaseId(
+  context: RouteContext,
+  run: (caseId: string) => Promise<NextResponse>
+): Promise<NextResponse> {
+  const routeCaseId = await resolveCaseId(context);
+  if (!routeCaseId.ok) {
+    return routeCaseId.response;
+  }
+
+  return run(routeCaseId.caseId);
+}
+
 export async function GET(request: Request, context: RouteContext) {
   return withGuardedValue(requireManagerActor(), async (actor) => {
-    const { caseId } = await context.params;
-    if (!caseId) {
-      return NextResponse.json({ error: 'Missing report case id.' }, { status: 400 });
-    }
+    return withResolvedCaseId(context, async (caseId) => {
+      await recordUserAction({
+        request,
+        userId: actor.id,
+        action: 'ADMIN_POSTCARD_REPORT_DETAIL',
+        metadata: {
+          caseId
+        }
+      });
 
-    await recordUserAction({
-      request,
-      userId: actor.id,
-      action: 'ADMIN_POSTCARD_REPORT_DETAIL',
-      metadata: {
-        caseId
+      const row = await findAdminReportCaseById(caseId);
+      if (!row) {
+        return NextResponse.json({ error: 'Report case not found.' }, { status: 404 });
       }
+
+      return NextResponse.json(serializeAdminReportCaseRecord(row), { status: 200 });
     });
-
-    const row = await findAdminReportCaseById(caseId);
-    if (!row) {
-      return NextResponse.json({ error: 'Report case not found.' }, { status: 404 });
-    }
-
-    return NextResponse.json(
-      {
-        ...row,
-        createdAt: row.createdAt.toISOString(),
-        updatedAt: row.updatedAt.toISOString(),
-        resolvedAt: row.resolvedAt?.toISOString() ?? null,
-        postcard: {
-          ...row.postcard,
-          deletedAt: row.postcard.deletedAt?.toISOString() ?? null
-        },
-        reports: row.reports.map((item) => ({
-          ...item,
-          createdAt: item.createdAt.toISOString()
-        }))
-      },
-      { status: 200 }
-    );
   });
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
   return withGuardedValue(requireManagerActor(), async (actor) => {
-    const { caseId } = await context.params;
-    if (!caseId) {
-      return NextResponse.json({ error: 'Missing report case id.' }, { status: 400 });
-    }
-
-    try {
-      const body = adminReportCasePatchSchema.parse(await request.json());
-
-      await recordUserAction({
-        request,
-        userId: actor.id,
-        action: 'ADMIN_POSTCARD_REPORT_STATUS_UPDATE',
-        metadata: {
-          caseId,
-          status: body.status
-        }
-      });
-
-      const updated = await updateReportCaseStatus({
-        caseId,
-        nextStatus: body.status,
-        adminNote: body.adminNote ?? null,
-        resolverUserId: actor.id
-      });
-
-      if (!updated) {
-        return NextResponse.json({ error: 'Report case not found.' }, { status: 404 });
-      }
-
-      return NextResponse.json(
-        {
-          caseId: updated.caseId,
-          postcardId: updated.postcardId,
-          status: updated.status,
-          reportVersion: updated.reportVersion,
-          wrongLocationReports: updated.wrongLocationReports,
-          postcardDeletedAt: updated.postcardDeletedAt?.toISOString() ?? null
-        },
-        { status: 200 }
+    return withResolvedCaseId(context, async (caseId) => {
+      return withAdminReportStatusPatch(
+        () => request.json().then((payload) => adminReportCasePatchSchema.parse(payload)),
+        async (body) =>
+          saveAdminReportCaseStatus({
+            request,
+            actorId: actor.id,
+            caseId,
+            status: body.status,
+            adminNote: body.adminNote ?? null
+          })
       );
-    } catch (error) {
-      return NextResponse.json(
-        {
-          error: 'Failed to update report status.',
-          details: error instanceof Error ? error.message : 'Unknown error'
-        },
-        { status: 400 }
-      );
-    }
+    });
   });
 }

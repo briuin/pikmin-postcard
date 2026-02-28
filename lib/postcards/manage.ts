@@ -140,6 +140,52 @@ function buildPostcardUpdateData(payload: PostcardUpdatePayload): Prisma.Postcar
   return updateData;
 }
 
+async function recordPostcardEditHistory(params: {
+  tx: Prisma.TransactionClient;
+  postcardId: string;
+  actorId: string;
+  action: PostcardEditAction;
+  before: EditablePostcard;
+  afterData: Prisma.InputJsonValue;
+}) {
+  await params.tx.postcardEditHistory.create({
+    data: {
+      postcardId: params.postcardId,
+      userId: params.actorId,
+      action: params.action,
+      beforeData: toEditSnapshot(params.before),
+      afterData: params.afterData
+    }
+  });
+}
+
+async function updatePostcardWithHistory(params: {
+  tx: Prisma.TransactionClient;
+  postcardId: string;
+  actorId: string;
+  before: EditablePostcard;
+  action: PostcardEditAction;
+  updateData: Prisma.PostcardUpdateInput;
+  toAfterData?: (after: EditablePostcard) => Prisma.InputJsonValue;
+}): Promise<EditablePostcard> {
+  const after = await params.tx.postcard.update({
+    where: { id: params.postcardId },
+    data: params.updateData,
+    select: postcardEditSelect
+  });
+
+  await recordPostcardEditHistory({
+    tx: params.tx,
+    postcardId: params.postcardId,
+    actorId: params.actorId,
+    action: params.action,
+    before: params.before,
+    afterData: params.toAfterData ? params.toAfterData(after) : toEditSnapshot(after)
+  });
+
+  return after;
+}
+
 export async function applyPostcardCropUpdate(params: {
   postcardId: string;
   actorId: string;
@@ -183,23 +229,17 @@ export async function applyPostcardCropUpdate(params: {
           updateData.originalImageUrl = resolvedOriginalImageUrl;
         }
 
-        const after = await tx.postcard.update({
-          where: { id: params.postcardId },
-          data: updateData,
-          select: postcardEditSelect
-        });
-
-        await tx.postcardEditHistory.create({
-          data: {
-            postcardId: params.postcardId,
-            userId: params.actorId,
-            action: PostcardEditAction.CROP_UPDATED,
-            beforeData: toEditSnapshot(before),
-            afterData: {
-              ...toEditSnapshot(after),
-              crop: params.crop
-            }
-          }
+        const after = await updatePostcardWithHistory({
+          tx,
+          postcardId: params.postcardId,
+          actorId: params.actorId,
+          before,
+          action: PostcardEditAction.CROP_UPDATED,
+          updateData,
+          toAfterData: (afterPostcard) => ({
+            ...toEditSnapshot(afterPostcard),
+            crop: params.crop
+          })
         });
 
         return after;
@@ -250,20 +290,13 @@ export async function applyPostcardDetailsUpdate(params: {
           updateData.country = reverseLocation.country;
         }
 
-        const after = await tx.postcard.update({
-          where: { id: params.postcardId },
-          data: updateData,
-          select: postcardEditSelect
-        });
-
-        await tx.postcardEditHistory.create({
-          data: {
-            postcardId: params.postcardId,
-            userId: params.actorId,
-            action: PostcardEditAction.DETAILS_UPDATED,
-            beforeData: toEditSnapshot(before),
-            afterData: toEditSnapshot(after)
-          }
+        const after = await updatePostcardWithHistory({
+          tx,
+          postcardId: params.postcardId,
+          actorId: params.actorId,
+          before,
+          action: PostcardEditAction.DETAILS_UPDATED,
+          updateData
         });
 
         return after;

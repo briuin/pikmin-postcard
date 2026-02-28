@@ -1,12 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
 import { signIn, signOut, useSession } from 'next-auth/react';
 import { AdminDashboard } from '@/components/admin-dashboard';
 import { AdminReportDetailPage } from '@/components/admin-report-detail-page';
 import { FeedbackSection } from '@/components/feedback-section';
-import { detectLocale, localeStorageKey, messages, supportedLocales, type Locale } from '@/lib/i18n';
+import { usePersistedLocale } from '@/components/use-persisted-locale';
+import { messages, supportedLocales, type Locale } from '@/lib/i18n';
 import { PostcardWorkbench } from '@/components/postcard-workbench';
 
 type HomeShellProps = {
@@ -37,7 +37,7 @@ function formatSessionText(
 }
 
 export function HomeShell({ page, reportCaseId }: HomeShellProps) {
-  const [locale, setLocale] = useState<Locale>('en');
+  const { locale, setLocale } = usePersistedLocale('en');
   const { data: session, status } = useSession();
   const isAuthenticated = status === 'authenticated';
   const isLoading = status === 'loading';
@@ -50,22 +50,6 @@ export function HomeShell({ page, reportCaseId }: HomeShellProps) {
     isLoading,
     locale
   );
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    const stored = window.localStorage.getItem(localeStorageKey);
-    setLocale(detectLocale(stored ?? window.navigator.language));
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-    window.localStorage.setItem(localeStorageKey, locale);
-  }, [locale]);
 
   const rootClassName = [
     'grid gap-3',

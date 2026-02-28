@@ -5,14 +5,10 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { signIn, useSession } from 'next-auth/react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  detectLocale,
-  localeStorageKey,
-  messages,
-  type AdminText,
-  type Locale
-} from '@/lib/i18n';
+import { usePersistedLocale } from '@/components/use-persisted-locale';
+import { messages, type AdminText } from '@/lib/i18n';
 import { parseJsonResponseOrThrow } from '@/lib/http-response';
+import { getReportReasonLabel, getReportStatusLabel } from '@/lib/postcards/report-label';
 
 type AdminReportDetailPageProps = {
   caseId: string;
@@ -53,34 +49,26 @@ function canAccessAdmin(role: UserRole | undefined): boolean {
 }
 
 function reportStatusLabel(text: AdminText, status: ReportDetailRecord['status']): string {
-  if (status === 'IN_PROGRESS') {
-    return text.reportStatusInProgress;
-  }
-  if (status === 'VERIFIED') {
-    return text.reportStatusVerified;
-  }
-  if (status === 'REMOVED') {
-    return text.reportStatusRemoved;
-  }
-  return text.reportStatusPending;
+  return getReportStatusLabel(status, {
+    pending: text.reportStatusPending,
+    inProgress: text.reportStatusInProgress,
+    verified: text.reportStatusVerified,
+    removed: text.reportStatusRemoved
+  });
 }
 
 function reportReasonLabel(text: AdminText, reason: ReportDetailRecord['reports'][number]['reason']): string {
-  if (reason === 'SPAM') {
-    return text.reportReasonSpam;
-  }
-  if (reason === 'ILLEGAL_IMAGE') {
-    return text.reportReasonIllegalImage;
-  }
-  if (reason === 'OTHER') {
-    return text.reportReasonOther;
-  }
-  return text.reportReasonWrongLocation;
+  return getReportReasonLabel(reason, {
+    wrongLocation: text.reportReasonWrongLocation,
+    spam: text.reportReasonSpam,
+    illegalImage: text.reportReasonIllegalImage,
+    other: text.reportReasonOther
+  });
 }
 
 export function AdminReportDetailPage({ caseId }: AdminReportDetailPageProps) {
   const { data: session, status } = useSession();
-  const [locale, setLocale] = useState<Locale>('en');
+  const { locale } = usePersistedLocale('en');
   const text = messages[locale].admin;
   const dateLocale: 'zh-TW' | 'en-US' = locale === 'zh-TW' ? 'zh-TW' : 'en-US';
 
@@ -96,21 +84,6 @@ export function AdminReportDetailPage({ caseId }: AdminReportDetailPageProps) {
     | UserRole
     | undefined;
   const allowAdmin = canAccessAdmin(userRole);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-    const stored = window.localStorage.getItem(localeStorageKey);
-    setLocale(detectLocale(stored ?? window.navigator.language));
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-    window.localStorage.setItem(localeStorageKey, locale);
-  }, [locale]);
 
   const loadRecord = useCallback(async () => {
     if (!allowAdmin) {

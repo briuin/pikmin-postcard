@@ -5,37 +5,30 @@ import { mutedTextClassName } from '@/components/admin-dashboard-view/styles';
 import type { AdminPostcardsPanelProps } from '@/components/admin-dashboard-view/types';
 import { PostcardTypeOptions } from '@/components/workbench/postcard-type-options';
 import type { PostcardType } from '@/components/workbench/types';
+import { getReportReasonLabel, getReportStatusLabel } from '@/lib/postcards/report-label';
 
 function reportReasonLabel(
   text: AdminPostcardsPanelProps['text'],
   reason: string
 ): string {
-  if (reason === 'SPAM') {
-    return text.reportReasonSpam;
-  }
-  if (reason === 'ILLEGAL_IMAGE') {
-    return text.reportReasonIllegalImage;
-  }
-  if (reason === 'OTHER') {
-    return text.reportReasonOther;
-  }
-  return text.reportReasonWrongLocation;
+  return getReportReasonLabel(reason, {
+    wrongLocation: text.reportReasonWrongLocation,
+    spam: text.reportReasonSpam,
+    illegalImage: text.reportReasonIllegalImage,
+    other: text.reportReasonOther
+  });
 }
 
 function reportStatusLabel(
   text: AdminPostcardsPanelProps['text'],
   status: string | null | undefined
 ): string {
-  if (status === 'IN_PROGRESS') {
-    return text.reportStatusInProgress;
-  }
-  if (status === 'VERIFIED') {
-    return text.reportStatusVerified;
-  }
-  if (status === 'REMOVED') {
-    return text.reportStatusRemoved;
-  }
-  return text.reportStatusPending;
+  return getReportStatusLabel(status, {
+    pending: text.reportStatusPending,
+    inProgress: text.reportStatusInProgress,
+    verified: text.reportStatusVerified,
+    removed: text.reportStatusRemoved
+  });
 }
 
 export function AdminPostcardsPanel({
