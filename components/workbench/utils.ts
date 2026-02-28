@@ -1,4 +1,5 @@
 import type { PercentCrop } from 'react-image-crop';
+import { deriveOriginalImageUrl } from '@/lib/postcards/image-url';
 
 export type LocationParseText = {
   parseLocationTwoNumbers: string;
@@ -36,25 +37,7 @@ export function parseLocationInput(input: string, text: LocationParseText): { la
   throw new Error(text.parseLocationRange);
 }
 
-export function deriveOriginalImageUrl(imageUrl: string | null | undefined): string | null {
-  if (!imageUrl) {
-    return null;
-  }
-
-  if (imageUrl.includes('/uploads/original/')) {
-    return imageUrl;
-  }
-
-  if (imageUrl.includes('/uploads/postcard/')) {
-    const fileName = imageUrl.split('/').pop()?.toLowerCase() ?? '';
-    if (fileName.includes('recrop-')) {
-      return null;
-    }
-    return imageUrl.replace('/uploads/postcard/', '/uploads/original/');
-  }
-
-  return null;
-}
+export { deriveOriginalImageUrl };
 
 function clampNumber(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));

@@ -1,7 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { SavedMapMarker, MapViewportBounds } from '@/components/open-map';
+import type { MapViewportBounds } from '@/components/open-map';
+import {
+  areBoundsNearlyEqual,
+  buildPublicMarkers,
+  buildPublicPostcardsParams,
+  getFeedbackStatusMessage,
+  type ExploreFeedbackAction
+} from '@/components/workbench/explore/shared';
 import type { WorkbenchText } from '@/lib/i18n';
 import type {
   DeviceLocation,
@@ -10,8 +17,6 @@ import type {
   PostcardRecord,
   PublicPostcardsPayload
 } from '@/components/workbench/types';
-
-export type ExploreFeedbackAction = 'like' | 'dislike' | 'report_wrong_location';
 
 type UseExploreControllerArgs = {
   text: WorkbenchText;
@@ -39,28 +44,7 @@ export function useExploreController({ text, isAuthenticated, showExplore }: Use
 
   const visiblePostcards = postcards;
 
-  const publicMarkers = useMemo<SavedMapMarker[]>(() => {
-    return visiblePostcards
-      .filter((postcard) => typeof postcard.latitude === 'number' && typeof postcard.longitude === 'number')
-      .map((postcard) => ({
-        id: postcard.id,
-        title: postcard.title,
-        latitude: postcard.latitude as number,
-        longitude: postcard.longitude as number,
-        placeName: postcard.placeName,
-        imageUrl: postcard.imageUrl,
-        notes: postcard.notes,
-        createdAt: postcard.createdAt,
-        locationStatus: postcard.locationStatus,
-        aiConfidence: postcard.aiConfidence,
-        aiPlaceGuess: postcard.aiPlaceGuess,
-        locationModelVersion: postcard.locationModelVersion,
-        uploaderName: postcard.uploaderName ?? null,
-        likeCount: postcard.likeCount ?? 0,
-        dislikeCount: postcard.dislikeCount ?? 0,
-        wrongLocationReports: postcard.wrongLocationReports ?? 0
-      }));
-  }, [visiblePostcards]);
+  const publicMarkers = useMemo(() => buildPublicMarkers(visiblePostcards), [visiblePostcards]);
 
   const requestDeviceLocation = useCallback(
     async (silent = false): Promise<boolean> => {
@@ -125,15 +109,7 @@ export function useExploreController({ text, isAuthenticated, showExplore }: Use
       if (!current) {
         return bounds;
       }
-
-      const threshold = 0.0001;
-      const unchanged =
-        Math.abs(current.north - bounds.north) < threshold &&
-        Math.abs(current.south - bounds.south) < threshold &&
-        Math.abs(current.east - bounds.east) < threshold &&
-        Math.abs(current.west - bounds.west) < threshold;
-
-      return unchanged ? current : bounds;
+      return areBoundsNearlyEqual(current, bounds) ? current : bounds;
     });
   }, []);
 
@@ -144,19 +120,12 @@ export function useExploreController({ text, isAuthenticated, showExplore }: Use
 
     setIsLoadingPublic(true);
     try {
-      const params = new URLSearchParams({
-        sort: exploreSort,
-        limit: String(exploreLimit),
-        north: String(mapBounds.north),
-        south: String(mapBounds.south),
-        east: String(mapBounds.east),
-        west: String(mapBounds.west)
+      const params = buildPublicPostcardsParams({
+        mapBounds,
+        exploreSort,
+        exploreLimit,
+        searchText
       });
-
-      const query = searchText.trim();
-      if (query) {
-        params.set('q', query);
-      }
 
       const response = await fetch(`/api/postcards?${params.toString()}`, { cache: 'no-store' });
       if (!response.ok) {
@@ -217,13 +186,7 @@ export function useExploreController({ text, isAuthenticated, showExplore }: Use
 
         const feedbackAction = payload.action ?? action;
         const result = payload.result ?? 'added';
-        if (feedbackAction === 'like') {
-          setExploreStatus(result === 'removed' ? text.feedbackLikeRemoved : text.feedbackThanksLike);
-        } else if (feedbackAction === 'dislike') {
-          setExploreStatus(result === 'removed' ? text.feedbackDislikeRemoved : text.feedbackDislikeRecorded);
-        } else {
-          setExploreStatus(text.feedbackWrongLocation);
-        }
+        setExploreStatus(getFeedbackStatusMessage(text, feedbackAction, result));
 
         await loadPublicPostcards();
       } catch (error) {
@@ -235,14 +198,7 @@ export function useExploreController({ text, isAuthenticated, showExplore }: Use
     [
       isAuthenticated,
       loadPublicPostcards,
-      text.feedbackDislikeRecorded,
-      text.feedbackDislikeRemoved,
-      text.feedbackFailed,
-      text.feedbackLikeRemoved,
-      text.feedbackRequireAuth,
-      text.feedbackThanksLike,
-      text.feedbackUnknownError,
-      text.feedbackWrongLocation
+      text
     ]
   );
 

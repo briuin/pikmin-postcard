@@ -1,0 +1,58 @@
+'use client';
+
+import type { WorkbenchText } from '@/lib/i18n';
+import {
+  actionButtonClassName,
+  chipRowClassName,
+  inlineFieldClassName,
+  inputClassName,
+  smallMutedClassName
+} from '@/components/workbench/dashboard-view/styles';
+
+type DashboardProfilePanelProps = {
+  text: WorkbenchText;
+  profileEmail: string;
+  profileDisplayName: string;
+  isLoadingProfile: boolean;
+  isSavingProfile: boolean;
+  onProfileDisplayNameChange: (value: string) => void;
+  onSaveProfileDisplayName: () => void;
+};
+
+export function DashboardProfilePanel({
+  text,
+  profileEmail,
+  profileDisplayName,
+  isLoadingProfile,
+  isSavingProfile,
+  onProfileDisplayNameChange,
+  onSaveProfileDisplayName
+}: DashboardProfilePanelProps) {
+  return (
+    <div className="grid gap-2 rounded-[14px] border border-[#deead9] bg-[linear-gradient(140deg,rgba(244,255,245,0.95),rgba(247,254,255,0.92))] px-2.5 py-2">
+      <strong>{text.profileTitle}</strong>
+      <small className={smallMutedClassName}>{text.profileSubtitle}</small>
+      <label className={inlineFieldClassName}>
+        {text.profileDisplayNameLabel}
+        <input
+          className={inputClassName}
+          value={profileDisplayName}
+          onChange={(event) => onProfileDisplayNameChange(event.target.value)}
+          placeholder={text.profileDisplayNamePlaceholder}
+          disabled={isLoadingProfile || isSavingProfile}
+        />
+      </label>
+      {profileEmail ? <small className={smallMutedClassName}>{text.profileEmailReadOnly(profileEmail)}</small> : null}
+      <div className={chipRowClassName}>
+        <button
+          type="button"
+          className={actionButtonClassName}
+          onClick={onSaveProfileDisplayName}
+          disabled={isLoadingProfile || isSavingProfile}
+        >
+          {isSavingProfile ? text.buttonSaving : text.profileSaveButton}
+        </button>
+      </div>
+    </div>
+  );
+}

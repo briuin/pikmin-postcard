@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { deriveOriginalImageUrl } from '@/lib/postcards/image-url';
 
 export function maskEmail(email: string | null | undefined): string | null {
   if (!email) {
@@ -21,25 +22,7 @@ export function maskEmail(email: string | null | undefined): string | null {
   return `${maskedLocal}@${maskedRoot}.${tld}`;
 }
 
-export function deriveOriginalImageUrl(imageUrl: string | null | undefined): string | null {
-  if (!imageUrl) {
-    return null;
-  }
-
-  if (imageUrl.includes('/uploads/original/')) {
-    return imageUrl;
-  }
-
-  if (imageUrl.includes('/uploads/postcard/')) {
-    const fileName = imageUrl.split('/').pop()?.toLowerCase() ?? '';
-    if (fileName.includes('recrop-')) {
-      return null;
-    }
-    return imageUrl.replace('/uploads/postcard/', '/uploads/original/');
-  }
-
-  return null;
-}
+export { deriveOriginalImageUrl };
 
 export function hasMissingOriginalImageColumnError(error: unknown): boolean {
   if (!(error instanceof Prisma.PrismaClientKnownRequestError)) {
