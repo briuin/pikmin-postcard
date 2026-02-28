@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { deriveOriginalImageUrl, maskEmail } from '@/lib/postcards/shared';
+import { deriveOriginalImageUrl } from '@/lib/postcards/shared';
 
 const postcardListSelectBase = {
   id: true,
@@ -26,7 +26,7 @@ const postcardListSelectBase = {
   createdAt: true,
   updatedAt: true,
   user: {
-    select: { email: true }
+    select: { email: true, displayName: true }
   },
   tags: {
     include: {
@@ -44,7 +44,7 @@ export const postcardListSelectWithoutOriginalImageUrl = postcardListSelectBase 
 
 type SerializablePostcard = {
   id: string;
-  user?: { email: string } | null;
+  user?: { email: string; displayName?: string | null } | null;
   imageUrl?: string | null;
   originalImageUrl?: string | null;
   [key: string]: unknown;
@@ -66,7 +66,7 @@ export function serializePostcards(
               originalImageUrl ?? deriveOriginalImageUrl(postcard.imageUrl)
           }
         : {}),
-      uploaderMasked: maskEmail(user?.email)
+      uploaderName: user?.displayName?.trim() ?? null
     };
   });
 }

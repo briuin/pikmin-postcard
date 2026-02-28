@@ -16,7 +16,7 @@ export type PostcardRecord = {
   wrongLocationReports: number;
   locationStatus: 'AUTO' | 'USER_CONFIRMED' | 'MANUAL';
   locationModelVersion: string | null;
-  uploaderMasked?: string | null;
+  uploaderName?: string | null;
   viewerFeedback?: {
     liked: boolean;
     disliked: boolean;

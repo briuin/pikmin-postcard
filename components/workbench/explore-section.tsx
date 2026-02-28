@@ -261,7 +261,7 @@ export function ExploreSection({
             ) : null}
 
             <small className={smallMutedClassName}>{selectedPostcard.placeName || text.exploreUnknownPlace}</small>
-            {selectedPostcard.uploaderMasked ? <small className={smallMutedClassName}>{text.exploreUploaderBy(selectedPostcard.uploaderMasked)}</small> : null}
+            {selectedPostcard.uploaderName ? <small className={smallMutedClassName}>{text.exploreUploaderBy(selectedPostcard.uploaderName)}</small> : null}
             <small className={smallMutedClassName}>
               {new Date(selectedPostcard.createdAt).toLocaleString(text.dateLocale)}
             </small>

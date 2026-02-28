@@ -11,6 +11,7 @@ type HomeShellProps = {
 };
 
 function formatSessionText(
+  name: string | null | undefined,
   email: string | null | undefined,
   isLoading: boolean,
   locale: Locale
@@ -24,13 +25,11 @@ function formatSessionText(
     return text.guest;
   }
 
-  const [local, domain] = email.split('@');
-  if (!local || !domain) {
-    return text.signedIn;
+  const normalizedName = name?.trim();
+  if (normalizedName) {
+    return normalizedName;
   }
-
-  const localMasked = local.length <= 3 ? `${local[0] ?? '*'}**` : `${local.slice(0, 3)}***`;
-  return `${localMasked}@${domain}`;
+  return text.signedIn;
 }
 
 export function HomeShell({ page }: HomeShellProps) {
@@ -39,7 +38,12 @@ export function HomeShell({ page }: HomeShellProps) {
   const isAuthenticated = status === 'authenticated';
   const isLoading = status === 'loading';
   const homeText = messages[locale].home;
-  const sessionText = formatSessionText(session?.user?.email ?? null, isLoading, locale);
+  const sessionText = formatSessionText(
+    session?.user?.name ?? null,
+    session?.user?.email ?? null,
+    isLoading,
+    locale
+  );
 
   useEffect(() => {
     if (typeof window === 'undefined') {

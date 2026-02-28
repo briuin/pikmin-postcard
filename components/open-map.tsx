@@ -18,7 +18,7 @@ export type SavedMapMarker = {
   aiConfidence?: number | null;
   aiPlaceGuess?: string | null;
   locationModelVersion?: string | null;
-  uploaderMasked?: string | null;
+  uploaderName?: string | null;
   likeCount?: number;
   dislikeCount?: number;
   wrongLocationReports?: number;
@@ -425,7 +425,7 @@ export function OpenMap({
                   <br />
                   {getLocationMethodText(point)}
                   <br />
-                  by {point.uploaderMasked ?? 'unknown uploader'}
+                  by {point.uploaderName ?? 'unknown uploader'}
                   {point.aiPlaceGuess ? (
                     <>
                       <br />
@@ -481,7 +481,7 @@ export function OpenMap({
                 <strong>{cluster.points.length} postcards nearby</strong>
                 <ul style={{ margin: '0.45rem 0 0', paddingLeft: '1rem' }}>
                   {cluster.points.slice(0, 6).map((point) => (
-                    <li key={point.id}>{point.title} ({point.uploaderMasked ?? 'unknown'})</li>
+                    <li key={point.id}>{point.title} ({point.uploaderName ?? 'unknown'})</li>
                   ))}
                 </ul>
               </Popup>

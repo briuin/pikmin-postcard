@@ -28,9 +28,15 @@ type DashboardSectionProps = {
   savingCropPostcardId: string | null;
   isLoadingJobs: boolean;
   isLoadingMine: boolean;
+  isLoadingProfile: boolean;
+  isSavingProfile: boolean;
+  profileEmail: string;
+  profileDisplayName: string;
   dashboardStatus: string;
   dashboardViewMode: DashboardViewMode;
   onSignIn: () => void;
+  onProfileDisplayNameChange: (value: string) => void;
+  onSaveProfileDisplayName: () => void;
   onSetDashboardViewMode: (mode: DashboardViewMode) => void;
   onRefresh: () => void;
   onUpdateJobDraft: (jobId: string, patch: Partial<DetectionDraft>) => void;
@@ -61,9 +67,15 @@ export function DashboardSection({
   savingCropPostcardId,
   isLoadingJobs,
   isLoadingMine,
+  isLoadingProfile,
+  isSavingProfile,
+  profileEmail,
+  profileDisplayName,
   dashboardStatus,
   dashboardViewMode,
   onSignIn,
+  onProfileDisplayNameChange,
+  onSaveProfileDisplayName,
   onSetDashboardViewMode,
   onRefresh,
   onUpdateJobDraft,
@@ -124,6 +136,32 @@ export function DashboardSection({
         </div>
       ) : (
         <>
+          <div className="grid gap-2 rounded-[14px] border border-[#deead9] bg-[linear-gradient(140deg,rgba(244,255,245,0.95),rgba(247,254,255,0.92))] px-2.5 py-2">
+            <strong>{text.profileTitle}</strong>
+            <small className={smallMutedClassName}>{text.profileSubtitle}</small>
+            <label className={inlineFieldClassName}>
+              {text.profileDisplayNameLabel}
+              <input
+                className={inputClassName}
+                value={profileDisplayName}
+                onChange={(event) => onProfileDisplayNameChange(event.target.value)}
+                placeholder={text.profileDisplayNamePlaceholder}
+                disabled={isLoadingProfile || isSavingProfile}
+              />
+            </label>
+            {profileEmail ? <small className={smallMutedClassName}>{text.profileEmailReadOnly(profileEmail)}</small> : null}
+            <div className={chipRowClassName}>
+              <button
+                type="button"
+                className={actionButtonClassName}
+                onClick={onSaveProfileDisplayName}
+                disabled={isLoadingProfile || isSavingProfile}
+              >
+                {isSavingProfile ? text.buttonSaving : text.profileSaveButton}
+              </button>
+            </div>
+          </div>
+
           <div className={dashboardToolbarClassName}>
             <div className={chipRowClassName}>
               <span className={chipClassName}>{text.chipAiJobs(jobs.length)}</span>

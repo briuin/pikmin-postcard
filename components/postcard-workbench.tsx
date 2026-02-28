@@ -115,6 +115,10 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
   const [savingCropPostcardId, setSavingCropPostcardId] = useState<string | null>(null);
   const [isLoadingJobs, setIsLoadingJobs] = useState(false);
   const [isLoadingMine, setIsLoadingMine] = useState(false);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profileEmail, setProfileEmail] = useState('');
+  const [profileDisplayName, setProfileDisplayName] = useState('');
   const [dashboardStatus, setDashboardStatus] = useState('');
   const [dashboardViewMode, setDashboardViewMode] = useState<DashboardViewMode>('grid');
 
@@ -136,7 +140,7 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
         aiConfidence: postcard.aiConfidence,
         aiPlaceGuess: postcard.aiPlaceGuess,
         locationModelVersion: postcard.locationModelVersion,
-        uploaderMasked: postcard.uploaderMasked ?? null,
+        uploaderName: postcard.uploaderName ?? null,
         likeCount: postcard.likeCount ?? 0,
         dislikeCount: postcard.dislikeCount ?? 0,
         wrongLocationReports: postcard.wrongLocationReports ?? 0
@@ -425,11 +429,13 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
     setDashboardStatus('');
     setIsLoadingJobs(true);
     setIsLoadingMine(true);
+    setIsLoadingProfile(true);
 
     try {
-      const [jobsResponse, mineResponse] = await Promise.all([
+      const [jobsResponse, mineResponse, profileResponse] = await Promise.all([
         fetch('/api/location-from-image', { cache: 'no-store' }),
-        fetch('/api/postcards?mine=1', { cache: 'no-store' })
+        fetch('/api/postcards?mine=1', { cache: 'no-store' }),
+        fetch('/api/profile', { cache: 'no-store' })
       ]);
 
       if (!jobsResponse.ok) {
@@ -439,11 +445,17 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
       if (!mineResponse.ok) {
         throw new Error(text.dashboardLoadMineFailed);
       }
+      if (!profileResponse.ok) {
+        throw new Error(text.dashboardUnknownError);
+      }
 
       const jobsData = (await jobsResponse.json()) as DetectionJobRecord[];
       const mineData = (await mineResponse.json()) as PostcardRecord[];
+      const profileData = (await profileResponse.json()) as { email?: string; displayName?: string | null };
       setJobs(jobsData);
       setMyPostcards(mineData);
+      setProfileEmail(profileData.email ?? '');
+      setProfileDisplayName(profileData.displayName ?? '');
       setPostcardDrafts((current) => {
         const next: Record<string, PostcardEditDraft> = { ...current };
         for (const postcard of mineData) {
@@ -456,6 +468,7 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
     } finally {
       setIsLoadingJobs(false);
       setIsLoadingMine(false);
+      setIsLoadingProfile(false);
     }
   }
 
@@ -697,6 +710,41 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
       setDashboardStatus(error instanceof Error ? error.message : text.aiSaveUnknownError);
     } finally {
       setSavingJobId(null);
+    }
+  }
+
+  async function saveProfileDisplayName() {
+    if (!ensureAuthenticated()) {
+      return;
+    }
+
+    const displayName = profileDisplayName.trim();
+    if (!displayName) {
+      setDashboardStatus(text.profileDisplayNameRequired);
+      return;
+    }
+
+    setIsSavingProfile(true);
+    setDashboardStatus(text.profileSaving);
+    try {
+      const response = await fetch('/api/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ displayName })
+      });
+
+      const payload = (await response.json()) as { error?: string; displayName?: string };
+      if (!response.ok) {
+        throw new Error(payload.error ?? text.profileSaveFailed);
+      }
+
+      setProfileDisplayName(payload.displayName ?? displayName);
+      setDashboardStatus(text.profileSaved);
+      await loadPublicPostcards();
+    } catch (error) {
+      setDashboardStatus(error instanceof Error ? error.message : text.profileUnknownError);
+    } finally {
+      setIsSavingProfile(false);
     }
   }
 
@@ -969,9 +1017,15 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
           savingCropPostcardId={savingCropPostcardId}
           isLoadingJobs={isLoadingJobs}
           isLoadingMine={isLoadingMine}
+          isLoadingProfile={isLoadingProfile}
+          isSavingProfile={isSavingProfile}
+          profileEmail={profileEmail}
+          profileDisplayName={profileDisplayName}
           dashboardStatus={dashboardStatus}
           dashboardViewMode={dashboardViewMode}
           onSignIn={() => signIn('google')}
+          onProfileDisplayNameChange={setProfileDisplayName}
+          onSaveProfileDisplayName={() => void saveProfileDisplayName()}
           onSetDashboardViewMode={setDashboardViewMode}
           onRefresh={() => void loadDashboardData()}
           onUpdateJobDraft={updateJobDraft}
