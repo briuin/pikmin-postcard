@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
-import { FeedbackAction, Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { getAuthenticatedUser, isApprovedUser } from '@/lib/api-auth';
-import { toViewerFeedback } from '@/lib/postcards/feedback';
-import { prisma } from '@/lib/prisma';
+import {
+  submitPostcardFeedback,
+  type FeedbackInputAction
+} from '@/lib/postcards/feedback-mutations';
 import { recordUserAction } from '@/lib/user-action-log';
 
 const feedbackSchema = z.object({
@@ -13,72 +14,6 @@ const feedbackSchema = z.object({
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
-
-type FeedbackResult = 'added' | 'removed' | 'switched' | 'already_reported';
-
-function toFeedbackAction(action: 'like' | 'dislike' | 'report_wrong_location'): FeedbackAction {
-  if (action === 'like') {
-    return FeedbackAction.LIKE;
-  }
-  if (action === 'dislike') {
-    return FeedbackAction.DISLIKE;
-  }
-  return FeedbackAction.REPORT_WRONG_LOCATION;
-}
-
-async function incrementActionCount(
-  tx: Prisma.TransactionClient,
-  postcardId: string,
-  action: FeedbackAction
-): Promise<void> {
-  if (action === FeedbackAction.LIKE) {
-    await tx.postcard.update({
-      where: { id: postcardId },
-      data: { likeCount: { increment: 1 } }
-    });
-    return;
-  }
-
-  if (action === FeedbackAction.DISLIKE) {
-    await tx.postcard.update({
-      where: { id: postcardId },
-      data: { dislikeCount: { increment: 1 } }
-    });
-    return;
-  }
-
-  await tx.postcard.update({
-    where: { id: postcardId },
-    data: { wrongLocationReports: { increment: 1 } }
-  });
-}
-
-async function decrementActionCount(
-  tx: Prisma.TransactionClient,
-  postcardId: string,
-  action: FeedbackAction
-): Promise<void> {
-  if (action === FeedbackAction.LIKE) {
-    await tx.postcard.update({
-      where: { id: postcardId },
-      data: { likeCount: { decrement: 1 } }
-    });
-    return;
-  }
-
-  if (action === FeedbackAction.DISLIKE) {
-    await tx.postcard.update({
-      where: { id: postcardId },
-      data: { dislikeCount: { decrement: 1 } }
-    });
-    return;
-  }
-
-  await tx.postcard.update({
-    where: { id: postcardId },
-    data: { wrongLocationReports: { decrement: 1 } }
-  });
-}
 
 export async function POST(request: Request, context: RouteContext) {
   const actor = await getAuthenticatedUser({ createIfMissing: true });
@@ -101,7 +36,9 @@ export async function POST(request: Request, context: RouteContext) {
   }
 
   try {
-    const body = feedbackSchema.parse(await request.json());
+    const body = feedbackSchema.parse(await request.json()) as {
+      action: FeedbackInputAction;
+    };
     await recordUserAction({
       request,
       userId: actor.id,
@@ -111,117 +48,11 @@ export async function POST(request: Request, context: RouteContext) {
         feedbackAction: body.action
       }
     });
-    const action = toFeedbackAction(body.action);
 
-    const postcard = await prisma.$transaction(async (tx) => {
-      const exists = await tx.postcard.findFirst({
-        where: {
-          id,
-          deletedAt: null
-        },
-        select: { id: true }
-      });
-
-      if (!exists) {
-        return null;
-      }
-
-      let result: FeedbackResult = 'added';
-      if (action === FeedbackAction.REPORT_WRONG_LOCATION) {
-        try {
-          await tx.postcardFeedback.create({
-            data: {
-              postcardId: id,
-              userId: actor.id,
-              action
-            }
-          });
-          await incrementActionCount(tx, id, action);
-        } catch (error) {
-          if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-            result = 'already_reported';
-          } else {
-            throw error;
-          }
-        }
-      } else {
-        const existingVotes = await tx.postcardFeedback.findMany({
-          where: {
-            postcardId: id,
-            userId: actor.id,
-            action: {
-              in: [FeedbackAction.LIKE, FeedbackAction.DISLIKE]
-            }
-          },
-          select: {
-            id: true,
-            action: true
-          }
-        });
-
-        const sameVote = existingVotes.find((item) => item.action === action);
-        const oppositeVote = existingVotes.find((item) => item.action !== action);
-
-        if (sameVote) {
-          await tx.postcardFeedback.delete({
-            where: {
-              id: sameVote.id
-            }
-          });
-          await decrementActionCount(tx, id, action);
-          result = 'removed';
-        } else {
-          if (oppositeVote) {
-            await tx.postcardFeedback.delete({
-              where: {
-                id: oppositeVote.id
-              }
-            });
-            await decrementActionCount(tx, id, oppositeVote.action);
-            result = 'switched';
-          }
-
-          await tx.postcardFeedback.create({
-            data: {
-              postcardId: id,
-              userId: actor.id,
-              action
-            }
-          });
-          await incrementActionCount(tx, id, action);
-        }
-      }
-
-      const counts = await tx.postcard.findUnique({
-        where: { id },
-        select: {
-          id: true,
-          likeCount: true,
-          dislikeCount: true,
-          wrongLocationReports: true
-        }
-      });
-
-      if (!counts) {
-        return null;
-      }
-
-      const feedbackRows = await tx.postcardFeedback.findMany({
-        where: {
-          postcardId: id,
-          userId: actor.id
-        },
-        select: {
-          action: true
-        }
-      });
-
-      return {
-        ...counts,
-        result,
-        action: body.action,
-        viewerFeedback: toViewerFeedback(feedbackRows.map((item) => item.action))
-      };
+    const postcard = await submitPostcardFeedback({
+      postcardId: id,
+      userId: actor.id,
+      action: body.action
     });
 
     if (!postcard) {

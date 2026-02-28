@@ -9,11 +9,10 @@ import {
   getFeedbackStatusMessage,
   type ExploreFeedbackAction
 } from '@/components/workbench/explore/shared';
+import { useExploreGeolocationController } from '@/components/workbench/explore/use-geolocation-controller';
 import type { WorkbenchText } from '@/lib/i18n';
 import type {
-  DeviceLocation,
   ExploreSort,
-  GeoPermissionState,
   PostcardRecord,
   PublicPostcardsPayload
 } from '@/components/workbench/types';
@@ -37,72 +36,20 @@ export function useExploreController({ text, isAuthenticated, showExplore }: Use
   const [mapBounds, setMapBounds] = useState<MapViewportBounds | null>(null);
   const [feedbackPendingKey, setFeedbackPendingKey] = useState<string | null>(null);
 
-  const [deviceLocation, setDeviceLocation] = useState<DeviceLocation | null>(null);
-  const [viewerFocusSignal, setViewerFocusSignal] = useState(0);
-  const [, setGeoPermission] = useState<GeoPermissionState>('prompt');
-  const [isRequestingLocation, setIsRequestingLocation] = useState(false);
-
   const visiblePostcards = postcards;
 
   const publicMarkers = useMemo(() => buildPublicMarkers(visiblePostcards), [visiblePostcards]);
 
-  const requestDeviceLocation = useCallback(
-    async (silent = false): Promise<boolean> => {
-      if (!navigator.geolocation) {
-        setGeoPermission('unsupported');
-        if (!silent) {
-          setExploreStatus(text.geoUnsupported);
-        }
-        return false;
-      }
-
-      setIsRequestingLocation(true);
-
-      try {
-        const granted = await new Promise<boolean>((resolve) => {
-          navigator.geolocation.getCurrentPosition(
-            (position) => {
-              setGeoPermission('granted');
-              setDeviceLocation({
-                latitude: position.coords.latitude,
-                longitude: position.coords.longitude,
-                accuracy: position.coords.accuracy
-              });
-              resolve(true);
-            },
-            (error) => {
-              if (error.code === error.PERMISSION_DENIED) {
-                setGeoPermission('denied');
-              } else {
-                setGeoPermission('prompt');
-              }
-              resolve(false);
-            },
-            {
-              enableHighAccuracy: true,
-              timeout: 10000,
-              maximumAge: 30000
-            }
-          );
-        });
-
-        if (!granted && !silent) {
-          setExploreStatus(text.geoLocateFailed);
-        }
-
-        if (granted && !silent) {
-          setFocusedMarkerId(null);
-          setViewerFocusSignal((current) => current + 1);
-          setExploreStatus(text.geoLocated);
-        }
-
-        return granted;
-      } finally {
-        setIsRequestingLocation(false);
-      }
-    },
-    [text.geoLocateFailed, text.geoLocated, text.geoUnsupported]
-  );
+  const {
+    deviceLocation,
+    viewerFocusSignal,
+    isRequestingLocation,
+    requestDeviceLocation
+  } = useExploreGeolocationController({
+    text,
+    onSetStatus: setExploreStatus,
+    onResetFocusedMarker: () => setFocusedMarkerId(null)
+  });
 
   const handleViewportChange = useCallback((bounds: MapViewportBounds) => {
     setMapBounds((current) => {
@@ -201,51 +148,6 @@ export function useExploreController({ text, isAuthenticated, showExplore }: Use
       text
     ]
   );
-
-  useEffect(() => {
-    let isMounted = true;
-    let permissionStatus: PermissionStatus | null = null;
-
-    async function loadPermissionStatus() {
-      if (!navigator.geolocation) {
-        setGeoPermission('unsupported');
-        return;
-      }
-
-      if (!navigator.permissions) {
-        setGeoPermission('prompt');
-        return;
-      }
-
-      try {
-        permissionStatus = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
-
-        if (!isMounted) {
-          return;
-        }
-
-        setGeoPermission(permissionStatus.state as GeoPermissionState);
-        permissionStatus.onchange = () => {
-          setGeoPermission(permissionStatus?.state as GeoPermissionState);
-        };
-
-        if (permissionStatus.state === 'granted') {
-          await requestDeviceLocation(true);
-        }
-      } catch {
-        setGeoPermission('prompt');
-      }
-    }
-
-    void loadPermissionStatus();
-
-    return () => {
-      isMounted = false;
-      if (permissionStatus) {
-        permissionStatus.onchange = null;
-      }
-    };
-  }, [requestDeviceLocation]);
 
   useEffect(() => {
     if (!showExplore || !mapBounds) {

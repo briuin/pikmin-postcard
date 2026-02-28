@@ -1,4 +1,5 @@
 import { auth } from '@/auth';
+import type { Prisma } from '@prisma/client';
 import { UserApprovalStatus, UserRole } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { defaultApprovalStatusForRole, isApprovedStatus } from '@/lib/user-approval';
@@ -23,6 +24,45 @@ type AuthenticatedUser = {
   canSubmitDetection: boolean;
   canVote: boolean;
 };
+
+const authenticatedUserSelect = {
+  id: true,
+  email: true,
+  role: true,
+  approvalStatus: true,
+  canCreatePostcard: true,
+  canSubmitDetection: true,
+  canVote: true
+} as const;
+
+type AuthenticatedUserRecord = Prisma.UserGetPayload<{
+  select: typeof authenticatedUserSelect;
+}>;
+
+function getDefaultUserAuthValues(email: string) {
+  const defaultRole = roleForEmail(email);
+  const defaultApprovalStatus = defaultApprovalStatusForRole(defaultRole);
+  return {
+    defaultRole,
+    defaultApprovalStatus
+  };
+}
+
+function toAuthenticatedUser(
+  user: NonNullable<AuthenticatedUserRecord>,
+  name: string | null
+): AuthenticatedUser {
+  return {
+    id: user.id,
+    email: user.email,
+    role: user.role,
+    approvalStatus: user.approvalStatus,
+    canCreatePostcard: user.canCreatePostcard,
+    canSubmitDetection: user.canSubmitDetection,
+    canVote: user.canVote,
+    name
+  };
+}
 
 export async function getAuthenticatedUserEmail(): Promise<string | null> {
   const session = await auth();
@@ -54,8 +94,7 @@ export async function getUserIdByEmail(
 ): Promise<string | null> {
   const normalizedEmail = normalizeEmail(email);
   const displayName = options.defaultDisplayName?.trim();
-  const defaultRole = roleForEmail(normalizedEmail);
-  const defaultApprovalStatus = defaultApprovalStatusForRole(defaultRole);
+  const { defaultRole, defaultApprovalStatus } = getDefaultUserAuthValues(normalizedEmail);
 
   if (options.createIfMissing) {
     const user = await prisma.user.upsert({
@@ -103,8 +142,7 @@ export async function getAuthenticatedUser(
   }
 
   const normalizedEmail = normalizeEmail(identity.email);
-  const defaultRole = roleForEmail(normalizedEmail);
-  const defaultApprovalStatus = defaultApprovalStatusForRole(defaultRole);
+  const { defaultRole, defaultApprovalStatus } = getDefaultUserAuthValues(normalizedEmail);
 
   if (options.createIfMissing) {
     const user = await prisma.user.upsert({
@@ -119,56 +157,22 @@ export async function getAuthenticatedUser(
         role: defaultRole,
         approvalStatus: defaultApprovalStatus
       },
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        approvalStatus: true,
-        canCreatePostcard: true,
-        canSubmitDetection: true,
-        canVote: true
-      }
+      select: authenticatedUserSelect
     });
 
-    return {
-      id: user.id,
-      email: user.email,
-      role: user.role,
-      approvalStatus: user.approvalStatus,
-      canCreatePostcard: user.canCreatePostcard,
-      canSubmitDetection: user.canSubmitDetection,
-      canVote: user.canVote,
-      name: identity.name
-    };
+    return toAuthenticatedUser(user, identity.name);
   }
 
   const user = await prisma.user.findUnique({
     where: { email: normalizedEmail },
-    select: {
-      id: true,
-      email: true,
-      role: true,
-      approvalStatus: true,
-      canCreatePostcard: true,
-      canSubmitDetection: true,
-      canVote: true
-    }
+    select: authenticatedUserSelect
   });
 
   if (!user) {
     return null;
   }
 
-  return {
-    id: user.id,
-    email: user.email,
-    role: user.role,
-    approvalStatus: user.approvalStatus,
-    canCreatePostcard: user.canCreatePostcard,
-    canSubmitDetection: user.canSubmitDetection,
-    canVote: user.canVote,
-    name: identity.name
-  };
+  return toAuthenticatedUser(user, identity.name);
 }
 
 export function isApprovedUser(
