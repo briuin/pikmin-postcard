@@ -9,22 +9,7 @@ import {
   smallMutedClassName
 } from '@/components/workbench/explore-view/styles';
 import type { ExplorePostcardModalProps } from '@/components/workbench/explore-view/types';
-
-function getPostcardTypeLabel(
-  postcardType: ExplorePostcardModalProps['postcard']['postcardType'],
-  text: ExplorePostcardModalProps['text']
-): string {
-  if (postcardType === 'MUSHROOM') {
-    return text.postcardTypeMushroom;
-  }
-  if (postcardType === 'FLOWER') {
-    return text.postcardTypeFlower;
-  }
-  if (postcardType === 'EXPLORATION') {
-    return text.postcardTypeExploration;
-  }
-  return text.postcardTypeUnknown;
-}
+import { getPostcardTypeLabel } from '@/lib/postcard-type-label';
 
 export function ExplorePostcardModal({
   text,

@@ -2,6 +2,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { PostcardCoordinateCopy } from '@/components/postcard-coordinate-copy';
+import { getPostcardTypeLabel } from '@/lib/postcard-type-label';
 import { findPostcardsForList } from '@/lib/postcards/repository';
 import { maskEmail } from '@/lib/postcards/shared';
 
@@ -10,19 +11,6 @@ type PageProps = {
 };
 
 export const dynamic = 'force-dynamic';
-
-function getPostcardTypeLabel(postcardType: string): string {
-  if (postcardType === 'MUSHROOM') {
-    return 'Mushroom';
-  }
-  if (postcardType === 'FLOWER') {
-    return 'Flower';
-  }
-  if (postcardType === 'EXPLORATION') {
-    return 'Exploration';
-  }
-  return 'Unknown';
-}
 
 export default async function PostcardSharePage({ params }: PageProps) {
   const { id } = await params;
