@@ -2,7 +2,7 @@ import { HomeShell } from '@/components/home-shell';
 
 export default function HomePage() {
   return (
-    <main>
+    <main className="explore-main">
       <HomeShell page="explore" />
     </main>
   );

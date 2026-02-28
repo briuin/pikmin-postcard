@@ -51,8 +51,7 @@ export function ExploreSection({
   mapNode
 }: ExploreSectionProps) {
   const [selectedPostcardId, setSelectedPostcardId] = useState<string | null>(null);
-  const [copyStatus, setCopyStatus] = useState('');
-  const [shareStatus, setShareStatus] = useState('');
+  const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null);
 
   const selectedPostcard = useMemo(
     () => visiblePostcards.find((postcard) => postcard.id === selectedPostcardId) ?? null,
@@ -62,10 +61,16 @@ export function ExploreSection({
   useEffect(() => {
     if (selectedPostcardId && !selectedPostcard) {
       setSelectedPostcardId(null);
-      setCopyStatus('');
-      setShareStatus('');
     }
   }, [selectedPostcardId, selectedPostcard]);
+
+  useEffect(() => {
+    if (!toast) {
+      return;
+    }
+    const timer = window.setTimeout(() => setToast(null), 2200);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
 
   useEffect(() => {
     if (!selectedPostcard) {
@@ -99,9 +104,13 @@ export function ExploreSection({
   const modalActionWarnButtonClassName =
     'rounded-xl border border-[#e9c782] bg-[linear-gradient(135deg,#f2cf6a,#e3b84f)] px-3 py-2 text-[0.86rem] font-bold text-[#34402f] shadow-[0_6px_14px_rgba(220,170,67,0.2)] transition hover:enabled:-translate-y-px disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none';
 
+  function showToast(message: string, tone: 'success' | 'error') {
+    setToast({ message, tone });
+  }
+
   async function copyCoordinates(postcard: PostcardRecord) {
     if (typeof postcard.latitude !== 'number' || typeof postcard.longitude !== 'number') {
-      setCopyStatus(text.exploreNoCoordinates);
+      showToast(text.exploreNoCoordinates, 'error');
       return;
     }
 
@@ -109,9 +118,9 @@ export function ExploreSection({
       await navigator.clipboard.writeText(
         `${postcard.latitude.toFixed(6)}, ${postcard.longitude.toFixed(6)}`
       );
-      setCopyStatus(text.exploreCopyCoordinatesDone);
+      showToast(text.exploreCopyCoordinatesDone, 'success');
     } catch {
-      setCopyStatus(text.exploreCopyCoordinatesFailed);
+      showToast(text.exploreCopyCoordinatesFailed, 'error');
     }
   }
 
@@ -119,9 +128,9 @@ export function ExploreSection({
     try {
       const baseUrl = window.location.origin;
       await navigator.clipboard.writeText(`${baseUrl}/postcard/${postcard.id}`);
-      setShareStatus(text.exploreSharePostcardDone);
+      showToast(text.exploreSharePostcardDone, 'success');
     } catch {
-      setShareStatus(text.exploreSharePostcardFailed);
+      showToast(text.exploreSharePostcardFailed, 'error');
     }
   }
 
@@ -233,13 +242,13 @@ export function ExploreSection({
                     />
                   ) : null}
                   <div className="min-w-0 flex-1 grid gap-0.5">
-                    <div className="flex items-center gap-1.5">
-                      <strong className="truncate">{postcard.title}</strong>
+                    <div className="flex min-w-0 items-center gap-1.5">
                       {isAiDetected(postcard) ? (
                         <span className="inline-flex shrink-0 items-center rounded-full border border-[#c6d9ff] bg-[#e9f1ff] px-1.5 py-0.5 text-[0.65rem] font-black uppercase tracking-[0.06em] text-[#365da6]">
                           AI
                         </span>
                       ) : null}
+                      <strong className="min-w-0 truncate">{postcard.title}</strong>
                     </div>
                     <small className={smallMutedClassName}>
                       {new Date(postcard.createdAt).toLocaleDateString(text.dateLocale)}
@@ -259,8 +268,6 @@ export function ExploreSection({
           className="fixed inset-0 z-[1200] grid place-items-center bg-[radial-gradient(circle_at_16%_8%,rgba(244,199,66,0.26),transparent_38%),radial-gradient(circle_at_86%_18%,rgba(78,142,247,0.22),transparent_40%),rgba(14,28,22,0.58)] p-3 backdrop-blur-[2px] max-[780px]:place-items-end max-[780px]:p-0"
           onClick={() => {
             setSelectedPostcardId(null);
-            setCopyStatus('');
-            setShareStatus('');
           }}
         >
           <article
@@ -275,13 +282,15 @@ export function ExploreSection({
                 <span className="inline-flex w-fit items-center rounded-full border border-[#d4e7d3] bg-[#f4fff4] px-2.5 py-1 text-[0.72rem] font-black uppercase tracking-[0.08em] text-[#2b6442]">
                   {text.exploreTitle}
                 </span>
-                <div className="flex items-center gap-1.5">
-                  <strong className="text-[1.1rem] leading-tight text-[#1a3428] max-[580px]:text-[1rem]">{selectedPostcard.title}</strong>
+                <div className="flex min-w-0 items-start gap-1.5">
                   {isAiDetected(selectedPostcard) ? (
                     <span className="inline-flex shrink-0 items-center rounded-full border border-[#c6d9ff] bg-[#e9f1ff] px-1.5 py-0.5 text-[0.65rem] font-black uppercase tracking-[0.06em] text-[#365da6]">
                       AI
                     </span>
                   ) : null}
+                  <strong className="min-w-0 [overflow-wrap:anywhere] text-[1.1rem] leading-tight text-[#1a3428] max-[580px]:text-[1rem]">
+                    {selectedPostcard.title}
+                  </strong>
                 </div>
               </div>
               <button
@@ -289,8 +298,6 @@ export function ExploreSection({
                 className="h-8 w-8 shrink-0 rounded-full border border-[#d2e4d2] bg-white/90 text-[1rem] font-bold leading-none text-[#325445] shadow-[0_4px_10px_rgba(40,73,57,0.12)]"
                 onClick={() => {
                   setSelectedPostcardId(null);
-                  setCopyStatus('');
-                  setShareStatus('');
                 }}
                 aria-label={text.buttonCancel}
                 title={text.buttonCancel}
@@ -349,8 +356,6 @@ export function ExploreSection({
                   </button>
                 </div>
               </div>
-              {copyStatus ? <small className={smallMutedClassName}>{copyStatus}</small> : null}
-              {shareStatus ? <small className={smallMutedClassName}>{shareStatus}</small> : null}
             </div>
 
             {selectedPostcard.notes ? (
@@ -431,6 +436,22 @@ export function ExploreSection({
               </button>
             </div>
           </article>
+        </div>
+      ) : null}
+
+      {toast ? (
+        <div className="pointer-events-none fixed bottom-4 left-1/2 z-[1300] -translate-x-1/2 px-3 max-[780px]:bottom-[max(0.9rem,env(safe-area-inset-bottom))]">
+          <div
+            className={
+              toast.tone === 'success'
+                ? 'rounded-full border border-[#9ad6ac] bg-[linear-gradient(145deg,#f4fff6,#e8fbef)] px-3.5 py-1.5 text-[0.83rem] font-semibold text-[#24543a] shadow-[0_10px_20px_rgba(36,84,58,0.18)]'
+                : 'rounded-full border border-[#e5c596] bg-[linear-gradient(145deg,#fff7e8,#ffefd6)] px-3.5 py-1.5 text-[0.83rem] font-semibold text-[#704f1f] shadow-[0_10px_20px_rgba(112,79,31,0.16)]'
+            }
+            role="status"
+            aria-live="polite"
+          >
+            {toast.message}
+          </div>
         </div>
       ) : null}
     </article>
