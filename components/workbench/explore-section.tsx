@@ -1,6 +1,6 @@
 'use client';
 
-import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { ExploreFilters } from '@/components/workbench/explore-view/filters';
 import { ExplorePostcardModal } from '@/components/workbench/explore-view/postcard-modal';
 import { ExplorePostcardsList } from '@/components/workbench/explore-view/postcards-list';
@@ -11,6 +11,7 @@ import {
 import { ExploreSummary } from '@/components/workbench/explore-view/summary';
 import { ExploreToastBanner } from '@/components/workbench/explore-view/toast';
 import type { ExploreToast } from '@/components/workbench/explore-view/types';
+import { useAutoDismiss } from '@/components/use-auto-dismiss';
 import type { WorkbenchText } from '@/lib/i18n';
 import type { ExploreSort, PostcardRecord } from '@/components/workbench/types';
 
@@ -72,14 +73,8 @@ export function ExploreSection({
       setSelectedPostcardId(null);
     }
   }, [selectedPostcardId, selectedPostcard]);
-
-  useEffect(() => {
-    if (!toast) {
-      return;
-    }
-    const timer = window.setTimeout(() => setToast(null), 2200);
-    return () => window.clearTimeout(timer);
-  }, [toast]);
+  const clearToast = useCallback(() => setToast(null), []);
+  useAutoDismiss(toast, clearToast);
 
   useEffect(() => {
     if (!selectedPostcard) {

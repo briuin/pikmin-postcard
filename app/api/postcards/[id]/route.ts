@@ -1,9 +1,6 @@
 import { NextResponse } from 'next/server';
-import {
-  getAuthenticatedUser,
-  isApprovedUser,
-  isManagerOrAboveRole
-} from '@/lib/api-auth';
+import { isManagerOrAboveRole } from '@/lib/api-auth';
+import { requireApprovedActor } from '@/lib/api-guards';
 import {
   applyPostcardCropUpdate,
   applyPostcardDetailsUpdate,
@@ -17,20 +14,45 @@ type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
-export async function PATCH(request: Request, context: RouteContext) {
-  const actor = await getAuthenticatedUser();
-  if (!actor) {
-    return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+type ApprovedActor = {
+  id: string;
+  role: Parameters<typeof isManagerOrAboveRole>[0];
+};
+
+type PostcardRouteContextResult =
+  | { ok: true; actor: ApprovedActor; id: string }
+  | { ok: false; response: NextResponse };
+
+async function resolveApprovedPostcardRouteContext(
+  context: RouteContext
+): Promise<PostcardRouteContextResult> {
+  const guard = await requireApprovedActor();
+  if (!guard.ok) {
+    return { ok: false, response: guard.response };
   }
-  if (!isApprovedUser(actor)) {
-    return NextResponse.json({ error: 'Account pending approval.' }, { status: 403 });
-  }
-  const canEditAny = isManagerOrAboveRole(actor.role);
 
   const { id } = await context.params;
   if (!id) {
-    return NextResponse.json({ error: 'Missing postcard id.' }, { status: 400 });
+    return {
+      ok: false,
+      response: NextResponse.json({ error: 'Missing postcard id.' }, { status: 400 })
+    };
   }
+
+  return {
+    ok: true,
+    actor: guard.value,
+    id
+  };
+}
+
+export async function PATCH(request: Request, context: RouteContext) {
+  const routeContext = await resolveApprovedPostcardRouteContext(context);
+  if (!routeContext.ok) {
+    return routeContext.response;
+  }
+  const { actor, id } = routeContext;
+  const canEditAny = isManagerOrAboveRole(actor.role);
 
   try {
     const body = await request.json();
@@ -97,18 +119,11 @@ export async function PATCH(request: Request, context: RouteContext) {
 }
 
 export async function DELETE(request: Request, context: RouteContext) {
-  const actor = await getAuthenticatedUser();
-  if (!actor) {
-    return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+  const routeContext = await resolveApprovedPostcardRouteContext(context);
+  if (!routeContext.ok) {
+    return routeContext.response;
   }
-  if (!isApprovedUser(actor)) {
-    return NextResponse.json({ error: 'Account pending approval.' }, { status: 403 });
-  }
-
-  const { id } = await context.params;
-  if (!id) {
-    return NextResponse.json({ error: 'Missing postcard id.' }, { status: 400 });
-  }
+  const { actor, id } = routeContext;
 
   await recordUserAction({
     request,

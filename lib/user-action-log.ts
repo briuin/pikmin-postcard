@@ -8,6 +8,14 @@ type RecordUserActionInput = {
   metadata?: Prisma.InputJsonValue;
 };
 
+export function buildUploadedFileActionMetadata(file: File): Prisma.InputJsonValue {
+  return {
+    fileName: file.name,
+    mimeType: file.type,
+    size: file.size
+  };
+}
+
 function firstNonEmptyValue(values: Array<string | null>): string | null {
   for (const value of values) {
     if (value && value.trim().length > 0) {

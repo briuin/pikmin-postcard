@@ -30,26 +30,7 @@ async function incrementActionCount(
   postcardId: string,
   action: FeedbackAction
 ): Promise<void> {
-  if (action === FeedbackAction.LIKE) {
-    await tx.postcard.update({
-      where: { id: postcardId },
-      data: { likeCount: { increment: 1 } }
-    });
-    return;
-  }
-
-  if (action === FeedbackAction.DISLIKE) {
-    await tx.postcard.update({
-      where: { id: postcardId },
-      data: { dislikeCount: { increment: 1 } }
-    });
-    return;
-  }
-
-  await tx.postcard.update({
-    where: { id: postcardId },
-    data: { wrongLocationReports: { increment: 1 } }
-  });
+  await mutateActionCount(tx, postcardId, action, 'increment');
 }
 
 async function decrementActionCount(
@@ -57,10 +38,21 @@ async function decrementActionCount(
   postcardId: string,
   action: FeedbackAction
 ): Promise<void> {
+  await mutateActionCount(tx, postcardId, action, 'decrement');
+}
+
+async function mutateActionCount(
+  tx: Prisma.TransactionClient,
+  postcardId: string,
+  action: FeedbackAction,
+  mode: 'increment' | 'decrement'
+): Promise<void> {
+  const amount = mode === 'increment' ? { increment: 1 } : { decrement: 1 };
+
   if (action === FeedbackAction.LIKE) {
     await tx.postcard.update({
       where: { id: postcardId },
-      data: { likeCount: { decrement: 1 } }
+      data: { likeCount: amount }
     });
     return;
   }
@@ -68,14 +60,14 @@ async function decrementActionCount(
   if (action === FeedbackAction.DISLIKE) {
     await tx.postcard.update({
       where: { id: postcardId },
-      data: { dislikeCount: { decrement: 1 } }
+      data: { dislikeCount: amount }
     });
     return;
   }
 
   await tx.postcard.update({
     where: { id: postcardId },
-    data: { wrongLocationReports: { decrement: 1 } }
+    data: { wrongLocationReports: amount }
   });
 }
 

@@ -72,6 +72,29 @@ function buildEditableWhere({ postcardId, actorId, canEditAny }: EditableWhere):
   };
 }
 
+async function findEditablePostcardBefore(
+  tx: Prisma.TransactionClient,
+  params: EditableWhere
+): Promise<EditablePostcard | null> {
+  return tx.postcard.findFirst({
+    where: buildEditableWhere(params),
+    select: postcardEditSelect
+  });
+}
+
+async function withEditablePostcard(
+  tx: Prisma.TransactionClient,
+  params: EditableWhere,
+  run: (before: EditablePostcard) => Promise<EditablePostcard>
+): Promise<EditablePostcard | null> {
+  const before = await findEditablePostcardBefore(tx, params);
+  if (!before) {
+    return null;
+  }
+
+  return run(before);
+}
+
 function buildPostcardUpdateData(payload: PostcardUpdatePayload): Prisma.PostcardUpdateInput {
   const updateData: Prisma.PostcardUpdateInput = {};
 
@@ -140,45 +163,43 @@ export async function applyPostcardCropUpdate(params: {
   });
 
   const updated = await prisma.$transaction(async (tx) => {
-    const before = await tx.postcard.findFirst({
-      where: buildEditableWhere({
+    return withEditablePostcard(
+      tx,
+      {
         postcardId: params.postcardId,
         actorId: params.actorId,
         canEditAny: params.canEditAny
-      }),
-      select: postcardEditSelect
-    });
-    if (!before) {
-      return null;
-    }
-
-    const updateData: Prisma.PostcardUpdateInput = {
-      imageUrl: postcardImageUrl
-    };
-    if (resolvedOriginalImageUrl) {
-      updateData.originalImageUrl = resolvedOriginalImageUrl;
-    }
-
-    const after = await tx.postcard.update({
-      where: { id: params.postcardId },
-      data: updateData,
-      select: postcardEditSelect
-    });
-
-    await tx.postcardEditHistory.create({
-      data: {
-        postcardId: params.postcardId,
-        userId: params.actorId,
-        action: PostcardEditAction.CROP_UPDATED,
-        beforeData: toEditSnapshot(before),
-        afterData: {
-          ...toEditSnapshot(after),
-          crop: params.crop
+      },
+      async (before) => {
+        const updateData: Prisma.PostcardUpdateInput = {
+          imageUrl: postcardImageUrl
+        };
+        if (resolvedOriginalImageUrl) {
+          updateData.originalImageUrl = resolvedOriginalImageUrl;
         }
-      }
-    });
 
-    return after;
+        const after = await tx.postcard.update({
+          where: { id: params.postcardId },
+          data: updateData,
+          select: postcardEditSelect
+        });
+
+        await tx.postcardEditHistory.create({
+          data: {
+            postcardId: params.postcardId,
+            userId: params.actorId,
+            action: PostcardEditAction.CROP_UPDATED,
+            beforeData: toEditSnapshot(before),
+            afterData: {
+              ...toEditSnapshot(after),
+              crop: params.crop
+            }
+          }
+        });
+
+        return after;
+      }
+    );
   });
 
   if (!updated) {
@@ -199,35 +220,33 @@ export async function applyPostcardDetailsUpdate(params: {
   payload: PostcardUpdatePayload;
 }): Promise<EditablePostcard | null> {
   return prisma.$transaction(async (tx) => {
-    const before = await tx.postcard.findFirst({
-      where: buildEditableWhere({
+    return withEditablePostcard(
+      tx,
+      {
         postcardId: params.postcardId,
         actorId: params.actorId,
         canEditAny: params.canEditAny
-      }),
-      select: postcardEditSelect
-    });
-    if (!before) {
-      return null;
-    }
+      },
+      async (before) => {
+        const after = await tx.postcard.update({
+          where: { id: params.postcardId },
+          data: buildPostcardUpdateData(params.payload),
+          select: postcardEditSelect
+        });
 
-    const after = await tx.postcard.update({
-      where: { id: params.postcardId },
-      data: buildPostcardUpdateData(params.payload),
-      select: postcardEditSelect
-    });
+        await tx.postcardEditHistory.create({
+          data: {
+            postcardId: params.postcardId,
+            userId: params.actorId,
+            action: PostcardEditAction.DETAILS_UPDATED,
+            beforeData: toEditSnapshot(before),
+            afterData: toEditSnapshot(after)
+          }
+        });
 
-    await tx.postcardEditHistory.create({
-      data: {
-        postcardId: params.postcardId,
-        userId: params.actorId,
-        action: PostcardEditAction.DETAILS_UPDATED,
-        beforeData: toEditSnapshot(before),
-        afterData: toEditSnapshot(after)
+        return after;
       }
-    });
-
-    return after;
+    );
   });
 }
 

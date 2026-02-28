@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
 import { requireApprovedCreator } from '@/lib/api-guards';
+import { requireImageFileFromRequest } from '@/lib/request-image';
 import { assertSupportedImage, buildObjectKey, uploadBytesToStorage } from '@/lib/storage';
-import { recordUserAction } from '@/lib/user-action-log';
+import {
+  buildUploadedFileActionMetadata,
+  recordUserAction
+} from '@/lib/user-action-log';
 
 export const runtime = 'nodejs';
 
@@ -11,24 +15,19 @@ export async function POST(request: Request) {
     if (!guard.ok) {
       return guard.response;
     }
-    const { actor } = guard;
+    const actor = guard.value;
 
-    const formData = await request.formData();
-    const file = formData.get('image');
-
-    if (!(file instanceof File)) {
-      return NextResponse.json({ error: 'Missing image file.' }, { status: 400 });
+    const imageFile = await requireImageFileFromRequest(request);
+    if (!imageFile.ok) {
+      return imageFile.response;
     }
+    const { file } = imageFile;
 
     await recordUserAction({
       request,
       userId: actor.id,
       action: 'IMAGE_UPLOAD',
-      metadata: {
-        fileName: file.name,
-        mimeType: file.type,
-        size: file.size
-      }
+      metadata: buildUploadedFileActionMetadata(file)
     });
 
     assertSupportedImage(file);

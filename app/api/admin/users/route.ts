@@ -1,21 +1,20 @@
 import { NextResponse } from 'next/server';
-import { getAuthenticatedUser, isAdminRole } from '@/lib/api-auth';
+import { invalidQueryResponse } from '@/lib/admin/route-helpers';
 import {
   listAdminUsers,
   listUsersQuerySchema,
   updateAdminUserAccess,
   updateUserAccessSchema
 } from '@/lib/admin/users';
+import { requireAdminActor } from '@/lib/api-guards';
 import { recordUserAction } from '@/lib/user-action-log';
 
 export async function GET(request: Request) {
-  const actor = await getAuthenticatedUser({ createIfMissing: true });
-  if (!actor) {
-    return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+  const guard = await requireAdminActor();
+  if (!guard.ok) {
+    return guard.response;
   }
-  if (!isAdminRole(actor.role)) {
-    return NextResponse.json({ error: 'Forbidden.' }, { status: 403 });
-  }
+  const actor = guard.value;
 
   await recordUserAction({
     request,
@@ -31,13 +30,7 @@ export async function GET(request: Request) {
   });
 
   if (!parse.success) {
-    return NextResponse.json(
-      {
-        error: 'Invalid query.',
-        details: parse.error.issues.map((issue) => issue.message).join('; ')
-      },
-      { status: 400 }
-    );
+    return invalidQueryResponse(parse.error);
   }
 
   const users = await listAdminUsers(parse.data);
@@ -45,13 +38,11 @@ export async function GET(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const actor = await getAuthenticatedUser({ createIfMissing: true });
-  if (!actor) {
-    return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+  const guard = await requireAdminActor();
+  if (!guard.ok) {
+    return guard.response;
   }
-  if (!isAdminRole(actor.role)) {
-    return NextResponse.json({ error: 'Forbidden.' }, { status: 403 });
-  }
+  const actor = guard.value;
 
   try {
     const payload = updateUserAccessSchema.parse(await request.json());

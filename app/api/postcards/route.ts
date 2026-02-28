@@ -1,10 +1,8 @@
 import { LocationStatus, PostcardType } from '@prisma/client';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import {
-  getAuthenticatedUserId
-} from '@/lib/api-auth';
-import { requireApprovedCreator } from '@/lib/api-guards';
+import { getAuthenticatedUserId } from '@/lib/api-auth';
+import { requireApprovedCreator, requireAuthenticatedUserId } from '@/lib/api-guards';
 import { prisma } from '@/lib/prisma';
 import {
   attachViewerFeedback,
@@ -41,10 +39,11 @@ export async function GET(request: Request) {
   const viewerUserId = await getAuthenticatedUserId();
 
   if (mineOnly) {
-    const userId = await getAuthenticatedUserId({ createIfMissing: true });
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+    const guard = await requireAuthenticatedUserId({ createIfMissing: true });
+    if (!guard.ok) {
+      return guard.response;
     }
+    const userId = guard.value;
 
     await recordUserAction({
       request,
@@ -120,7 +119,7 @@ export async function POST(request: Request) {
     if (!guard.ok) {
       return guard.response;
     }
-    const { actor } = guard;
+    const actor = guard.value;
 
     const body = postcardCreateSchema.parse(await request.json());
     await recordUserAction({

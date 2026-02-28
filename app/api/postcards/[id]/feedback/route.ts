@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getAuthenticatedUser, isApprovedUser } from '@/lib/api-auth';
+import { requireApprovedVoter } from '@/lib/api-guards';
 import {
   submitPostcardFeedback,
   type FeedbackInputAction
@@ -16,19 +16,11 @@ type RouteContext = {
 };
 
 export async function POST(request: Request, context: RouteContext) {
-  const actor = await getAuthenticatedUser({ createIfMissing: true });
-  if (!actor) {
-    return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+  const guard = await requireApprovedVoter();
+  if (!guard.ok) {
+    return guard.response;
   }
-  if (!isApprovedUser(actor)) {
-    return NextResponse.json({ error: 'Account pending approval.' }, { status: 403 });
-  }
-  if (!actor.canVote) {
-    return NextResponse.json(
-      { error: 'You are not allowed to vote or report locations.' },
-      { status: 403 }
-    );
-  }
+  const actor = guard.value;
 
   const { id } = await context.params;
   if (!id) {

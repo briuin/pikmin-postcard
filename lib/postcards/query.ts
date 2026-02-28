@@ -72,18 +72,32 @@ export function parsePublicQuery(url: URL) {
   });
 }
 
+export function buildPostcardSearchFilter(
+  searchText: string,
+  options: { includeUploaderFields?: boolean } = {}
+): Prisma.PostcardWhereInput {
+  const orConditions: Prisma.PostcardWhereInput[] = [
+    { title: { contains: searchText, mode: 'insensitive' } },
+    { notes: { contains: searchText, mode: 'insensitive' } },
+    { placeName: { contains: searchText, mode: 'insensitive' } },
+    { aiPlaceGuess: { contains: searchText, mode: 'insensitive' } }
+  ];
+
+  if (options.includeUploaderFields) {
+    orConditions.push(
+      { user: { email: { contains: searchText, mode: 'insensitive' } } },
+      { user: { displayName: { contains: searchText, mode: 'insensitive' } } }
+    );
+  }
+
+  return { OR: orConditions };
+}
+
 export function buildPublicWhere(query: PublicQuery): Prisma.PostcardWhereInput {
   const whereAnd: Prisma.PostcardWhereInput[] = [{ deletedAt: null }];
 
   if (query.q && query.q.length > 0) {
-    whereAnd.push({
-      OR: [
-        { title: { contains: query.q, mode: 'insensitive' } },
-        { notes: { contains: query.q, mode: 'insensitive' } },
-        { placeName: { contains: query.q, mode: 'insensitive' } },
-        { aiPlaceGuess: { contains: query.q, mode: 'insensitive' } }
-      ]
-    });
+    whereAnd.push(buildPostcardSearchFilter(query.q));
   }
 
   if (

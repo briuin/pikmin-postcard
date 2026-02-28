@@ -1,19 +1,27 @@
 import { NextResponse } from 'next/server';
-import { getAuthenticatedUser, getAuthenticatedUserId, isApprovedUser } from '@/lib/api-auth';
+import {
+  requireApprovedDetectionSubmitter,
+  requireAuthenticatedUserId
+} from '@/lib/api-guards';
 import {
   listDetectionJobsForUser,
   processDetectionJob,
   queueDetectionJob
 } from '@/lib/location-detection/jobs';
-import { recordUserAction } from '@/lib/user-action-log';
+import { requireImageFileFromRequest } from '@/lib/request-image';
+import {
+  buildUploadedFileActionMetadata,
+  recordUserAction
+} from '@/lib/user-action-log';
 
 export const runtime = 'nodejs';
 
 export async function GET(request: Request) {
-  const userId = await getAuthenticatedUserId({ createIfMissing: true });
-  if (!userId) {
-    return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+  const guard = await requireAuthenticatedUserId({ createIfMissing: true });
+  if (!guard.ok) {
+    return guard.response;
   }
+  const userId = guard.value;
 
   await recordUserAction({
     request,
@@ -26,36 +34,24 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const actor = await getAuthenticatedUser({ createIfMissing: true });
-  if (!actor) {
-    return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+  const guard = await requireApprovedDetectionSubmitter();
+  if (!guard.ok) {
+    return guard.response;
   }
-  if (!isApprovedUser(actor)) {
-    return NextResponse.json({ error: 'Account pending approval.' }, { status: 403 });
-  }
-  if (!actor.canSubmitDetection) {
-    return NextResponse.json(
-      { error: 'You are not allowed to submit AI detection jobs.' },
-      { status: 403 }
-    );
-  }
+  const actor = guard.value;
 
   try {
-    const formData = await request.formData();
-    const file = formData.get('image');
-    if (!(file instanceof File)) {
-      return NextResponse.json({ error: 'Missing image file.' }, { status: 400 });
+    const imageFile = await requireImageFileFromRequest(request);
+    if (!imageFile.ok) {
+      return imageFile.response;
     }
+    const { file } = imageFile;
 
     await recordUserAction({
       request,
       userId: actor.id,
       action: 'DETECTION_JOB_SUBMIT',
-      metadata: {
-        fileName: file.name,
-        mimeType: file.type,
-        size: file.size
-      }
+      metadata: buildUploadedFileActionMetadata(file)
     });
 
     const queued = await queueDetectionJob({

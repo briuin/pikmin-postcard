@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useAutoDismiss } from '@/components/use-auto-dismiss';
 
 type PostcardCoordinateCopyProps = {
   coordinates: string | null;
@@ -9,14 +10,7 @@ type PostcardCoordinateCopyProps = {
 export function PostcardCoordinateCopy({ coordinates }: PostcardCoordinateCopyProps) {
   const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null);
   const safeCoordinates = coordinates ?? '';
-
-  useEffect(() => {
-    if (!toast) {
-      return;
-    }
-    const timer = window.setTimeout(() => setToast(null), 2200);
-    return () => window.clearTimeout(timer);
-  }, [toast]);
+  useAutoDismiss(toast, () => setToast(null));
 
   if (!coordinates) {
     return null;

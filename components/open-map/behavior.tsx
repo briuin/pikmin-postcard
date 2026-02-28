@@ -10,6 +10,26 @@ import type {
   ViewerPoint
 } from '@/components/open-map/types';
 
+function emitViewportChange(
+  map: ReturnType<typeof useMap>,
+  onViewportChange?: (bounds: MapViewportBounds, zoom: number) => void
+) {
+  if (!onViewportChange) {
+    return;
+  }
+
+  const bounds = map.getBounds();
+  onViewportChange(
+    {
+      north: bounds.getNorth(),
+      south: bounds.getSouth(),
+      east: bounds.getEast(),
+      west: bounds.getWest()
+    },
+    map.getZoom()
+  );
+}
+
 export function MapClickHandler({ onPick }: { onPick?: (lat: number, lng: number) => void }) {
   useMapEvents({
     click(event) {
@@ -108,54 +128,15 @@ export function MapViewportEvents({
 }) {
   const map = useMapEvents({
     moveend() {
-      if (!onViewportChange) {
-        return;
-      }
-
-      const bounds = map.getBounds();
-      onViewportChange(
-        {
-          north: bounds.getNorth(),
-          south: bounds.getSouth(),
-          east: bounds.getEast(),
-          west: bounds.getWest()
-        },
-        map.getZoom()
-      );
+      emitViewportChange(map, onViewportChange);
     },
     zoomend() {
-      if (!onViewportChange) {
-        return;
-      }
-
-      const bounds = map.getBounds();
-      onViewportChange(
-        {
-          north: bounds.getNorth(),
-          south: bounds.getSouth(),
-          east: bounds.getEast(),
-          west: bounds.getWest()
-        },
-        map.getZoom()
-      );
+      emitViewportChange(map, onViewportChange);
     }
   });
 
   useEffect(() => {
-    if (!onViewportChange) {
-      return;
-    }
-
-    const bounds = map.getBounds();
-    onViewportChange(
-      {
-        north: bounds.getNorth(),
-        south: bounds.getSouth(),
-        east: bounds.getEast(),
-        west: bounds.getWest()
-      },
-      map.getZoom()
-    );
+    emitViewportChange(map, onViewportChange);
   }, [map, onViewportChange]);
 
   return null;

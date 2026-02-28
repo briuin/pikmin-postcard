@@ -48,6 +48,27 @@ function getDefaultUserAuthValues(email: string) {
   };
 }
 
+function buildUserUpsertData(params: {
+  normalizedEmail: string;
+  displayName: string | null;
+  defaultRole: UserRole;
+  defaultApprovalStatus: UserApprovalStatus;
+}) {
+  return {
+    where: { email: params.normalizedEmail },
+    update:
+      params.defaultRole === UserRole.ADMIN
+        ? { role: UserRole.ADMIN, approvalStatus: UserApprovalStatus.APPROVED }
+        : {},
+    create: {
+      email: params.normalizedEmail,
+      displayName: params.displayName,
+      role: params.defaultRole,
+      approvalStatus: params.defaultApprovalStatus
+    }
+  };
+}
+
 function toAuthenticatedUser(
   user: NonNullable<AuthenticatedUserRecord>,
   name: string | null
@@ -97,19 +118,14 @@ export async function getUserIdByEmail(
   const { defaultRole, defaultApprovalStatus } = getDefaultUserAuthValues(normalizedEmail);
 
   if (options.createIfMissing) {
-    const user = await prisma.user.upsert({
-      where: { email: normalizedEmail },
-      update:
-        defaultRole === UserRole.ADMIN
-          ? { role: UserRole.ADMIN, approvalStatus: UserApprovalStatus.APPROVED }
-          : {},
-      create: {
-        email: normalizedEmail,
+    const user = await prisma.user.upsert(
+      buildUserUpsertData({
+        normalizedEmail,
         displayName: displayName && displayName.length > 0 ? displayName : null,
-        role: defaultRole,
-        approvalStatus: defaultApprovalStatus
-      }
-    });
+        defaultRole,
+        defaultApprovalStatus
+      })
+    );
     return user.id;
   }
 
@@ -146,17 +162,12 @@ export async function getAuthenticatedUser(
 
   if (options.createIfMissing) {
     const user = await prisma.user.upsert({
-      where: { email: normalizedEmail },
-      update:
-        defaultRole === UserRole.ADMIN
-          ? { role: UserRole.ADMIN, approvalStatus: UserApprovalStatus.APPROVED }
-          : {},
-      create: {
-        email: normalizedEmail,
+      ...buildUserUpsertData({
+        normalizedEmail,
         displayName: identity.name,
-        role: defaultRole,
-        approvalStatus: defaultApprovalStatus
-      },
+        defaultRole,
+        defaultApprovalStatus
+      }),
       select: authenticatedUserSelect
     });
 
