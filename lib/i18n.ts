@@ -140,6 +140,9 @@ const en = {
     exploreCopyCoordinates: 'Copy Coordinates',
     exploreCopyCoordinatesDone: 'Coordinates copied.',
     exploreCopyCoordinatesFailed: 'Failed to copy coordinates.',
+    exploreSharePostcard: 'Share',
+    exploreSharePostcardDone: 'Share link copied.',
+    exploreSharePostcardFailed: 'Failed to copy share link.',
     exploreNoCoordinates: 'No coordinates available.',
 
     createTitle: 'Create',
@@ -338,6 +341,9 @@ const zhTW: typeof en = {
     exploreCopyCoordinates: '複製座標',
     exploreCopyCoordinatesDone: '已複製座標。',
     exploreCopyCoordinatesFailed: '複製座標失敗。',
+    exploreSharePostcard: '分享',
+    exploreSharePostcardDone: '分享連結已複製。',
+    exploreSharePostcardFailed: '複製分享連結失敗。',
     exploreNoCoordinates: '沒有可用座標。',
 
     createTitle: '建立',

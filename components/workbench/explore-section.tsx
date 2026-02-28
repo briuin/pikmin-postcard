@@ -52,6 +52,7 @@ export function ExploreSection({
 }: ExploreSectionProps) {
   const [selectedPostcardId, setSelectedPostcardId] = useState<string | null>(null);
   const [copyStatus, setCopyStatus] = useState('');
+  const [shareStatus, setShareStatus] = useState('');
 
   const selectedPostcard = useMemo(
     () => visiblePostcards.find((postcard) => postcard.id === selectedPostcardId) ?? null,
@@ -62,6 +63,7 @@ export function ExploreSection({
     if (selectedPostcardId && !selectedPostcard) {
       setSelectedPostcardId(null);
       setCopyStatus('');
+      setShareStatus('');
     }
   }, [selectedPostcardId, selectedPostcard]);
 
@@ -110,6 +112,16 @@ export function ExploreSection({
       setCopyStatus(text.exploreCopyCoordinatesDone);
     } catch {
       setCopyStatus(text.exploreCopyCoordinatesFailed);
+    }
+  }
+
+  async function copyShareLink(postcard: PostcardRecord) {
+    try {
+      const baseUrl = window.location.origin;
+      await navigator.clipboard.writeText(`${baseUrl}/postcard/${postcard.id}`);
+      setShareStatus(text.exploreSharePostcardDone);
+    } catch {
+      setShareStatus(text.exploreSharePostcardFailed);
     }
   }
 
@@ -232,6 +244,7 @@ export function ExploreSection({
           onClick={() => {
             setSelectedPostcardId(null);
             setCopyStatus('');
+            setShareStatus('');
           }}
         >
           <article
@@ -254,6 +267,7 @@ export function ExploreSection({
                 onClick={() => {
                   setSelectedPostcardId(null);
                   setCopyStatus('');
+                  setShareStatus('');
                 }}
               >
                 {text.buttonCancel}
@@ -300,7 +314,15 @@ export function ExploreSection({
                 >
                   ⧉
                 </button>
+                <button
+                  type="button"
+                  className={modalActionButtonClassName}
+                  onClick={() => void copyShareLink(selectedPostcard)}
+                >
+                  {text.exploreSharePostcard}
+                </button>
                 {copyStatus ? <small className={smallMutedClassName}>{copyStatus}</small> : null}
+                {shareStatus ? <small className={smallMutedClassName}>{shareStatus}</small> : null}
               </div>
             </div>
 
