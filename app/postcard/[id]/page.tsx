@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -12,12 +13,48 @@ type PageProps = {
 
 export const dynamic = 'force-dynamic';
 
-export default async function PostcardSharePage({ params }: PageProps) {
-  const { id } = await params;
-  if (!id) {
-    notFound();
+const DEFAULT_SITE_URL = 'https://pikmin.askans.app';
+
+function resolveBaseUrl(): URL {
+  const candidates = [
+    process.env.AUTH_URL,
+    process.env.NEXTAUTH_URL,
+    process.env.NEXT_PUBLIC_APP_URL,
+    process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
+    DEFAULT_SITE_URL
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate) {
+      continue;
+    }
+
+    const normalized = /^https?:\/\//i.test(candidate) ? candidate : `https://${candidate}`;
+    try {
+      return new URL(normalized);
+    } catch {
+      continue;
+    }
   }
 
+  return new URL(DEFAULT_SITE_URL);
+}
+
+function toAbsoluteUrl(value: string): string {
+  if (!value) {
+    return value;
+  }
+
+  try {
+    return new URL(value).toString();
+  } catch {
+    const base = resolveBaseUrl();
+    const path = value.startsWith('/') ? value : `/${value}`;
+    return new URL(path, base).toString();
+  }
+}
+
+async function findSharedPostcardById(id: string) {
   const rows = await findPostcardsForList({
     where: {
       id,
@@ -26,11 +63,84 @@ export default async function PostcardSharePage({ params }: PageProps) {
     take: 1
   });
 
-  if (rows.length === 0) {
+  return rows[0] ?? null;
+}
+
+function buildShareDescription(postcard: NonNullable<Awaited<ReturnType<typeof findSharedPostcardById>>>) {
+  const location =
+    postcard.placeName?.trim() ||
+    [postcard.city, postcard.state, postcard.country].filter(Boolean).join(', ') ||
+    'Unknown place';
+  const typeLabel = getPostcardTypeLabel(postcard.postcardType);
+  const rawNotes = postcard.notes?.trim() ?? '';
+  const shortNotes =
+    rawNotes.length > 120 ? `${rawNotes.slice(0, 117).trimEnd()}...` : rawNotes;
+
+  return [location, `Type: ${typeLabel}`, shortNotes].filter(Boolean).join(' · ');
+}
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { id } = await params;
+  if (!id) {
+    return {
+      title: 'Postcard not found | Pikmin Postcard',
+      description: 'The shared postcard could not be found.'
+    };
+  }
+
+  const postcard = await findSharedPostcardById(id);
+  if (!postcard) {
+    return {
+      title: 'Postcard not found | Pikmin Postcard',
+      description: 'The shared postcard could not be found.'
+    };
+  }
+
+  const title = postcard.title?.trim() || 'Shared Postcard';
+  const description = buildShareDescription(postcard);
+  const canonicalUrl = toAbsoluteUrl(`/postcard/${postcard.id}`);
+  const imageUrl = postcard.imageUrl ? toAbsoluteUrl(postcard.imageUrl) : undefined;
+
+  return {
+    title: `${title} | Pikmin Postcard`,
+    description,
+    alternates: {
+      canonical: canonicalUrl
+    },
+    openGraph: {
+      type: 'article',
+      siteName: 'Pikmin Postcard',
+      url: canonicalUrl,
+      title,
+      description,
+      images: imageUrl
+        ? [
+            {
+              url: imageUrl,
+              alt: title
+            }
+          ]
+        : undefined
+    },
+    twitter: {
+      card: imageUrl ? 'summary_large_image' : 'summary',
+      title,
+      description,
+      images: imageUrl ? [imageUrl] : undefined
+    }
+  };
+}
+
+export default async function PostcardSharePage({ params }: PageProps) {
+  const { id } = await params;
+  if (!id) {
     notFound();
   }
 
-  const postcard = rows[0];
+  const postcard = await findSharedPostcardById(id);
+  if (!postcard) {
+    notFound();
+  }
   const uploaderName =
     postcard.user?.displayName?.trim() || maskEmail(postcard.user?.email);
   const createdAt = postcard.createdAt;
@@ -38,6 +148,11 @@ export default async function PostcardSharePage({ params }: PageProps) {
     typeof postcard.latitude === 'number' && typeof postcard.longitude === 'number'
       ? `${postcard.latitude.toFixed(6)}, ${postcard.longitude.toFixed(6)}`
       : null;
+  const isAiDetected =
+    postcard.locationStatus === 'AUTO' ||
+    postcard.locationStatus === 'USER_CONFIRMED' ||
+    typeof postcard.aiConfidence === 'number' ||
+    Boolean(postcard.aiPlaceGuess);
 
   return (
     <main className="mx-auto grid w-full max-w-[820px] gap-3 px-3 py-4">
@@ -47,7 +162,16 @@ export default async function PostcardSharePage({ params }: PageProps) {
             <span className="inline-flex w-fit items-center rounded-full border border-[#d5e7d6] bg-[#f4fff4] px-2.5 py-1 text-[0.72rem] font-black uppercase tracking-[0.08em] text-[#2b6442]">
               Shared Postcard
             </span>
-            <h1 className="text-[1.2rem] leading-tight text-[#183122]">{postcard.title}</h1>
+            <div className="flex min-w-0 items-start gap-1.5">
+              {isAiDetected ? (
+                <span className="inline-flex shrink-0 items-center rounded-full border border-[#c6d9ff] bg-[#e9f1ff] px-1.5 py-0.5 text-[0.65rem] font-black uppercase tracking-[0.06em] text-[#365da6]">
+                  AI
+                </span>
+              ) : null}
+              <h1 className="min-w-0 [overflow-wrap:anywhere] text-[1.2rem] leading-tight text-[#183122]">
+                {postcard.title}
+              </h1>
+            </div>
           </div>
           <Link
             href="/"
