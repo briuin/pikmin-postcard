@@ -134,6 +134,7 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
           isSubmittingAi={create.isSubmittingAi}
           isSavingManual={create.isSavingManual}
           aiFile={create.aiFile}
+          manualFile={create.manualFile}
           manualTitle={create.manualTitle}
           manualPostcardType={create.manualPostcardType}
           manualNotes={create.manualNotes}
