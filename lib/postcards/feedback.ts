@@ -5,6 +5,8 @@ export type ViewerFeedback = {
   liked: boolean;
   disliked: boolean;
   reportedWrongLocation: boolean;
+  favorited: boolean;
+  collected: boolean;
 };
 
 type FeedbackRow = {
@@ -16,7 +18,9 @@ function emptyViewerFeedback(): ViewerFeedback {
   return {
     liked: false,
     disliked: false,
-    reportedWrongLocation: false
+    reportedWrongLocation: false,
+    favorited: false,
+    collected: false
   };
 }
 
@@ -26,7 +30,9 @@ export function toViewerFeedback(actions: Iterable<FeedbackAction>): ViewerFeedb
   return {
     liked: set.has(FeedbackAction.LIKE),
     disliked: set.has(FeedbackAction.DISLIKE),
-    reportedWrongLocation: set.has(FeedbackAction.REPORT_WRONG_LOCATION)
+    reportedWrongLocation: set.has(FeedbackAction.REPORT_WRONG_LOCATION),
+    favorited: set.has(FeedbackAction.FAVORITE),
+    collected: set.has(FeedbackAction.COLLECTED)
   };
 }
 
@@ -44,7 +50,7 @@ export async function findViewerFeedbackRowsForPostcards(
       where: {
         userId,
         action: {
-          in: [FeedbackAction.LIKE, FeedbackAction.DISLIKE]
+          in: [FeedbackAction.LIKE, FeedbackAction.DISLIKE, FeedbackAction.FAVORITE, FeedbackAction.COLLECTED]
         },
         postcardId: {
           in: ids

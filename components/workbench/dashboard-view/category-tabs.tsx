@@ -9,6 +9,7 @@ type DashboardCategoryTabsProps = {
   activeCategory: DashboardCategory;
   jobsCount: number;
   postcardsCount: number;
+  savedCount: number;
   reportsCount: number;
   onChangeCategory: (category: DashboardCategory) => void;
 };
@@ -18,6 +19,7 @@ export function DashboardCategoryTabs({
   activeCategory,
   jobsCount,
   postcardsCount,
+  savedCount,
   reportsCount,
   onChangeCategory
 }: DashboardCategoryTabsProps) {
@@ -44,6 +46,17 @@ export function DashboardCategoryTabs({
         onClick={() => onChangeCategory('postcards')}
       >
         {text.myPostcardsTitle} ({postcardsCount})
+      </button>
+      <button
+        type="button"
+        className={
+          activeCategory === 'saved'
+            ? `${categoryTabButtonClassName} border-[#83c797] bg-[linear-gradient(135deg,#56b36a,#359d59)] text-white shadow-[0_6px_12px_rgba(47,158,88,0.22)]`
+            : `${categoryTabButtonClassName} border-[#d6e8d4] bg-[#f4fff4] text-[#2b6442]`
+        }
+        onClick={() => onChangeCategory('saved')}
+      >
+        {text.dashboardSavedTitle} ({savedCount})
       </button>
       <button
         type="button"

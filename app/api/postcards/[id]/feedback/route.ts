@@ -9,7 +9,7 @@ import {
 import { recordUserAction } from '@/lib/user-action-log';
 
 const feedbackSchema = z.object({
-  action: z.enum(['like', 'dislike', 'report', 'report_wrong_location']),
+  action: z.enum(['like', 'dislike', 'favorite', 'collected', 'report', 'report_wrong_location']),
   reason: z.enum(['wrong_location', 'spam', 'illegal_image', 'other']).optional(),
   description: z.string().trim().max(1200).optional()
 }).superRefine((payload, ctx) => {

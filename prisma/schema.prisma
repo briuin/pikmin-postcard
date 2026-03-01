@@ -24,6 +24,8 @@ enum FeedbackAction {
   LIKE
   DISLIKE
   REPORT_WRONG_LOCATION
+  FAVORITE
+  COLLECTED
 }
 
 enum PostcardEditAction {

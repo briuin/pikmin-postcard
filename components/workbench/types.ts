@@ -43,6 +43,8 @@ export type PostcardRecord = {
     liked: boolean;
     disliked: boolean;
     reportedWrongLocation: boolean;
+    favorited: boolean;
+    collected: boolean;
   };
   createdAt: string;
 };

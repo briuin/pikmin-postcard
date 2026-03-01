@@ -162,6 +162,7 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
           isAuthenticated={isAuthenticated}
           jobs={dashboard.jobs}
           myPostcards={dashboard.myPostcards}
+          savedPostcards={dashboard.savedPostcards}
           myReports={dashboard.myReports}
           postcardDrafts={dashboard.postcardDrafts}
           savingJobId={dashboard.savingJobId}
@@ -174,6 +175,7 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
           cancelingReportId={dashboard.cancelingReportId}
           isLoadingJobs={dashboard.isLoadingJobs}
           isLoadingMine={dashboard.isLoadingMine}
+          isLoadingSaved={dashboard.isLoadingSaved}
           isLoadingReports={dashboard.isLoadingReports}
           isLoadingProfile={dashboard.isLoadingProfile}
           isSavingProfile={dashboard.isSavingProfile}

@@ -30,6 +30,12 @@ export function ExplorePostcardModal({
   const [reportDescription, setReportDescription] = useState('');
   const placeLabel = getPostcardPlaceLabel(postcard, text.exploreUnknownPlace);
   const reportPending = feedbackPendingKey === `${postcard.id}:report`;
+  const favoritePending = feedbackPendingKey === `${postcard.id}:favorite`;
+  const collectedPending = feedbackPendingKey === `${postcard.id}:collected`;
+  const favoriteActive = Boolean(postcard.viewerFeedback?.favorited);
+  const collectedActive = Boolean(postcard.viewerFeedback?.collected);
+  const iconToggleButtonClassName =
+    'h-9 w-9 shrink-0 cursor-pointer rounded-xl border border-[#cde5cf] bg-[linear-gradient(135deg,#58b96d,#369d5a)] text-[1.05rem] font-black leading-none text-white shadow-[0_6px_14px_rgba(53,156,89,0.22)] transition hover:enabled:-translate-y-px disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none';
 
   useEffect(() => {
     setIsReportFormOpen(false);
@@ -100,13 +106,55 @@ export function ExplorePostcardModal({
           </div>
         ) : null}
 
-        <div className="relative z-10 flex flex-wrap gap-1.5">
+        <div className="relative z-10 flex flex-wrap items-center gap-1.5">
           <span className={modalChipClassName}>👍 {postcard.likeCount}</span>
           <span className={modalChipClassName}>👎 {postcard.dislikeCount}</span>
           <span className={modalChipClassName}>⚠️ {postcard.wrongLocationReports}</span>
-          <span className={modalChipClassName}>
-            {new Date(postcard.createdAt).toLocaleString(text.dateLocale)}
-          </span>
+          <div className="ml-auto flex items-center gap-1.5">
+            <button
+              type="button"
+              className={
+                favoriteActive
+                  ? `${iconToggleButtonClassName} ring-2 ring-[rgba(47,158,88,0.35)]`
+                  : iconToggleButtonClassName
+              }
+              onClick={() => onSubmitFeedback(postcard.id, 'favorite')}
+              disabled={!isAuthenticated || favoritePending}
+              aria-label={favoriteActive ? text.exploreFavoriteCancel : text.exploreFavorite}
+              title={favoriteActive ? text.exploreFavoriteCancel : text.exploreFavorite}
+            >
+              {favoritePending ? '…' : favoriteActive ? '★' : '☆'}
+            </button>
+            <button
+              type="button"
+              className={
+                collectedActive
+                  ? `${iconToggleButtonClassName} ring-2 ring-[rgba(47,158,88,0.35)]`
+                  : iconToggleButtonClassName
+              }
+              onClick={() => onSubmitFeedback(postcard.id, 'collected')}
+              disabled={!isAuthenticated || collectedPending}
+              aria-label={collectedActive ? text.exploreCollectedCancel : text.exploreCollected}
+              title={collectedActive ? text.exploreCollectedCancel : text.exploreCollected}
+            >
+              {collectedPending ? (
+                '…'
+              ) : (
+                <svg
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  className="mx-auto h-5 w-5"
+                  fill={collectedActive ? 'currentColor' : 'none'}
+                  stroke="currentColor"
+                  strokeWidth={1.9}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M7 3.75h10A1.25 1.25 0 0 1 18.25 5v15.25l-6.25-4.4-6.25 4.4V5A1.25 1.25 0 0 1 7 3.75Z" />
+                </svg>
+              )}
+            </button>
+          </div>
         </div>
 
         <div className="relative z-10 grid gap-1.5 rounded-[14px] border border-[#d8e8d9] bg-[linear-gradient(145deg,#f2fff5,#edf7ff)] p-2.5">

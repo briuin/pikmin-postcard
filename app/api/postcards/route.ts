@@ -1,4 +1,4 @@
-import { LocationStatus, PostcardType } from '@prisma/client';
+import { FeedbackAction, LocationStatus, PostcardType } from '@prisma/client';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getAuthenticatedUserId } from '@/lib/api-auth';
@@ -42,6 +42,7 @@ const postcardCreateSchema = z.object({
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const mineOnly = url.searchParams.get('mine') === '1';
+  const savedOnly = url.searchParams.get('saved') === '1';
   const viewerUserId = await getAuthenticatedUserId();
 
   if (mineOnly) {
@@ -64,6 +65,68 @@ export async function GET(request: Request) {
         });
 
         const serialized = serializePostcards(postcards, { includeOriginalImageUrl: true });
+        const feedbackRows = await findViewerFeedbackRowsForPostcards(
+          viewerUserId,
+          serialized.map((item) => item.id)
+        );
+
+        return NextResponse.json(attachViewerFeedback(serialized, feedbackRows), { status: 200 });
+      }
+    );
+  }
+
+  if (savedOnly) {
+    return withGuardedValue(
+      requireAuthenticatedUserId({ createIfMissing: true }),
+      async (userId) => {
+        await recordUserAction({
+          request,
+          userId,
+          action: 'SAVED_POSTCARD_LIST'
+        });
+
+        const savedRows = await prisma.postcardFeedback.findMany({
+          where: {
+            userId,
+            action: {
+              in: [FeedbackAction.FAVORITE, FeedbackAction.COLLECTED]
+            },
+            postcard: {
+              deletedAt: null
+            }
+          },
+          select: {
+            postcardId: true
+          },
+          orderBy: {
+            createdAt: 'desc'
+          },
+          take: 400
+        });
+
+        const orderedPostcardIds = Array.from(new Set(savedRows.map((row) => row.postcardId)));
+        if (orderedPostcardIds.length === 0) {
+          return NextResponse.json([], { status: 200 });
+        }
+
+        const postcards = await findPostcardsForList({
+          where: {
+            id: {
+              in: orderedPostcardIds
+            },
+            deletedAt: null
+          },
+          orderBy: {
+            updatedAt: 'desc'
+          },
+          take: 400
+        });
+
+        const postcardById = new Map(postcards.map((postcard) => [postcard.id, postcard]));
+        const orderedPostcards = orderedPostcardIds
+          .map((id) => postcardById.get(id))
+          .filter((row): row is (typeof postcards)[number] => Boolean(row));
+        const serialized = serializePostcards(orderedPostcards, { includeOriginalImageUrl: true });
         const feedbackRows = await findViewerFeedbackRowsForPostcards(
           viewerUserId,
           serialized.map((item) => item.id)

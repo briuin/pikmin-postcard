@@ -14,6 +14,7 @@ export type DashboardSectionProps = {
   isAuthenticated: boolean;
   jobs: DetectionJobRecord[];
   myPostcards: PostcardRecord[];
+  savedPostcards: PostcardRecord[];
   myReports: DashboardReportRecord[];
   postcardDrafts: Record<string, PostcardEditDraft>;
   savingJobId: string | null;
@@ -25,6 +26,7 @@ export type DashboardSectionProps = {
   savingCropPostcardId: string | null;
   isLoadingJobs: boolean;
   isLoadingMine: boolean;
+  isLoadingSaved: boolean;
   isLoadingReports: boolean;
   isLoadingProfile: boolean;
   isSavingProfile: boolean;
@@ -55,4 +57,4 @@ export type PreviewImage = {
   alt: string;
 };
 
-export type DashboardCategory = 'ai' | 'postcards' | 'reports';
+export type DashboardCategory = 'ai' | 'postcards' | 'saved' | 'reports';

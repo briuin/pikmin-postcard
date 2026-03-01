@@ -2,7 +2,13 @@ import { FeedbackAction, PostcardReportReason, PostcardReportStatus, Prisma } fr
 import { prisma } from '@/lib/prisma';
 import { toViewerFeedback, type ViewerFeedback } from '@/lib/postcards/feedback';
 
-export type FeedbackInputAction = 'like' | 'dislike' | 'report' | 'report_wrong_location';
+export type FeedbackInputAction =
+  | 'like'
+  | 'dislike'
+  | 'favorite'
+  | 'collected'
+  | 'report'
+  | 'report_wrong_location';
 export type FeedbackResult = 'added' | 'removed' | 'switched' | 'already_reported';
 export type FeedbackReportReasonInput =
   | 'wrong_location'
@@ -16,13 +22,19 @@ export type FeedbackMutationResult = {
   dislikeCount: number;
   wrongLocationReports: number;
   result: FeedbackResult;
-  action: 'like' | 'dislike' | 'report';
+  action: 'like' | 'dislike' | 'favorite' | 'collected' | 'report';
   viewerFeedback: ViewerFeedback;
 };
 
-function toVoteFeedbackAction(action: FeedbackInputAction): FeedbackAction {
+function toToggleFeedbackAction(action: FeedbackInputAction): FeedbackAction {
   if (action === 'like') {
     return FeedbackAction.LIKE;
+  }
+  if (action === 'favorite') {
+    return FeedbackAction.FAVORITE;
+  }
+  if (action === 'collected') {
+    return FeedbackAction.COLLECTED;
   }
   return FeedbackAction.DISLIKE;
 }
@@ -54,7 +66,7 @@ async function loadViewerFeedback(
         postcardId: params.postcardId,
         userId: params.userId,
         action: {
-          in: [FeedbackAction.LIKE, FeedbackAction.DISLIKE]
+          in: [FeedbackAction.LIKE, FeedbackAction.DISLIKE, FeedbackAction.FAVORITE, FeedbackAction.COLLECTED]
         }
       },
       select: {
@@ -202,13 +214,13 @@ export async function submitPostcardFeedback(params: {
         }
       }
     } else {
-      const action = toVoteFeedbackAction(params.action);
-      const existingVotes = await tx.postcardFeedback.findMany({
+      const action = toToggleFeedbackAction(params.action);
+      const existingFeedbackRows = await tx.postcardFeedback.findMany({
         where: {
           postcardId: params.postcardId,
           userId: params.userId,
           action: {
-            in: [FeedbackAction.LIKE, FeedbackAction.DISLIKE]
+            in: [FeedbackAction.LIKE, FeedbackAction.DISLIKE, FeedbackAction.FAVORITE, FeedbackAction.COLLECTED]
           }
         },
         select: {
@@ -217,36 +229,61 @@ export async function submitPostcardFeedback(params: {
         }
       });
 
-      const sameVote = existingVotes.find((item) => item.action === action);
-      const oppositeVote = existingVotes.find((item) => item.action !== action);
+      if (action === FeedbackAction.LIKE || action === FeedbackAction.DISLIKE) {
+        const sameVote = existingFeedbackRows.find((item) => item.action === action);
+        const oppositeVote = existingFeedbackRows.find(
+          (item) =>
+            item.action !== action &&
+            (item.action === FeedbackAction.LIKE || item.action === FeedbackAction.DISLIKE)
+        );
 
-      if (sameVote) {
-        await tx.postcardFeedback.delete({
-          where: {
-            id: sameVote.id
-          }
-        });
-        await decrementActionCount(tx, params.postcardId, action);
-        result = 'removed';
-      } else {
-        if (oppositeVote) {
+        if (sameVote) {
           await tx.postcardFeedback.delete({
             where: {
-              id: oppositeVote.id
+              id: sameVote.id
             }
           });
-          await decrementActionCount(tx, params.postcardId, oppositeVote.action);
-          result = 'switched';
-        }
-
-        await tx.postcardFeedback.create({
-          data: {
-            postcardId: params.postcardId,
-            userId: params.userId,
-            action
+          await decrementActionCount(tx, params.postcardId, action);
+          result = 'removed';
+        } else {
+          if (oppositeVote) {
+            await tx.postcardFeedback.delete({
+              where: {
+                id: oppositeVote.id
+              }
+            });
+            await decrementActionCount(tx, params.postcardId, oppositeVote.action);
+            result = 'switched';
           }
-        });
-        await incrementActionCount(tx, params.postcardId, action);
+
+          await tx.postcardFeedback.create({
+            data: {
+              postcardId: params.postcardId,
+              userId: params.userId,
+              action
+            }
+          });
+          await incrementActionCount(tx, params.postcardId, action);
+        }
+      } else {
+        const sameAction = existingFeedbackRows.find((item) => item.action === action);
+
+        if (sameAction) {
+          await tx.postcardFeedback.delete({
+            where: {
+              id: sameAction.id
+            }
+          });
+          result = 'removed';
+        } else {
+          await tx.postcardFeedback.create({
+            data: {
+              postcardId: params.postcardId,
+              userId: params.userId,
+              action
+            }
+          });
+        }
       }
     }
 

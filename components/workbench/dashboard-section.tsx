@@ -7,6 +7,7 @@ import { DashboardCategoryTabs } from '@/components/workbench/dashboard-view/cat
 import { DashboardImagePreviewModal } from '@/components/workbench/dashboard-view/image-preview-modal';
 import { DashboardPostcardsList } from '@/components/workbench/dashboard-view/postcards-list';
 import { DashboardReportsList } from '@/components/workbench/dashboard-view/reports-list';
+import { DashboardSavedList } from '@/components/workbench/dashboard-view/saved-list';
 import { DashboardProfilePanel } from '@/components/workbench/dashboard-view/profile-panel';
 import {
   getDashboardListClassName,
@@ -27,6 +28,7 @@ export function DashboardSection({
   isAuthenticated,
   jobs,
   myPostcards,
+  savedPostcards,
   myReports,
   postcardDrafts,
   savingJobId,
@@ -39,6 +41,7 @@ export function DashboardSection({
   cancelingReportId,
   isLoadingJobs,
   isLoadingMine,
+  isLoadingSaved,
   isLoadingReports,
   isLoadingProfile,
   isSavingProfile,
@@ -95,9 +98,11 @@ export function DashboardSection({
             text={text}
             jobsCount={jobs.length}
             postcardsCount={myPostcards.length}
+            savedCount={savedPostcards.length}
             dashboardViewMode={dashboardViewMode}
             isLoadingJobs={isLoadingJobs}
             isLoadingMine={isLoadingMine}
+            isLoadingSaved={isLoadingSaved}
             onSetDashboardViewMode={onSetDashboardViewMode}
             onRefresh={onRefresh}
           />
@@ -110,6 +115,7 @@ export function DashboardSection({
               activeCategory={activeCategory}
               jobsCount={jobs.length}
               postcardsCount={myPostcards.length}
+              savedCount={savedPostcards.length}
               reportsCount={myReports.length}
               onChangeCategory={setActiveCategory}
             />
@@ -159,6 +165,16 @@ export function DashboardSection({
                 dashboardListClassName={dashboardListClassName}
                 cancelingReportId={cancelingReportId}
                 onCancelReport={onCancelReport}
+              />
+            ) : null}
+
+            {activeCategory === 'saved' ? (
+              <DashboardSavedList
+                text={text}
+                savedPostcards={savedPostcards}
+                isLoadingSaved={isLoadingSaved}
+                dashboardListClassName={dashboardListClassName}
+                onPreviewImage={setPreviewImage}
               />
             ) : null}
           </div>

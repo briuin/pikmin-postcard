@@ -13,9 +13,11 @@ type DashboardToolbarProps = {
   text: WorkbenchText;
   jobsCount: number;
   postcardsCount: number;
+  savedCount: number;
   dashboardViewMode: DashboardViewMode;
   isLoadingJobs: boolean;
   isLoadingMine: boolean;
+  isLoadingSaved: boolean;
   onSetDashboardViewMode: (mode: DashboardViewMode) => void;
   onRefresh: () => void;
 };
@@ -24,9 +26,11 @@ export function DashboardToolbar({
   text,
   jobsCount,
   postcardsCount,
+  savedCount,
   dashboardViewMode,
   isLoadingJobs,
   isLoadingMine,
+  isLoadingSaved,
   onSetDashboardViewMode,
   onRefresh
 }: DashboardToolbarProps) {
@@ -35,6 +39,7 @@ export function DashboardToolbar({
       <div className={chipRowClassName}>
         <span className={chipClassName}>{text.chipAiJobs(jobsCount)}</span>
         <span className={chipClassName}>{text.chipMyPostcards(postcardsCount)}</span>
+        <span className={chipClassName}>{text.chipSavedPostcards(savedCount)}</span>
       </div>
       <div className={chipRowClassName}>
         <button
@@ -57,7 +62,7 @@ export function DashboardToolbar({
           type="button"
           className={actionButtonClassName}
           onClick={onRefresh}
-          disabled={isLoadingJobs || isLoadingMine}
+          disabled={isLoadingJobs || isLoadingMine || isLoadingSaved}
         >
           {text.buttonRefresh}
         </button>

@@ -2,7 +2,7 @@ import type { MapViewportBounds, SavedMapMarker } from '@/components/open-map';
 import type { WorkbenchText } from '@/lib/i18n';
 import type { ExploreSort, PostcardRecord } from '@/components/workbench/types';
 
-export type ExploreFeedbackAction = 'like' | 'dislike' | 'report';
+export type ExploreFeedbackAction = 'like' | 'dislike' | 'favorite' | 'collected' | 'report';
 
 type FeedbackResult = 'added' | 'removed' | 'switched' | 'already_reported';
 
@@ -12,6 +12,10 @@ type FeedbackMessageText = Pick<
   | 'feedbackLikeRemoved'
   | 'feedbackDislikeRecorded'
   | 'feedbackDislikeRemoved'
+  | 'feedbackFavoriteAdded'
+  | 'feedbackFavoriteRemoved'
+  | 'feedbackCollectedAdded'
+  | 'feedbackCollectedRemoved'
   | 'feedbackWrongLocation'
   | 'feedbackReportAlreadySubmitted'
 >;
@@ -85,6 +89,12 @@ export function getFeedbackStatusMessage(
   }
   if (action === 'dislike') {
     return result === 'removed' ? text.feedbackDislikeRemoved : text.feedbackDislikeRecorded;
+  }
+  if (action === 'favorite') {
+    return result === 'removed' ? text.feedbackFavoriteRemoved : text.feedbackFavoriteAdded;
+  }
+  if (action === 'collected') {
+    return result === 'removed' ? text.feedbackCollectedRemoved : text.feedbackCollectedAdded;
   }
   if (result === 'already_reported') {
     return text.feedbackReportAlreadySubmitted;
