@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { PostcardCoordinateCopy } from '@/components/postcard-coordinate-copy';
 import { getPostcardTypeLabel } from '@/lib/postcard-type-label';
+import { buildLocationLabel } from '@/lib/postcards/location-label';
 import { findPostcardsForList } from '@/lib/postcards/repository';
 import { maskEmail } from '@/lib/postcards/shared';
 
@@ -67,10 +68,7 @@ async function findSharedPostcardById(id: string) {
 }
 
 function buildShareDescription(postcard: NonNullable<Awaited<ReturnType<typeof findSharedPostcardById>>>) {
-  const location =
-    postcard.placeName?.trim() ||
-    [postcard.city, postcard.state, postcard.country].filter(Boolean).join(', ') ||
-    'Unknown place';
+  const location = buildLocationLabel(postcard, 'Unknown place');
   const typeLabel = getPostcardTypeLabel(postcard.postcardType);
   const rawNotes = postcard.notes?.trim() ?? '';
   const shortNotes =
@@ -144,6 +142,7 @@ export default async function PostcardSharePage({ params }: PageProps) {
   const uploaderName =
     postcard.user?.displayName?.trim() || maskEmail(postcard.user?.email);
   const createdAt = postcard.createdAt;
+  const locationLabel = buildLocationLabel(postcard, 'Unknown place');
   const coordinateText =
     typeof postcard.latitude === 'number' && typeof postcard.longitude === 'number'
       ? `${postcard.latitude.toFixed(6)}, ${postcard.longitude.toFixed(6)}`
@@ -196,7 +195,7 @@ export default async function PostcardSharePage({ params }: PageProps) {
             Type: {getPostcardTypeLabel(postcard.postcardType)}
           </span>
           <span className="inline-flex items-center rounded-full border border-[#d5e8d8] bg-[#f6fff7] px-2.5 py-1 text-[0.8rem] font-semibold text-[#36594a]">
-            {postcard.placeName || 'Unknown place'}
+            {locationLabel}
           </span>
           {uploaderName ? (
             <span className="inline-flex items-center rounded-full border border-[#d5e8d8] bg-[#f6fff7] px-2.5 py-1 text-[0.8rem] font-semibold text-[#36594a]">

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
-import { isAiDetected } from '@/components/workbench/explore-view/helpers';
+import { getPostcardPlaceLabel, isAiDetected } from '@/components/workbench/explore-view/helpers';
 import {
   cardThumbClassName,
   modalActionButtonClassName,
@@ -28,6 +28,7 @@ export function ExplorePostcardModal({
     'wrong_location'
   );
   const [reportDescription, setReportDescription] = useState('');
+  const placeLabel = getPostcardPlaceLabel(postcard, text.exploreUnknownPlace);
   const reportPending = feedbackPendingKey === `${postcard.id}:report`;
 
   useEffect(() => {
@@ -88,7 +89,7 @@ export function ExplorePostcardModal({
               <span className={modalChipClassName}>
                 {text.fieldPostcardType}: {getPostcardTypeLabel(postcard.postcardType, text)}
               </span>
-              <span className={modalChipClassName}>{postcard.placeName || text.exploreUnknownPlace}</span>
+              <span className={modalChipClassName}>{placeLabel}</span>
               {postcard.uploaderName ? (
                 <span className={modalChipClassName}>{text.exploreUploaderBy(postcard.uploaderName)}</span>
               ) : null}
