@@ -64,6 +64,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 let globalSignInImpl: ((provider?: string) => Promise<void>) | null = null;
 let globalSignOutImpl: ((options?: { callbackUrl?: string }) => Promise<void>) | null = null;
+let cachedGoogleClientId: string | null = null;
 
 function decodeBase64UrlJson<T>(value: string): T | null {
   try {
@@ -222,6 +223,31 @@ async function requestGoogleIdTokenViaPopup(clientId: string): Promise<string> {
   });
 }
 
+async function resolveGoogleClientId(): Promise<string> {
+  if (cachedGoogleClientId && cachedGoogleClientId.trim().length > 0) {
+    return cachedGoogleClientId;
+  }
+
+  const fromEnv = (process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? '').trim();
+  if (fromEnv) {
+    cachedGoogleClientId = fromEnv;
+    return fromEnv;
+  }
+
+  const response = await fetch('/api/auth/google-client-id', { cache: 'no-store' });
+  if (!response.ok) {
+    throw new Error('Google sign-in is not configured.');
+  }
+  const payload = (await response.json()) as { clientId?: string };
+  const clientId = String(payload.clientId || '').trim();
+  if (!clientId) {
+    throw new Error('Google sign-in is not configured.');
+  }
+
+  cachedGoogleClientId = clientId;
+  return clientId;
+}
+
 function sessionFromExchange(payload: AuthExchangeResponse): SessionData {
   return {
     user: {
@@ -301,10 +327,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signInWithGoogle = useCallback(async () => {
-    const googleClientId = (process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? '').trim();
-    if (!googleClientId) {
-      throw new Error('NEXT_PUBLIC_GOOGLE_CLIENT_ID is missing.');
-    }
+    const googleClientId = await resolveGoogleClientId();
 
     const googleIdToken = await requestGoogleIdTokenViaPopup(googleClientId);
     const response = await apiFetch('/api/auth/exchange', {
