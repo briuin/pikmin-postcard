@@ -25,13 +25,6 @@ type ProxyExternalApiRequestArgs = {
   method?: string;
 };
 
-type WithOptionalExternalApiProxyArgs<TResponse extends Response> = {
-  request: Request;
-  path: string;
-  method?: string;
-  runLocal: () => Promise<TResponse>;
-};
-
 function buildForwardHeaders(request: Request): Headers {
   const headers = new Headers();
   const incoming = request.headers;
@@ -82,19 +75,4 @@ export async function proxyExternalApiRequest(
     status: response.status,
     headers: responseHeaders
   });
-}
-
-export async function withOptionalExternalApiProxy<TResponse extends Response>(
-  args: WithOptionalExternalApiProxyArgs<TResponse>
-): Promise<TResponse | Response> {
-  const proxied = await proxyExternalApiRequest({
-    request: args.request,
-    path: args.path,
-    method: args.method
-  });
-  if (proxied) {
-    return proxied;
-  }
-
-  return args.runLocal();
 }

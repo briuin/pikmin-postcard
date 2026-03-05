@@ -1,5 +1,5 @@
-import { getPostcardReportAdminBackend } from '@/lib/backend/postcard-report-admin-backend';
+import { getAppBackend } from '@/lib/backend/app-backend';
 
 export async function GET(request: Request) {
-  return getPostcardReportAdminBackend().reports.list(request);
+  return getAppBackend().reports.list(request);
 }

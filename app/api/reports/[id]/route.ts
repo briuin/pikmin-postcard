@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getPostcardReportAdminBackend } from '@/lib/backend/postcard-report-admin-backend';
+import { getAppBackend } from '@/lib/backend/app-backend';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -11,5 +11,5 @@ export async function DELETE(request: Request, context: RouteContext) {
     return NextResponse.json({ error: 'Missing report id.' }, { status: 400 });
   }
 
-  return getPostcardReportAdminBackend().reports.cancelById(request, reportId);
+  return getAppBackend().reports.cancelById(request, reportId);
 }

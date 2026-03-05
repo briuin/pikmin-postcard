@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getPostcardReportAdminBackend } from '@/lib/backend/postcard-report-admin-backend';
+import { getAppBackend } from '@/lib/backend/app-backend';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -11,7 +11,7 @@ export async function GET(request: Request, context: RouteContext) {
     return NextResponse.json({ error: 'Missing postcard id.' }, { status: 400 });
   }
 
-  return getPostcardReportAdminBackend().postcards.getById(request, id);
+  return getAppBackend().postcards.getById(request, id);
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
@@ -20,7 +20,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     return NextResponse.json({ error: 'Missing postcard id.' }, { status: 400 });
   }
 
-  return getPostcardReportAdminBackend().postcards.updateById(request, id);
+  return getAppBackend().postcards.updateById(request, id);
 }
 
 export async function DELETE(request: Request, context: RouteContext) {
@@ -29,5 +29,5 @@ export async function DELETE(request: Request, context: RouteContext) {
     return NextResponse.json({ error: 'Missing postcard id.' }, { status: 400 });
   }
 
-  return getPostcardReportAdminBackend().postcards.deleteById(request, id);
+  return getAppBackend().postcards.deleteById(request, id);
 }

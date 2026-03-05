@@ -13,6 +13,11 @@ import {
   attachViewerFeedback,
   findViewerFeedbackRowsForPostcards
 } from '@/lib/postcards/feedback';
+import {
+  type FeedbackReportReasonInput,
+  submitPostcardFeedback,
+  type FeedbackInputAction
+} from '@/lib/postcards/feedback-mutations';
 import { serializePostcards } from '@/lib/postcards/list';
 import { buildPublicOrderBy, buildPublicWhere, parsePublicQuery } from '@/lib/postcards/query';
 import { findPostcardsForList } from '@/lib/postcards/repository';
@@ -39,6 +44,23 @@ const postcardCreateSchema = z.object({
   aiPlaceGuess: z.string().max(180).optional(),
   locationStatus: z.nativeEnum(LocationStatus).optional(),
   locationModelVersion: z.string().max(100).optional()
+});
+
+const postcardFeedbackSchema = z.object({
+  action: z.enum(['like', 'dislike', 'favorite', 'collected', 'report', 'report_wrong_location']),
+  reason: z.enum(['wrong_location', 'spam', 'illegal_image', 'other']).optional(),
+  description: z.string().trim().max(1200).optional()
+}).superRefine((payload, ctx) => {
+  if (
+    (payload.action === 'report' || payload.action === 'report_wrong_location') &&
+    !payload.reason
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['reason'],
+      message: 'Reason is required when reporting.'
+    });
+  }
 });
 
 export type ApprovedPostcardActor = {
@@ -401,4 +423,52 @@ export async function softDeletePostcardLocal(args: {
   }
 
   return NextResponse.json({ ok: true }, { status: 200 });
+}
+
+export async function submitPostcardFeedbackLocal(args: {
+  request: Request;
+  postcardId: string;
+  actorId: string;
+}): Promise<NextResponse> {
+  const { request, postcardId, actorId } = args;
+
+  try {
+    const body = postcardFeedbackSchema.parse(await request.json()) as {
+      action: FeedbackInputAction;
+      reason?: FeedbackReportReasonInput;
+      description?: string;
+    };
+    await recordUserAction({
+      request,
+      userId: actorId,
+      action: 'POSTCARD_FEEDBACK',
+      metadata: {
+        postcardId,
+        feedbackAction: body.action,
+        reportReason: body.reason ?? null
+      }
+    });
+
+    const postcard = await submitPostcardFeedback({
+      postcardId,
+      userId: actorId,
+      action: body.action,
+      reportReason: body.reason,
+      reportDescription: body.description ?? null
+    });
+
+    if (!postcard) {
+      return NextResponse.json({ error: 'Postcard not found.' }, { status: 404 });
+    }
+
+    return NextResponse.json(postcard, { status: 200 });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error: 'Failed to submit feedback.',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
+      { status: 400 }
+    );
+  }
 }

@@ -1,9 +1,9 @@
-import { getPostcardReportAdminBackend } from '@/lib/backend/postcard-report-admin-backend';
+import { getAppBackend } from '@/lib/backend/app-backend';
 
 export async function GET(request: Request) {
-  return getPostcardReportAdminBackend().admin.listReports(request);
+  return getAppBackend().admin.listReports(request);
 }
 
 export async function PATCH(request: Request) {
-  return getPostcardReportAdminBackend().admin.updateReport(request);
+  return getAppBackend().admin.updateReport(request);
 }
