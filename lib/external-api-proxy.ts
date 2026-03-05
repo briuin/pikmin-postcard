@@ -19,7 +19,30 @@ export function isExternalServerlessApiEnabled(): boolean {
   return Boolean(getExternalServerlessApiBase());
 }
 
-export async function proxyExternalApiGet(path: string): Promise<Response | null> {
+type ProxyExternalApiRequestArgs = {
+  request: Request;
+  path: string;
+  method?: string;
+};
+
+function buildForwardHeaders(request: Request): Headers {
+  const headers = new Headers();
+  const incoming = request.headers;
+  const forwardKeys = ['authorization', 'content-type', 'x-user-id', 'x-user-email'] as const;
+
+  for (const key of forwardKeys) {
+    const value = incoming.get(key);
+    if (value) {
+      headers.set(key, value);
+    }
+  }
+
+  return headers;
+}
+
+export async function proxyExternalApiRequest(
+  args: ProxyExternalApiRequestArgs
+): Promise<Response | null> {
   if (!isExternalServerlessApiEnabled()) {
     return null;
   }
@@ -29,14 +52,22 @@ export async function proxyExternalApiGet(path: string): Promise<Response | null
     return null;
   }
 
-  const url = `${base}${path.startsWith('/') ? path : `/${path}`}`;
+  const method = (args.method ?? args.request.method ?? 'GET').toUpperCase();
+  const path = args.path.startsWith('/') ? args.path : `/${args.path}`;
+  const url = `${base}${path}`;
+  const headers = buildForwardHeaders(args.request);
+  const requestBody =
+    method === 'GET' || method === 'HEAD' ? undefined : await args.request.text();
+
   const response = await fetch(url, {
-    method: 'GET',
+    method,
+    headers,
+    body: requestBody && requestBody.length > 0 ? requestBody : undefined,
     cache: 'no-store'
   });
-  const body = await response.text();
+  const responseBody = await response.text();
 
-  return new Response(body, {
+  return new Response(responseBody, {
     status: response.status,
     headers: {
       'content-type': response.headers.get('content-type') ?? 'application/json',

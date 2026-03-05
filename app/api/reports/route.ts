@@ -1,9 +1,18 @@
 import { NextResponse } from 'next/server';
 import { requireAuthenticatedUserId, withGuardedValue } from '@/lib/api-guards';
+import { proxyExternalApiRequest } from '@/lib/external-api-proxy';
 import { listDashboardReportsByReporter } from '@/lib/postcards/report-workflow';
 import { recordUserAction } from '@/lib/user-action-log';
 
 export async function GET(request: Request) {
+  const proxied = await proxyExternalApiRequest({
+    request,
+    path: '/reports'
+  });
+  if (proxied) {
+    return proxied;
+  }
+
   return withGuardedValue(
     requireAuthenticatedUserId({ createIfMissing: true }),
     async (userId) => {

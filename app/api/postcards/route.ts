@@ -7,7 +7,7 @@ import {
   requireAuthenticatedUserId,
   withGuardedValue
 } from '@/lib/api-guards';
-import { proxyExternalApiGet } from '@/lib/external-api-proxy';
+import { proxyExternalApiRequest } from '@/lib/external-api-proxy';
 import { prisma } from '@/lib/prisma';
 import {
   attachViewerFeedback,
@@ -42,16 +42,17 @@ const postcardCreateSchema = z.object({
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
+  const proxied = await proxyExternalApiRequest({
+    request,
+    path: `/postcards${url.search}`
+  });
+  if (proxied) {
+    return proxied;
+  }
+
   const mineOnly = url.searchParams.get('mine') === '1';
   const savedOnly = url.searchParams.get('saved') === '1';
   const viewerUserId = await getAuthenticatedUserId();
-
-  if (!mineOnly && !savedOnly) {
-    const proxied = await proxyExternalApiGet(`/postcards?${url.searchParams.toString()}`);
-    if (proxied) {
-      return proxied;
-    }
-  }
 
   if (mineOnly) {
     return withGuardedValue(
@@ -190,6 +191,14 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const proxied = await proxyExternalApiRequest({
+    request,
+    path: '/postcards'
+  });
+  if (proxied) {
+    return proxied;
+  }
+
   return withGuardedValue(requireApprovedCreator(), async (actor) => {
     try {
       const body = postcardCreateSchema.parse(await request.json());

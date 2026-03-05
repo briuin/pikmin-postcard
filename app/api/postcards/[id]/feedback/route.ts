@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireApprovedVoter, withGuardedValue } from '@/lib/api-guards';
+import { proxyExternalApiRequest } from '@/lib/external-api-proxy';
 import {
   type FeedbackReportReasonInput,
   submitPostcardFeedback,
@@ -27,12 +28,20 @@ type RouteContext = {
 };
 
 export async function POST(request: Request, context: RouteContext) {
-  return withGuardedValue(requireApprovedVoter(), async (actor) => {
-    const { id } = await context.params;
-    if (!id) {
-      return NextResponse.json({ error: 'Missing postcard id.' }, { status: 400 });
-    }
+  const { id: postcardId } = await context.params;
+  if (!postcardId) {
+    return NextResponse.json({ error: 'Missing postcard id.' }, { status: 400 });
+  }
 
+  const proxied = await proxyExternalApiRequest({
+    request,
+    path: `/postcards/${encodeURIComponent(postcardId)}/feedback`
+  });
+  if (proxied) {
+    return proxied;
+  }
+
+  return withGuardedValue(requireApprovedVoter(), async (actor) => {
     try {
       const body = feedbackSchema.parse(await request.json()) as {
         action: FeedbackInputAction;
@@ -44,14 +53,14 @@ export async function POST(request: Request, context: RouteContext) {
         userId: actor.id,
         action: 'POSTCARD_FEEDBACK',
         metadata: {
-          postcardId: id,
+          postcardId,
           feedbackAction: body.action,
           reportReason: body.reason ?? null
         }
       });
 
       const postcard = await submitPostcardFeedback({
-        postcardId: id,
+        postcardId,
         userId: actor.id,
         action: body.action,
         reportReason: body.reason,

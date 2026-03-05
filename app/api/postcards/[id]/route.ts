@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { PostcardReportStatus } from '@prisma/client';
 import { isManagerOrAboveRole } from '@/lib/api-auth';
 import { requireApprovedActor } from '@/lib/api-guards';
-import { proxyExternalApiGet } from '@/lib/external-api-proxy';
+import { proxyExternalApiRequest } from '@/lib/external-api-proxy';
 import { serializePostcards } from '@/lib/postcards/list';
 import { findPostcardsForList } from '@/lib/postcards/repository';
 import { findAdminEditableReportCaseStateByPostcardId } from '@/lib/postcards/report-workflow';
@@ -65,7 +65,10 @@ export async function GET(_request: Request, context: RouteContext) {
     return NextResponse.json({ error: 'Missing postcard id.' }, { status: 400 });
   }
 
-  const proxied = await proxyExternalApiGet(`/postcards/${encodeURIComponent(id)}`);
+  const proxied = await proxyExternalApiRequest({
+    request: _request,
+    path: `/postcards/${encodeURIComponent(id)}`
+  });
   if (proxied) {
     return proxied;
   }
@@ -90,6 +93,19 @@ export async function GET(_request: Request, context: RouteContext) {
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
+  const routeParams = await context.params;
+  if (!routeParams.id) {
+    return NextResponse.json({ error: 'Missing postcard id.' }, { status: 400 });
+  }
+
+  const proxied = await proxyExternalApiRequest({
+    request,
+    path: `/postcards/${encodeURIComponent(routeParams.id)}`
+  });
+  if (proxied) {
+    return proxied;
+  }
+
   return withApprovedPostcardRouteContext(context, async ({ actor, id }) => {
     const {
       applyPostcardCropUpdate,
@@ -175,6 +191,19 @@ export async function PATCH(request: Request, context: RouteContext) {
 }
 
 export async function DELETE(request: Request, context: RouteContext) {
+  const routeParams = await context.params;
+  if (!routeParams.id) {
+    return NextResponse.json({ error: 'Missing postcard id.' }, { status: 400 });
+  }
+
+  const proxied = await proxyExternalApiRequest({
+    request,
+    path: `/postcards/${encodeURIComponent(routeParams.id)}`
+  });
+  if (proxied) {
+    return proxied;
+  }
+
   return withApprovedPostcardRouteContext(context, async ({ actor, id }) => {
     const { softDeletePostcard } = await import('@/lib/postcards/manage');
 

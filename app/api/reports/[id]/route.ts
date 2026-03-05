@@ -1,6 +1,7 @@
 import { PostcardReportStatus } from '@prisma/client';
 import { NextResponse } from 'next/server';
 import { requireAuthenticatedUserId, withGuardedValue } from '@/lib/api-guards';
+import { proxyExternalApiRequest } from '@/lib/external-api-proxy';
 import { prisma } from '@/lib/prisma';
 import { recordUserAction } from '@/lib/user-action-log';
 
@@ -9,19 +10,27 @@ type RouteContext = {
 };
 
 export async function DELETE(request: Request, context: RouteContext) {
+  const { id: reportId } = await context.params;
+  if (!reportId) {
+    return NextResponse.json({ error: 'Missing report id.' }, { status: 400 });
+  }
+
+  const proxied = await proxyExternalApiRequest({
+    request,
+    path: `/reports/${encodeURIComponent(reportId)}`
+  });
+  if (proxied) {
+    return proxied;
+  }
+
   return withGuardedValue(
     requireAuthenticatedUserId({ createIfMissing: true }),
     async (userId) => {
-      const { id } = await context.params;
-      if (!id) {
-        return NextResponse.json({ error: 'Missing report id.' }, { status: 400 });
-      }
-
       try {
         const result = await prisma.$transaction(async (tx) => {
           const report = await tx.postcardReport.findFirst({
             where: {
-              id,
+              id: reportId,
               reporterUserId: userId
             },
             include: {
@@ -107,7 +116,7 @@ export async function DELETE(request: Request, context: RouteContext) {
           userId,
           action: 'POSTCARD_REPORT_CANCEL',
           metadata: {
-            reportId: id,
+            reportId: reportId,
             postcardId: result.postcardId
           }
         });
