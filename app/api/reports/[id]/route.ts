@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireAuthenticatedUserId, withGuardedValue } from '@/lib/api-guards';
-import { withOptionalExternalApiProxy } from '@/lib/external-api-proxy';
-import { cancelDashboardReportLocal } from '@/lib/postcards/local-report-route-service';
+import { getPostcardReportAdminBackend } from '@/lib/backend/postcard-report-admin-backend';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -13,13 +11,5 @@ export async function DELETE(request: Request, context: RouteContext) {
     return NextResponse.json({ error: 'Missing report id.' }, { status: 400 });
   }
 
-  return withOptionalExternalApiProxy({
-    request,
-    path: `/reports/${encodeURIComponent(reportId)}`,
-    runLocal: async () =>
-      withGuardedValue(
-        requireAuthenticatedUserId({ createIfMissing: true }),
-        async (userId) => cancelDashboardReportLocal({ request, userId, reportId })
-      )
-  });
+  return getPostcardReportAdminBackend().reports.cancelById(request, reportId);
 }
