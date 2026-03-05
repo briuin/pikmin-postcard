@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireApprovedVoter, withGuardedValue } from '@/lib/api-guards';
-import { proxyExternalApiRequest } from '@/lib/external-api-proxy';
+import { withOptionalExternalApiProxy } from '@/lib/external-api-proxy';
 import {
   type FeedbackReportReasonInput,
   submitPostcardFeedback,
@@ -33,53 +33,50 @@ export async function POST(request: Request, context: RouteContext) {
     return NextResponse.json({ error: 'Missing postcard id.' }, { status: 400 });
   }
 
-  const proxied = await proxyExternalApiRequest({
+  return withOptionalExternalApiProxy({
     request,
-    path: `/postcards/${encodeURIComponent(postcardId)}/feedback`
-  });
-  if (proxied) {
-    return proxied;
-  }
+    path: `/postcards/${encodeURIComponent(postcardId)}/feedback`,
+    runLocal: async () =>
+      withGuardedValue(requireApprovedVoter(), async (actor) => {
+        try {
+          const body = feedbackSchema.parse(await request.json()) as {
+            action: FeedbackInputAction;
+            reason?: FeedbackReportReasonInput;
+            description?: string;
+          };
+          await recordUserAction({
+            request,
+            userId: actor.id,
+            action: 'POSTCARD_FEEDBACK',
+            metadata: {
+              postcardId,
+              feedbackAction: body.action,
+              reportReason: body.reason ?? null
+            }
+          });
 
-  return withGuardedValue(requireApprovedVoter(), async (actor) => {
-    try {
-      const body = feedbackSchema.parse(await request.json()) as {
-        action: FeedbackInputAction;
-        reason?: FeedbackReportReasonInput;
-        description?: string;
-      };
-      await recordUserAction({
-        request,
-        userId: actor.id,
-        action: 'POSTCARD_FEEDBACK',
-        metadata: {
-          postcardId,
-          feedbackAction: body.action,
-          reportReason: body.reason ?? null
+          const postcard = await submitPostcardFeedback({
+            postcardId,
+            userId: actor.id,
+            action: body.action,
+            reportReason: body.reason,
+            reportDescription: body.description ?? null
+          });
+
+          if (!postcard) {
+            return NextResponse.json({ error: 'Postcard not found.' }, { status: 404 });
+          }
+
+          return NextResponse.json(postcard, { status: 200 });
+        } catch (error) {
+          return NextResponse.json(
+            {
+              error: 'Failed to submit feedback.',
+              details: error instanceof Error ? error.message : 'Unknown error'
+            },
+            { status: 400 }
+          );
         }
-      });
-
-      const postcard = await submitPostcardFeedback({
-        postcardId,
-        userId: actor.id,
-        action: body.action,
-        reportReason: body.reason,
-        reportDescription: body.description ?? null
-      });
-
-      if (!postcard) {
-        return NextResponse.json({ error: 'Postcard not found.' }, { status: 404 });
-      }
-
-      return NextResponse.json(postcard, { status: 200 });
-    } catch (error) {
-      return NextResponse.json(
-        {
-          error: 'Failed to submit feedback.',
-          details: error instanceof Error ? error.message : 'Unknown error'
-        },
-        { status: 400 }
-      );
-    }
+      })
   });
 }

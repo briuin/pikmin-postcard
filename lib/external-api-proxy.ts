@@ -25,6 +25,13 @@ type ProxyExternalApiRequestArgs = {
   method?: string;
 };
 
+type WithOptionalExternalApiProxyArgs<TResponse extends Response> = {
+  request: Request;
+  path: string;
+  method?: string;
+  runLocal: () => Promise<TResponse>;
+};
+
 function buildForwardHeaders(request: Request): Headers {
   const headers = new Headers();
   const incoming = request.headers;
@@ -57,21 +64,37 @@ export async function proxyExternalApiRequest(
   const url = `${base}${path}`;
   const headers = buildForwardHeaders(args.request);
   const requestBody =
-    method === 'GET' || method === 'HEAD' ? undefined : await args.request.text();
+    method === 'GET' || method === 'HEAD' ? null : await args.request.arrayBuffer();
 
   const response = await fetch(url, {
     method,
     headers,
-    body: requestBody && requestBody.length > 0 ? requestBody : undefined,
+    body: requestBody && requestBody.byteLength > 0 ? requestBody : undefined,
     cache: 'no-store'
   });
-  const responseBody = await response.text();
+  const responseBody = await response.arrayBuffer();
+  const responseHeaders = new Headers(response.headers);
+  if (!responseHeaders.has('cache-control')) {
+    responseHeaders.set('cache-control', 'no-store');
+  }
 
   return new Response(responseBody, {
     status: response.status,
-    headers: {
-      'content-type': response.headers.get('content-type') ?? 'application/json',
-      'cache-control': response.headers.get('cache-control') ?? 'no-store'
-    }
+    headers: responseHeaders
   });
+}
+
+export async function withOptionalExternalApiProxy<TResponse extends Response>(
+  args: WithOptionalExternalApiProxyArgs<TResponse>
+): Promise<TResponse | Response> {
+  const proxied = await proxyExternalApiRequest({
+    request: args.request,
+    path: args.path,
+    method: args.method
+  });
+  if (proxied) {
+    return proxied;
+  }
+
+  return args.runLocal();
 }

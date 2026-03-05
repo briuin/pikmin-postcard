@@ -7,7 +7,7 @@ import {
   requireAuthenticatedUserId,
   withGuardedValue
 } from '@/lib/api-guards';
-import { proxyExternalApiRequest } from '@/lib/external-api-proxy';
+import { withOptionalExternalApiProxy } from '@/lib/external-api-proxy';
 import { prisma } from '@/lib/prisma';
 import {
   attachViewerFeedback,
@@ -42,228 +42,227 @@ const postcardCreateSchema = z.object({
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  const proxied = await proxyExternalApiRequest({
+  return withOptionalExternalApiProxy({
     request,
-    path: `/postcards${url.search}`
-  });
-  if (proxied) {
-    return proxied;
-  }
+    path: `/postcards${url.search}`,
+    runLocal: async () => {
+      const mineOnly = url.searchParams.get('mine') === '1';
+      const savedOnly = url.searchParams.get('saved') === '1';
+      const viewerUserId = await getAuthenticatedUserId();
 
-  const mineOnly = url.searchParams.get('mine') === '1';
-  const savedOnly = url.searchParams.get('saved') === '1';
-  const viewerUserId = await getAuthenticatedUserId();
+      if (mineOnly) {
+        return withGuardedValue(
+          requireAuthenticatedUserId({ createIfMissing: true }),
+          async (userId) => {
+            await recordUserAction({
+              request,
+              userId,
+              action: 'MY_POSTCARD_LIST'
+            });
 
-  if (mineOnly) {
-    return withGuardedValue(
-      requireAuthenticatedUserId({ createIfMissing: true }),
-      async (userId) => {
-        await recordUserAction({
-          request,
-          userId,
-          action: 'MY_POSTCARD_LIST'
-        });
+            const postcards = await findPostcardsForList({
+              where: {
+                userId,
+                deletedAt: null
+              },
+              orderBy: { createdAt: 'desc' },
+              take: 200
+            });
 
-        const postcards = await findPostcardsForList({
-          where: {
-            userId,
-            deletedAt: null
-          },
-          orderBy: { createdAt: 'desc' },
-          take: 200
-        });
+            const serialized = serializePostcards(postcards, { includeOriginalImageUrl: true });
+            const feedbackRows = await findViewerFeedbackRowsForPostcards(
+              viewerUserId,
+              serialized.map((item) => item.id)
+            );
 
-        const serialized = serializePostcards(postcards, { includeOriginalImageUrl: true });
-        const feedbackRows = await findViewerFeedbackRowsForPostcards(
-          viewerUserId,
-          serialized.map((item) => item.id)
+            return NextResponse.json(attachViewerFeedback(serialized, feedbackRows), {
+              status: 200
+            });
+          }
         );
-
-        return NextResponse.json(attachViewerFeedback(serialized, feedbackRows), { status: 200 });
       }
-    );
-  }
 
-  if (savedOnly) {
-    return withGuardedValue(
-      requireAuthenticatedUserId({ createIfMissing: true }),
-      async (userId) => {
-        await recordUserAction({
-          request,
-          userId,
-          action: 'SAVED_POSTCARD_LIST'
-        });
+      if (savedOnly) {
+        return withGuardedValue(
+          requireAuthenticatedUserId({ createIfMissing: true }),
+          async (userId) => {
+            await recordUserAction({
+              request,
+              userId,
+              action: 'SAVED_POSTCARD_LIST'
+            });
 
-        const savedRows = await prisma.postcardFeedback.findMany({
-          where: {
-            userId,
-            action: {
-              in: [FeedbackAction.FAVORITE, FeedbackAction.COLLECTED]
-            },
-            postcard: {
-              deletedAt: null
+            const savedRows = await prisma.postcardFeedback.findMany({
+              where: {
+                userId,
+                action: {
+                  in: [FeedbackAction.FAVORITE, FeedbackAction.COLLECTED]
+                },
+                postcard: {
+                  deletedAt: null
+                }
+              },
+              select: {
+                postcardId: true
+              },
+              orderBy: {
+                createdAt: 'desc'
+              },
+              take: 400
+            });
+
+            const orderedPostcardIds = Array.from(new Set(savedRows.map((row) => row.postcardId)));
+            if (orderedPostcardIds.length === 0) {
+              return NextResponse.json([], { status: 200 });
             }
-          },
-          select: {
-            postcardId: true
-          },
-          orderBy: {
-            createdAt: 'desc'
-          },
-          take: 400
-        });
 
-        const orderedPostcardIds = Array.from(new Set(savedRows.map((row) => row.postcardId)));
-        if (orderedPostcardIds.length === 0) {
-          return NextResponse.json([], { status: 200 });
-        }
+            const postcards = await findPostcardsForList({
+              where: {
+                id: {
+                  in: orderedPostcardIds
+                },
+                deletedAt: null
+              },
+              orderBy: {
+                updatedAt: 'desc'
+              },
+              take: 400
+            });
 
-        const postcards = await findPostcardsForList({
-          where: {
-            id: {
-              in: orderedPostcardIds
-            },
-            deletedAt: null
-          },
-          orderBy: {
-            updatedAt: 'desc'
-          },
-          take: 400
-        });
+            const postcardById = new Map(postcards.map((postcard) => [postcard.id, postcard]));
+            const orderedPostcards = orderedPostcardIds
+              .map((id) => postcardById.get(id))
+              .filter((row): row is (typeof postcards)[number] => Boolean(row));
+            const serialized = serializePostcards(orderedPostcards, { includeOriginalImageUrl: true });
+            const feedbackRows = await findViewerFeedbackRowsForPostcards(
+              viewerUserId,
+              serialized.map((item) => item.id)
+            );
 
-        const postcardById = new Map(postcards.map((postcard) => [postcard.id, postcard]));
-        const orderedPostcards = orderedPostcardIds
-          .map((id) => postcardById.get(id))
-          .filter((row): row is (typeof postcards)[number] => Boolean(row));
-        const serialized = serializePostcards(orderedPostcards, { includeOriginalImageUrl: true });
-        const feedbackRows = await findViewerFeedbackRowsForPostcards(
-          viewerUserId,
-          serialized.map((item) => item.id)
+            return NextResponse.json(attachViewerFeedback(serialized, feedbackRows), {
+              status: 200
+            });
+          }
         );
-
-        return NextResponse.json(attachViewerFeedback(serialized, feedbackRows), { status: 200 });
       }
-    );
-  }
 
-  const queryParse = parsePublicQuery(url);
-  if (!queryParse.success) {
-    return NextResponse.json(
-      {
-        error: 'Invalid query.',
-        details: queryParse.error.issues.map((issue) => issue.message).join('; ')
-      },
-      { status: 400 }
-    );
-  }
+      const queryParse = parsePublicQuery(url);
+      if (!queryParse.success) {
+        return NextResponse.json(
+          {
+            error: 'Invalid query.',
+            details: queryParse.error.issues.map((issue) => issue.message).join('; ')
+          },
+          { status: 400 }
+        );
+      }
 
-  const query = queryParse.data;
-  const where = buildPublicWhere(query);
-  const orderBy = buildPublicOrderBy(query.sort);
+      const query = queryParse.data;
+      const where = buildPublicWhere(query);
+      const orderBy = buildPublicOrderBy(query.sort);
 
-  const [postcards, total] = await Promise.all([
-    findPostcardsForList({
-      where,
-      orderBy,
-      take: query.limit + 1
-    }),
-    prisma.postcard.count({ where })
-  ]);
+      const [postcards, total] = await Promise.all([
+        findPostcardsForList({
+          where,
+          orderBy,
+          take: query.limit + 1
+        }),
+        prisma.postcard.count({ where })
+      ]);
 
-  const hasMore = postcards.length > query.limit;
-  const items = hasMore ? postcards.slice(0, query.limit) : postcards;
-  const serialized = serializePostcards(items);
-  const feedbackRows = await findViewerFeedbackRowsForPostcards(
-    viewerUserId,
-    serialized.map((item) => item.id)
-  );
+      const hasMore = postcards.length > query.limit;
+      const items = hasMore ? postcards.slice(0, query.limit) : postcards;
+      const serialized = serializePostcards(items);
+      const feedbackRows = await findViewerFeedbackRowsForPostcards(
+        viewerUserId,
+        serialized.map((item) => item.id)
+      );
 
-  return NextResponse.json(
-    {
-      items: attachViewerFeedback(serialized, feedbackRows),
-      total,
-      hasMore,
-      limit: query.limit,
-      sort: query.sort
-    },
-    { status: 200 }
-  );
+      return NextResponse.json(
+        {
+          items: attachViewerFeedback(serialized, feedbackRows),
+          total,
+          hasMore,
+          limit: query.limit,
+          sort: query.sort
+        },
+        { status: 200 }
+      );
+    }
+  });
 }
 
 export async function POST(request: Request) {
-  const proxied = await proxyExternalApiRequest({
+  return withOptionalExternalApiProxy({
     request,
-    path: '/postcards'
-  });
-  if (proxied) {
-    return proxied;
-  }
+    path: '/postcards',
+    runLocal: async () =>
+      withGuardedValue(requireApprovedCreator(), async (actor) => {
+        try {
+          const body = postcardCreateSchema.parse(await request.json());
+          const reverseLocation =
+            typeof body.latitude === 'number' && typeof body.longitude === 'number'
+              ? await reverseGeocodeCoordinates(body.latitude, body.longitude)
+              : null;
 
-  return withGuardedValue(requireApprovedCreator(), async (actor) => {
-    try {
-      const body = postcardCreateSchema.parse(await request.json());
-      const reverseLocation =
-        typeof body.latitude === 'number' && typeof body.longitude === 'number'
-          ? await reverseGeocodeCoordinates(body.latitude, body.longitude)
-          : null;
+          await recordUserAction({
+            request,
+            userId: actor.id,
+            action: 'POSTCARD_CREATE',
+            metadata: {
+              postcardType: body.postcardType,
+              locationStatus: body.locationStatus ?? LocationStatus.AUTO
+            }
+          });
 
-      await recordUserAction({
-        request,
-        userId: actor.id,
-        action: 'POSTCARD_CREATE',
-        metadata: {
-          postcardType: body.postcardType,
-          locationStatus: body.locationStatus ?? LocationStatus.AUTO
-        }
-      });
+          const baseData = {
+            userId: actor.id,
+            title: body.title,
+            postcardType: body.postcardType,
+            notes: body.notes,
+            imageUrl: body.imageUrl,
+            city: reverseLocation?.city ?? body.city,
+            state: reverseLocation?.state ?? body.state,
+            country: reverseLocation?.country ?? body.country,
+            placeName: body.placeName,
+            latitude: body.latitude,
+            longitude: body.longitude,
+            aiLatitude: body.aiLatitude,
+            aiLongitude: body.aiLongitude,
+            aiConfidence: body.aiConfidence,
+            aiPlaceGuess: body.aiPlaceGuess,
+            locationStatus: body.locationStatus ?? LocationStatus.AUTO,
+            locationModelVersion: body.locationModelVersion ?? process.env.GEMINI_MODEL ?? 'unknown'
+          };
 
-      const baseData = {
-        userId: actor.id,
-        title: body.title,
-        postcardType: body.postcardType,
-        notes: body.notes,
-        imageUrl: body.imageUrl,
-        city: reverseLocation?.city ?? body.city,
-        state: reverseLocation?.state ?? body.state,
-        country: reverseLocation?.country ?? body.country,
-        placeName: body.placeName,
-        latitude: body.latitude,
-        longitude: body.longitude,
-        aiLatitude: body.aiLatitude,
-        aiLongitude: body.aiLongitude,
-        aiConfidence: body.aiConfidence,
-        aiPlaceGuess: body.aiPlaceGuess,
-        locationStatus: body.locationStatus ?? LocationStatus.AUTO,
-        locationModelVersion: body.locationModelVersion ?? process.env.GEMINI_MODEL ?? 'unknown'
-      };
+          let postcard;
+          try {
+            postcard = await prisma.postcard.create({
+              data: {
+                ...baseData,
+                originalImageUrl: body.originalImageUrl
+              }
+            });
+          } catch (error) {
+            if (!hasMissingOriginalImageColumnError(error)) {
+              throw error;
+            }
 
-      let postcard;
-      try {
-        postcard = await prisma.postcard.create({
-          data: {
-            ...baseData,
-            originalImageUrl: body.originalImageUrl
+            postcard = await prisma.postcard.create({
+              data: baseData
+            });
           }
-        });
-      } catch (error) {
-        if (!hasMissingOriginalImageColumnError(error)) {
-          throw error;
+
+          return NextResponse.json(postcard, { status: 201 });
+        } catch (error) {
+          return NextResponse.json(
+            {
+              error: 'Invalid postcard payload.',
+              details: error instanceof Error ? error.message : 'Unknown error'
+            },
+            { status: 400 }
+          );
         }
-
-        postcard = await prisma.postcard.create({
-          data: baseData
-        });
-      }
-
-      return NextResponse.json(postcard, { status: 201 });
-    } catch (error) {
-      return NextResponse.json(
-        {
-          error: 'Invalid postcard payload.',
-          details: error instanceof Error ? error.message : 'Unknown error'
-        },
-        { status: 400 }
-      );
-    }
+      })
   });
 }
