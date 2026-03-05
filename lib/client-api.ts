@@ -41,6 +41,19 @@ export function getServerlessApiBaseUrl(): string {
   return (process.env.NEXT_PUBLIC_SERVERLESS_API_BASE_URL ?? '').trim().replace(/\/$/, '');
 }
 
+function shouldUseExternalServerlessApi(context: ApiFetchContext = {}): boolean {
+  if (context.forceInternal) {
+    return false;
+  }
+
+  const enabled = (process.env.NEXT_PUBLIC_USE_EXTERNAL_SERVERLESS_API ?? '').trim().toLowerCase() === 'true';
+  if (!enabled) {
+    return false;
+  }
+
+  return Boolean(getServerlessApiBaseUrl());
+}
+
 function mapInternalApiPathToServerless(path: string): string | null {
   const normalized = path.trim();
 
@@ -85,10 +98,10 @@ function mapInternalApiPathToServerless(path: string): string | null {
 }
 
 export function buildApiUrl(path: string, context: ApiFetchContext = {}): string {
-  const base = getServerlessApiBaseUrl();
-  if (!base || context.forceInternal) {
+  if (!shouldUseExternalServerlessApi(context)) {
     return path;
   }
+  const base = getServerlessApiBaseUrl();
 
   const mappedPath = mapInternalApiPathToServerless(path);
   if (!mappedPath) {
@@ -99,6 +112,9 @@ export function buildApiUrl(path: string, context: ApiFetchContext = {}): string
 }
 
 export function isServerlessApiUrl(url: string): boolean {
+  if ((process.env.NEXT_PUBLIC_USE_EXTERNAL_SERVERLESS_API ?? '').trim().toLowerCase() !== 'true') {
+    return false;
+  }
   const base = getServerlessApiBaseUrl();
   return Boolean(base) && url.startsWith(base);
 }

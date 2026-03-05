@@ -1,7 +1,5 @@
 /// <reference path="./.sst/platform/config.d.ts" />
 
-const DEFAULT_SERVERLESS_API_BASE_URL =
-  "https://q5wrip39qe.execute-api.us-east-1.amazonaws.com";
 const DEFAULT_DOMAIN_NAME = "pikmin.askans.app";
 const DEFAULT_ROUTE53_ZONE_ID = "Z07732472U0GRGAK1E05W";
 
@@ -30,8 +28,9 @@ export default $config({
   },
   async run() {
     const publicApiBaseUrl =
-      process.env.NEXT_PUBLIC_SERVERLESS_API_BASE_URL?.trim() ||
-      DEFAULT_SERVERLESS_API_BASE_URL;
+      process.env.NEXT_PUBLIC_SERVERLESS_API_BASE_URL?.trim() || "";
+    const useExternalServerlessApi =
+      process.env.NEXT_PUBLIC_USE_EXTERNAL_SERVERLESS_API?.trim() || "false";
     const publicGoogleClientId =
       process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim() ||
       process.env.GOOGLE_CLIENT_ID?.trim() ||
@@ -63,6 +62,7 @@ export default $config({
         : undefined,
       environment: {
         NEXT_PUBLIC_SERVERLESS_API_BASE_URL: publicApiBaseUrl,
+        NEXT_PUBLIC_USE_EXTERNAL_SERVERLESS_API: useExternalServerlessApi,
         NEXT_PUBLIC_GOOGLE_CLIENT_ID: publicGoogleClientId,
         GOOGLE_CLIENT_ID: requiredEnv("GOOGLE_CLIENT_ID"),
         GOOGLE_CLIENT_SECRET: requiredEnv("GOOGLE_CLIENT_SECRET"),

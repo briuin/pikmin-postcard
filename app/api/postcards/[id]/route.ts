@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { PostcardReportStatus } from '@prisma/client';
 import { isManagerOrAboveRole } from '@/lib/api-auth';
 import { requireApprovedActor } from '@/lib/api-guards';
+import { serializePostcards } from '@/lib/postcards/list';
 import {
   applyPostcardCropUpdate,
   applyPostcardDetailsUpdate,
@@ -9,6 +10,7 @@ import {
   postcardUpdateSchema,
   softDeletePostcard
 } from '@/lib/postcards/manage';
+import { findPostcardsForList } from '@/lib/postcards/repository';
 import { findAdminEditableReportCaseStateByPostcardId } from '@/lib/postcards/report-workflow';
 import { recordUserAction } from '@/lib/user-action-log';
 
@@ -61,6 +63,31 @@ async function withApprovedPostcardRouteContext(
     actor: routeContext.actor,
     id: routeContext.id
   });
+}
+
+export async function GET(_request: Request, context: RouteContext) {
+  const { id } = await context.params;
+  if (!id) {
+    return NextResponse.json({ error: 'Missing postcard id.' }, { status: 400 });
+  }
+
+  const rows = await findPostcardsForList({
+    where: {
+      id,
+      deletedAt: null
+    },
+    orderBy: {
+      createdAt: 'desc'
+    },
+    take: 1
+  });
+
+  if (rows.length === 0) {
+    return NextResponse.json({ error: 'Postcard not found.' }, { status: 404 });
+  }
+
+  const serialized = serializePostcards(rows);
+  return NextResponse.json(serialized[0], { status: 200 });
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
