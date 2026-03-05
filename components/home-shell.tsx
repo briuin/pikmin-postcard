@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { signIn, signOut, useSession } from 'next-auth/react';
+import { signIn, signOut, useSession } from '@/lib/auth-client';
 import { AdminDashboard } from '@/components/admin-dashboard';
 import { AdminReportDetailPage } from '@/components/admin-report-detail-page';
 import { FeedbackSection } from '@/components/feedback-section';

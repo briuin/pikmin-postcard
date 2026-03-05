@@ -1,9 +1,9 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { signIn, useSession } from 'next-auth/react';
 import 'react-image-crop/dist/ReactCrop.css';
 import { useCallback, useEffect } from 'react';
+import { signIn, useSession } from '@/lib/auth-client';
 import { messages, type Locale } from '@/lib/i18n';
 import { ExploreSection } from '@/components/workbench/explore-section';
 import { CreateSection } from '@/components/workbench/create-section';

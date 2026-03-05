@@ -1,9 +1,7 @@
 import NextAuth from 'next-auth';
 import { UserApprovalStatus, UserRole } from '@prisma/client';
 import Google from 'next-auth/providers/google';
-import { prisma } from '@/lib/prisma';
-import { defaultApprovalStatusForRole } from '@/lib/user-approval';
-import { normalizeEmail, roleForEmail } from '@/lib/user-role';
+import { ensureUserByEmail } from '@/lib/dynamo-users';
 
 export const { handlers, auth } = NextAuth({
   trustHost: true,
@@ -22,28 +20,13 @@ export const { handlers, auth } = NextAuth({
         return false;
       }
 
-      const email = normalizeEmail(String(profile.email));
       const name =
         typeof profile.name === 'string' && profile.name.trim().length > 0
           ? profile.name.trim()
           : null;
-      const defaultRole = roleForEmail(email);
-
-      await prisma.user.upsert({
-        where: { email },
-        update:
-          defaultRole === UserRole.ADMIN
-            ? {
-                role: UserRole.ADMIN,
-                approvalStatus: UserApprovalStatus.APPROVED
-              }
-            : {},
-        create: {
-          email,
-          displayName: name,
-          role: defaultRole,
-          approvalStatus: defaultApprovalStatusForRole(defaultRole)
-        }
+      await ensureUserByEmail({
+        email: String(profile.email),
+        displayName: name
       });
 
       return true;
@@ -54,41 +37,9 @@ export const { handlers, auth } = NextAuth({
         return token;
       }
 
-      const email = normalizeEmail(tokenEmail);
-      const defaultRole = roleForEmail(email);
-      let user = await prisma.user.findUnique({
-        where: { email },
-        select: {
-          id: true,
-          role: true,
-          approvalStatus: true
-        }
+      const user = await ensureUserByEmail({
+        email: tokenEmail
       });
-
-      if (!user) {
-        user = await prisma.user.create({
-          data: {
-            email,
-            role: defaultRole,
-            approvalStatus: defaultApprovalStatusForRole(defaultRole)
-          },
-          select: {
-            id: true,
-            role: true,
-            approvalStatus: true
-          }
-        });
-      } else if (defaultRole === UserRole.ADMIN && user.role !== UserRole.ADMIN) {
-        user = await prisma.user.update({
-          where: { email },
-          data: { role: UserRole.ADMIN, approvalStatus: UserApprovalStatus.APPROVED },
-          select: {
-            id: true,
-            role: true,
-            approvalStatus: true
-          }
-        });
-      }
 
       token.role = user.role;
       token.approvalStatus = user.approvalStatus;

@@ -20,6 +20,19 @@ const S3_REGION = process.env.S3_REGION || REGION;
 const S3_PUBLIC_BASE_URL = process.env.S3_PUBLIC_BASE_URL || "";
 const GOOGLE_GENERATIVE_AI_API_KEY = process.env.GOOGLE_GENERATIVE_AI_API_KEY || "";
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
+const APP_JWT_SECRET = process.env.APP_JWT_SECRET || "";
+const NEW_USER_APPROVAL_MODE = String(process.env.NEW_USER_APPROVAL_MODE || "auto")
+  .trim()
+  .toLowerCase();
+const DEFAULT_ADMIN_EMAILS = ["dreamingdexiaoxiaohao@gmail.com"];
+const ADMIN_EMAILS = [
+  ...DEFAULT_ADMIN_EMAILS,
+  ...String(process.env.ADMIN_EMAILS || "")
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean),
+];
 
 const TABLES = {
   users: `${TABLE_PREFIX}-users`,
@@ -56,6 +69,191 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+function normalizeEmail(email) {
+  return String(email || "")
+    .trim()
+    .toLowerCase();
+}
+
+function roleForEmail(email) {
+  return ADMIN_EMAILS.includes(normalizeEmail(email)) ? "ADMIN" : "MEMBER";
+}
+
+function defaultApprovalStatusForRole(role) {
+  if (role === "ADMIN") return "APPROVED";
+  return NEW_USER_APPROVAL_MODE === "pending" ? "PENDING" : "APPROVED";
+}
+
+function toBase64Url(buffer) {
+  return Buffer.from(buffer)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+function fromBase64Url(value) {
+  const normalized = String(value || "")
+    .replace(/-/g, "+")
+    .replace(/_/g, "/");
+  const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+  return Buffer.from(padded, "base64");
+}
+
+function parseJwtParts(token) {
+  const parts = String(token || "").split(".");
+  if (parts.length !== 3) {
+    throw new Error("Invalid token format");
+  }
+  const [encodedHeader, encodedPayload, encodedSignature] = parts;
+  const signingInput = `${encodedHeader}.${encodedPayload}`;
+  const header = JSON.parse(fromBase64Url(encodedHeader).toString("utf8"));
+  const payload = JSON.parse(fromBase64Url(encodedPayload).toString("utf8"));
+  const signature = fromBase64Url(encodedSignature);
+
+  return {
+    header,
+    payload,
+    signingInput,
+    signature,
+  };
+}
+
+function createAppJwt(payload, options = {}) {
+  if (!APP_JWT_SECRET) {
+    throw new Error("APP_JWT_SECRET is not configured");
+  }
+
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const expiresInSeconds =
+    typeof options.expiresInSeconds === "number" && options.expiresInSeconds > 0
+      ? options.expiresInSeconds
+      : 60 * 60 * 24 * 7;
+
+  const header = { alg: "HS256", typ: "JWT" };
+  const body = {
+    iat: nowSeconds,
+    exp: nowSeconds + expiresInSeconds,
+    ...payload,
+  };
+
+  const encodedHeader = toBase64Url(Buffer.from(JSON.stringify(header)));
+  const encodedPayload = toBase64Url(Buffer.from(JSON.stringify(body)));
+  const signingInput = `${encodedHeader}.${encodedPayload}`;
+  const signature = crypto.createHmac("sha256", APP_JWT_SECRET).update(signingInput).digest();
+  const encodedSignature = toBase64Url(signature);
+  return `${signingInput}.${encodedSignature}`;
+}
+
+function verifyAppJwt(token) {
+  if (!APP_JWT_SECRET) {
+    throw new Error("APP_JWT_SECRET is not configured");
+  }
+  const { header, payload, signingInput, signature } = parseJwtParts(token);
+  if (header?.alg !== "HS256") {
+    throw new Error("Unsupported token algorithm");
+  }
+  const expected = crypto.createHmac("sha256", APP_JWT_SECRET).update(signingInput).digest();
+  if (expected.length !== signature.length || !crypto.timingSafeEqual(expected, signature)) {
+    throw new Error("Invalid token signature");
+  }
+
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  if (typeof payload.exp !== "number" || payload.exp <= nowSeconds) {
+    throw new Error("Token expired");
+  }
+  if (typeof payload.sub !== "string" || !payload.sub) {
+    throw new Error("Token subject is missing");
+  }
+
+  return payload;
+}
+
+function getBearerToken(event) {
+  const header = getHeader(event.headers, "authorization");
+  if (!header) return null;
+  const match = String(header).match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim() || null;
+}
+
+let googleJwksCache = {
+  fetchedAtMs: 0,
+  keys: [],
+};
+
+async function getGoogleJwks() {
+  const now = Date.now();
+  if (googleJwksCache.keys.length > 0 && now - googleJwksCache.fetchedAtMs < 60 * 60 * 1000) {
+    return googleJwksCache.keys;
+  }
+
+  const response = await fetch("https://www.googleapis.com/oauth2/v3/certs", {
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    throw new Error("Failed to fetch Google JWKs");
+  }
+  const payload = await response.json();
+  const keys = Array.isArray(payload?.keys) ? payload.keys : [];
+  if (!keys.length) {
+    throw new Error("Google JWK set is empty");
+  }
+
+  googleJwksCache = {
+    fetchedAtMs: now,
+    keys,
+  };
+  return keys;
+}
+
+async function verifyGoogleIdToken(idToken) {
+  if (!GOOGLE_CLIENT_ID) {
+    throw new Error("GOOGLE_CLIENT_ID is not configured");
+  }
+
+  const { header, payload, signingInput, signature } = parseJwtParts(idToken);
+  if (header?.alg !== "RS256" || !header?.kid) {
+    throw new Error("Unsupported Google token header");
+  }
+
+  const jwks = await getGoogleJwks();
+  const jwk = jwks.find((item) => item.kid === header.kid);
+  if (!jwk) {
+    throw new Error("Google signing key was not found");
+  }
+
+  const keyObject = crypto.createPublicKey({ key: jwk, format: "jwk" });
+  const verified = crypto.verify("RSA-SHA256", Buffer.from(signingInput), keyObject, signature);
+  if (!verified) {
+    throw new Error("Google token signature is invalid");
+  }
+
+  const issuer = String(payload.iss || "");
+  if (issuer !== "https://accounts.google.com" && issuer !== "accounts.google.com") {
+    throw new Error("Google token issuer is invalid");
+  }
+
+  const audienceValues = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
+  if (!audienceValues.map(String).includes(GOOGLE_CLIENT_ID)) {
+    throw new Error("Google token audience is invalid");
+  }
+
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  if (typeof payload.exp !== "number" || payload.exp <= nowSeconds) {
+    throw new Error("Google token expired");
+  }
+
+  if (!payload.email || payload.email_verified === false) {
+    throw new Error("Google account email is not verified");
+  }
+
+  return {
+    googleSub: String(payload.sub || ""),
+    email: normalizeEmail(payload.email),
+    name: payload.name ? String(payload.name) : null,
+  };
+}
+
 function parseBody(event) {
   if (!event.body) return {};
   try {
@@ -75,18 +273,24 @@ function getHeader(headers, key) {
   return null;
 }
 
-function getUserId(event) {
-  return getHeader(event.headers, "x-user-id");
-}
-
-function getUserEmail(event) {
-  return getHeader(event.headers, "x-user-email");
-}
-
 function parseNumber(value) {
   if (value == null || value === "") return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
+}
+
+function parseBooleanParam(value, defaultValue = false) {
+  if (value == null || value === "") return defaultValue;
+  const normalized = String(value).trim().toLowerCase();
+  if (["1", "true", "yes", "y", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "n", "off"].includes(normalized)) return false;
+  return defaultValue;
+}
+
+function parseIntegerParam(value, fallback, min, max) {
+  const parsed = parseInt(String(value ?? ""), 10);
+  const effective = Number.isFinite(parsed) ? parsed : fallback;
+  return Math.min(Math.max(effective, min), max);
 }
 
 function chunk(list, size) {
@@ -112,14 +316,6 @@ function uploaderName(user) {
   return maskEmail(user.email);
 }
 
-function requireUserId(event) {
-  const userId = getUserId(event);
-  if (!userId) {
-    return { ok: false, response: response(401, { error: "Missing x-user-id header" }) };
-  }
-  return { ok: true, userId };
-}
-
 async function getUserById(userId) {
   const res = await ddb.send(
     new GetCommand({
@@ -130,27 +326,56 @@ async function getUserById(userId) {
   return res.Item || null;
 }
 
-async function ensureUserForRequest(event) {
-  const userCheck = requireUserId(event);
-  if (!userCheck.ok) return userCheck;
+function roleRank(role) {
+  const value = String(role || "").toUpperCase();
+  if (value === "ADMIN") return 3;
+  if (value === "MANAGER") return 2;
+  return 1;
+}
 
-  let user = await getUserById(userCheck.userId);
+function isManagerOrAbove(role) {
+  return roleRank(role) >= 2;
+}
+
+function isAdmin(role) {
+  return String(role || "").toUpperCase() === "ADMIN";
+}
+
+async function findUserByEmail(email) {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return null;
+
+  const result = await ddb.send(
+    new QueryCommand({
+      TableName: TABLES.users,
+      IndexName: "email-index",
+      KeyConditionExpression: "#email = :email",
+      ExpressionAttributeNames: { "#email": "email" },
+      ExpressionAttributeValues: { ":email": normalized },
+      Limit: 1,
+    })
+  );
+
+  return result.Items?.[0] || null;
+}
+
+async function ensureUserByEmail({ email, name = null }) {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) {
+    throw new Error("User email is required");
+  }
+
+  const defaultRole = roleForEmail(normalizedEmail);
+  const now = nowIso();
+  let user = await findUserByEmail(normalizedEmail);
+
   if (!user) {
-    const email = getUserEmail(event);
-    if (!email) {
-      return {
-        ok: false,
-        response: response(401, { error: "User not found and x-user-email is missing" }),
-      };
-    }
-
-    const now = nowIso();
     user = {
-      id: userCheck.userId,
-      email: String(email).toLowerCase(),
-      displayName: null,
-      role: "MEMBER",
-      approvalStatus: "APPROVED",
+      id: `usr_${crypto.randomUUID().replace(/-/g, "")}`,
+      email: normalizedEmail,
+      displayName: name ? String(name).trim() || null : null,
+      role: defaultRole,
+      approvalStatus: defaultApprovalStatusForRole(defaultRole),
       canCreatePostcard: true,
       canSubmitDetection: true,
       canVote: true,
@@ -158,9 +383,131 @@ async function ensureUserForRequest(event) {
       updatedAt: now,
     };
     await ddb.send(new PutCommand({ TableName: TABLES.users, Item: user }));
+    return user;
+  }
+
+  const shouldForceAdmin = defaultRole === "ADMIN" && String(user.role || "") !== "ADMIN";
+  const normalizedDisplayName = name ? String(name).trim() || null : null;
+  const shouldSetDisplayName =
+    normalizedDisplayName && !String(user.displayName || "").trim();
+  const shouldNormalizeEmail = normalizeEmail(user.email) !== normalizedEmail;
+  const shouldSetPermissions =
+    typeof user.canCreatePostcard !== "boolean" ||
+    typeof user.canSubmitDetection !== "boolean" ||
+    typeof user.canVote !== "boolean";
+
+  if (shouldForceAdmin || shouldSetDisplayName || shouldNormalizeEmail || shouldSetPermissions) {
+    const updated = {
+      ...user,
+      email: normalizedEmail,
+      displayName: shouldSetDisplayName ? normalizedDisplayName : user.displayName || null,
+      role: shouldForceAdmin ? "ADMIN" : user.role || "MEMBER",
+      approvalStatus: shouldForceAdmin
+        ? "APPROVED"
+        : user.approvalStatus || defaultApprovalStatusForRole(String(user.role || "MEMBER")),
+      canCreatePostcard:
+        typeof user.canCreatePostcard === "boolean" ? user.canCreatePostcard : true,
+      canSubmitDetection:
+        typeof user.canSubmitDetection === "boolean" ? user.canSubmitDetection : true,
+      canVote: typeof user.canVote === "boolean" ? user.canVote : true,
+      updatedAt: now,
+    };
+    await ddb.send(new PutCommand({ TableName: TABLES.users, Item: updated }));
+    return updated;
+  }
+
+  return user;
+}
+
+function toAuthUserResponse(user) {
+  return {
+    id: String(user.id),
+    email: normalizeEmail(user.email),
+    displayName: user.displayName ? String(user.displayName) : null,
+    role: String(user.role || "MEMBER").toUpperCase(),
+    approvalStatus: String(user.approvalStatus || "PENDING").toUpperCase(),
+  };
+}
+
+function createAuthTokenForUser(user) {
+  const authUser = toAuthUserResponse(user);
+  return createAppJwt({
+    sub: authUser.id,
+    email: authUser.email,
+    name: authUser.displayName,
+    role: authUser.role,
+    approvalStatus: authUser.approvalStatus,
+  });
+}
+
+async function requireAuthenticatedUser(event) {
+  const bearerToken = getBearerToken(event);
+  if (!bearerToken) {
+    return {
+      ok: false,
+      response: response(401, { error: "Missing Authorization bearer token." }),
+    };
+  }
+
+  let payload;
+  try {
+    payload = verifyAppJwt(bearerToken);
+  } catch (error) {
+    return {
+      ok: false,
+      response: response(401, {
+        error: "Invalid bearer token.",
+        details: error instanceof Error ? error.message : String(error),
+      }),
+    };
+  }
+
+  const user = await getUserById(String(payload.sub));
+  if (!user) {
+    return {
+      ok: false,
+      response: response(401, { error: "Authenticated user no longer exists." }),
+    };
   }
 
   return { ok: true, user };
+}
+
+async function getViewerUserId(event) {
+  const bearerToken = getBearerToken(event);
+  if (!bearerToken) return null;
+
+  try {
+    const payload = verifyAppJwt(bearerToken);
+    const user = await getUserById(String(payload.sub));
+    return user ? String(user.id) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function requireManagerUser(event) {
+  const auth = await requireAuthenticatedUser(event);
+  if (!auth.ok) return auth;
+  if (!isManagerOrAbove(auth.user.role)) {
+    return {
+      ok: false,
+      response: response(403, { error: "Manager role or above is required." }),
+    };
+  }
+  return auth;
+}
+
+async function requireAdminUser(event) {
+  const auth = await requireAuthenticatedUser(event);
+  if (!auth.ok) return auth;
+  if (!isAdmin(auth.user.role)) {
+    return {
+      ok: false,
+      response: response(403, { error: "Admin role is required." }),
+    };
+  }
+  return auth;
 }
 
 async function recordUserAction(event, userId, action, metadata = null) {
@@ -425,12 +772,16 @@ function sortPostcards(items, sort) {
 }
 
 async function scanAllPostcards() {
+  return scanAll(TABLES.postcards);
+}
+
+async function scanAll(tableName) {
   const items = [];
   let lastKey;
   do {
     const res = await ddb.send(
       new ScanCommand({
-        TableName: TABLES.postcards,
+        TableName: tableName,
         ExclusiveStartKey: lastKey,
       })
     );
@@ -503,7 +854,7 @@ async function listPublicPostcards(event) {
   const east = parseNumber(qs.east);
   const west = parseNumber(qs.west);
   const sort = String(qs.sort || "ranking");
-  const viewerUserId = getUserId(event);
+  const viewerUserId = await getViewerUserId(event);
 
   const rows = await scanAllPostcards();
   const filtered = rows.filter((row) => {
@@ -533,10 +884,10 @@ async function listPostcards(event) {
   const savedOnly = String(qs.saved || "") === "1";
 
   if (mineOnly || savedOnly) {
-    const user = requireUserId(event);
-    if (!user.ok) return user.response;
-    if (mineOnly) return listMinePostcards(event, user.userId);
-    return listSavedPostcards(event, user.userId);
+    const auth = await requireAuthenticatedUser(event);
+    if (!auth.ok) return auth.response;
+    if (mineOnly) return listMinePostcards(event, String(auth.user.id));
+    return listSavedPostcards(event, String(auth.user.id));
   }
 
   return listPublicPostcards(event);
@@ -554,7 +905,7 @@ async function getPostcardById(event, id) {
     return response(404, { error: "Postcard not found" });
   }
 
-  const viewerUserId = getUserId(event);
+  const viewerUserId = await getViewerUserId(event);
   const [decorated] = await decoratePostcards([row.Item], viewerUserId);
   return response(200, decorated);
 }
@@ -589,7 +940,7 @@ async function reverseGeocode(latitude, longitude) {
 }
 
 async function createPostcard(event) {
-  const userResult = await ensureUserForRequest(event);
+  const userResult = await requireAuthenticatedUser(event);
   if (!userResult.ok) return userResult.response;
 
   const { user } = userResult;
@@ -650,7 +1001,7 @@ async function createPostcard(event) {
 }
 
 async function updatePostcard(event, postcardId) {
-  const userResult = await ensureUserForRequest(event);
+  const userResult = await requireAuthenticatedUser(event);
   if (!userResult.ok) return userResult.response;
   const { user } = userResult;
 
@@ -702,7 +1053,7 @@ async function updatePostcard(event, postcardId) {
 }
 
 async function softDeletePostcard(event, postcardId) {
-  const userResult = await ensureUserForRequest(event);
+  const userResult = await requireAuthenticatedUser(event);
   if (!userResult.ok) return userResult.response;
   const { user } = userResult;
 
@@ -818,7 +1169,7 @@ async function getPostcardFeedbackSummary(postcardId, userId) {
 }
 
 async function submitFeedback(event, postcardId) {
-  const userResult = await ensureUserForRequest(event);
+  const userResult = await requireAuthenticatedUser(event);
   if (!userResult.ok) return userResult.response;
   const { user } = userResult;
 
@@ -1006,17 +1357,18 @@ async function uploadImage(event) {
 }
 
 async function listDetectionJobs(event) {
-  const user = requireUserId(event);
-  if (!user.ok) return user.response;
+  const userResult = await requireAuthenticatedUser(event);
+  if (!userResult.ok) return userResult.response;
+  const { user } = userResult;
 
-  await recordUserAction(event, user.userId, "DETECTION_JOB_LIST");
+  await recordUserAction(event, user.id, "DETECTION_JOB_LIST");
 
   const rows = await queryAllByIndex({
     tableName: TABLES.detectionJobs,
     indexName: "userId-createdAt-index",
     keyExpression: "#u = :u",
     attrNames: { "#u": "userId" },
-    attrValues: { ":u": user.userId },
+    attrValues: { ":u": user.id },
     scanIndexForward: false,
     limit: 200,
   });
@@ -1109,7 +1461,7 @@ async function detectWithGeminiInline(mimeType, bytes) {
 }
 
 async function submitDetectionJob(event) {
-  const userResult = await ensureUserForRequest(event);
+  const userResult = await requireAuthenticatedUser(event);
   if (!userResult.ok) return userResult.response;
   const { user } = userResult;
 
@@ -1267,7 +1619,7 @@ async function submitDetectionJob(event) {
 }
 
 async function getProfile(event) {
-  const userResult = await ensureUserForRequest(event);
+  const userResult = await requireAuthenticatedUser(event);
   if (!userResult.ok) return userResult.response;
   const { user } = userResult;
 
@@ -1279,7 +1631,7 @@ async function getProfile(event) {
 }
 
 async function patchProfile(event) {
-  const userResult = await ensureUserForRequest(event);
+  const userResult = await requireAuthenticatedUser(event);
   if (!userResult.ok) return userResult.response;
   const { user } = userResult;
 
@@ -1305,7 +1657,7 @@ async function patchProfile(event) {
 }
 
 async function submitFeedbackMessage(event) {
-  const userResult = await ensureUserForRequest(event);
+  const userResult = await requireAuthenticatedUser(event);
   if (!userResult.ok) return userResult.response;
   const { user } = userResult;
 
@@ -1344,17 +1696,18 @@ async function submitFeedbackMessage(event) {
 }
 
 async function listMyReports(event) {
-  const user = requireUserId(event);
-  if (!user.ok) return user.response;
+  const userResult = await requireAuthenticatedUser(event);
+  if (!userResult.ok) return userResult.response;
+  const { user } = userResult;
 
-  await recordUserAction(event, user.userId, "MY_POSTCARD_REPORTS_LIST");
+  await recordUserAction(event, user.id, "MY_POSTCARD_REPORTS_LIST");
 
   const reports = await queryAllByIndex({
     tableName: TABLES.postcardReports,
     indexName: "reporterUserId-createdAt-index",
     keyExpression: "#u = :u",
     attrNames: { "#u": "reporterUserId" },
-    attrValues: { ":u": user.userId },
+    attrValues: { ":u": user.id },
     scanIndexForward: false,
     limit: 500,
   });
@@ -1398,8 +1751,9 @@ async function listMyReports(event) {
 }
 
 async function deleteReport(event, reportId) {
-  const user = requireUserId(event);
-  if (!user.ok) return user.response;
+  const userResult = await requireAuthenticatedUser(event);
+  if (!userResult.ok) return userResult.response;
+  const { user } = userResult;
 
   const reportRes = await ddb.send(
     new GetCommand({
@@ -1408,7 +1762,7 @@ async function deleteReport(event, reportId) {
     })
   );
   const report = reportRes.Item;
-  if (!report || String(report.reporterUserId) !== String(user.userId)) {
+  if (!report || String(report.reporterUserId) !== String(user.id)) {
     return response(404, { error: "Report not found." });
   }
 
@@ -1465,12 +1819,654 @@ async function deleteReport(event, reportId) {
     );
   }
 
-  await recordUserAction(event, user.userId, "POSTCARD_REPORT_CANCEL", {
+  await recordUserAction(event, user.id, "POSTCARD_REPORT_CANCEL", {
     reportId,
     postcardId: report.postcardId,
   });
 
   return response(200, { ok: true });
+}
+
+function normalizeRole(value) {
+  const role = String(value || "")
+    .trim()
+    .toUpperCase();
+  if (role === "ADMIN" || role === "MANAGER" || role === "MEMBER") {
+    return role;
+  }
+  return null;
+}
+
+function normalizeApprovalStatus(value) {
+  const status = String(value || "")
+    .trim()
+    .toUpperCase();
+  if (status === "APPROVED" || status === "PENDING") {
+    return status;
+  }
+  return null;
+}
+
+function normalizeFeedbackMessageStatus(value) {
+  const status = String(value || "")
+    .trim()
+    .toUpperCase();
+  if (status === "OPEN" || status === "CLOSED") {
+    return status;
+  }
+  return null;
+}
+
+function normalizeReportCaseStatus(value) {
+  const status = String(value || "")
+    .trim()
+    .toUpperCase();
+  if (status === "PENDING" || status === "IN_PROGRESS" || status === "VERIFIED" || status === "REMOVED") {
+    return status;
+  }
+  return null;
+}
+
+function toLowerText(value) {
+  return String(value || "").toLowerCase();
+}
+
+function includesKeyword(values, keyword) {
+  if (!keyword) return true;
+  return values.some((value) => toLowerText(value).includes(keyword));
+}
+
+function toIsoOrNull(value) {
+  if (!value) return null;
+  const parsed = new Date(String(value));
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString();
+}
+
+async function exchangeGoogleAuthToken(event) {
+  const body = parseBody(event);
+  const idToken = String(body.idToken || "").trim();
+  if (!idToken) {
+    return response(400, { error: "idToken is required" });
+  }
+
+  let verified;
+  try {
+    verified = await verifyGoogleIdToken(idToken);
+  } catch (error) {
+    return response(401, {
+      error: "Google token verification failed.",
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  const user = await ensureUserByEmail({
+    email: verified.email,
+    name: verified.name,
+  });
+  const token = createAuthTokenForUser(user);
+
+  await recordUserAction(event, user.id, "AUTH_EXCHANGE", {
+    provider: "google",
+    googleSub: verified.googleSub,
+  });
+
+  return response(200, {
+    token,
+    user: toAuthUserResponse(user),
+  });
+}
+
+async function getAuthSession(event) {
+  const auth = await requireAuthenticatedUser(event);
+  if (!auth.ok) {
+    return response(200, { user: null });
+  }
+
+  return response(200, {
+    user: toAuthUserResponse(auth.user),
+  });
+}
+
+function isBootstrapAdminEmail(email) {
+  return ADMIN_EMAILS.includes(normalizeEmail(email));
+}
+
+async function listAdminUsers(event) {
+  const admin = await requireAdminUser(event);
+  if (!admin.ok) return admin.response;
+
+  const qs = event.queryStringParameters || {};
+  const keyword = normalizeSearchText(qs.q || qs.keyword || "");
+  const roleFilter = normalizeRole(qs.role);
+  const limit = parseIntegerParam(qs.limit, 500, 1, 500);
+
+  const [users, postcards] = await Promise.all([scanAll(TABLES.users), scanAllPostcards()]);
+  const postcardCountByUserId = new Map();
+  for (const postcard of postcards) {
+    if (postcard.deletedAt) continue;
+    const userId = String(postcard.userId || "");
+    postcardCountByUserId.set(userId, Number(postcardCountByUserId.get(userId) || 0) + 1);
+  }
+
+  const rows = users
+    .filter((user) => {
+      const normalizedRole = normalizeRole(user.role) || roleForEmail(user.email);
+      const approval = normalizeApprovalStatus(user.approvalStatus) || defaultApprovalStatusForRole(normalizedRole);
+      if (roleFilter && normalizedRole !== roleFilter) return false;
+      return includesKeyword(
+        [user.email, user.displayName, normalizedRole, approval],
+        keyword
+      );
+    })
+    .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
+    .slice(0, limit)
+    .map((user) => {
+      const normalizedRole = normalizeRole(user.role) || roleForEmail(user.email);
+      return {
+        id: String(user.id),
+        email: normalizeEmail(user.email),
+        displayName: user.displayName ? String(user.displayName) : null,
+        role: normalizedRole,
+        approvalStatus:
+          normalizeApprovalStatus(user.approvalStatus) || defaultApprovalStatusForRole(normalizedRole),
+        canCreatePostcard:
+          typeof user.canCreatePostcard === "boolean" ? user.canCreatePostcard : true,
+        canSubmitDetection:
+          typeof user.canSubmitDetection === "boolean" ? user.canSubmitDetection : true,
+        canVote: typeof user.canVote === "boolean" ? user.canVote : true,
+        createdAt: String(user.createdAt || nowIso()),
+        postcardCount: Number(postcardCountByUserId.get(String(user.id)) || 0),
+      };
+    });
+
+  await recordUserAction(event, admin.user.id, "ADMIN_USERS_LIST", {
+    search: keyword,
+    role: roleFilter || null,
+  });
+
+  return response(200, rows);
+}
+
+async function patchAdminUser(event) {
+  const admin = await requireAdminUser(event);
+  if (!admin.ok) return admin.response;
+
+  const body = parseBody(event);
+  const userId = String(body.userId || "").trim();
+  if (!userId) {
+    return response(400, { error: "userId is required" });
+  }
+
+  const role = normalizeRole(body.role);
+  const approvalStatus = normalizeApprovalStatus(body.approvalStatus);
+  if (!role || !approvalStatus) {
+    return response(400, { error: "role and approvalStatus are required." });
+  }
+
+  const target = await getUserById(userId);
+  if (!target) {
+    return response(404, { error: "User not found." });
+  }
+
+  if (isBootstrapAdminEmail(target.email) && role !== "ADMIN") {
+    return response(400, { error: "Default bootstrap admin account must remain ADMIN." });
+  }
+  if (isBootstrapAdminEmail(target.email) && approvalStatus !== "APPROVED") {
+    return response(400, { error: "Default bootstrap admin account must remain APPROVED." });
+  }
+
+  const updated = {
+    ...target,
+    role,
+    approvalStatus,
+    canCreatePostcard: Boolean(body.canCreatePostcard),
+    canSubmitDetection: Boolean(body.canSubmitDetection),
+    canVote: Boolean(body.canVote),
+    updatedAt: nowIso(),
+  };
+
+  await ddb.send(new PutCommand({ TableName: TABLES.users, Item: updated }));
+  await recordUserAction(event, admin.user.id, "ADMIN_USER_ACCESS_UPDATE", {
+    targetUserId: userId,
+    role,
+    approvalStatus,
+    canCreatePostcard: updated.canCreatePostcard,
+    canSubmitDetection: updated.canSubmitDetection,
+    canVote: updated.canVote,
+  });
+
+  const postcards = await queryAllByIndex({
+    tableName: TABLES.postcards,
+    indexName: "userId-createdAt-index",
+    keyExpression: "#u = :u",
+    attrNames: { "#u": "userId" },
+    attrValues: { ":u": userId },
+    scanIndexForward: false,
+    limit: 2000,
+  });
+  const postcardCount = postcards.filter((item) => !item.deletedAt).length;
+
+  return response(200, {
+    id: String(updated.id),
+    email: normalizeEmail(updated.email),
+    displayName: updated.displayName ? String(updated.displayName) : null,
+    role,
+    approvalStatus,
+    canCreatePostcard: updated.canCreatePostcard,
+    canSubmitDetection: updated.canSubmitDetection,
+    canVote: updated.canVote,
+    createdAt: String(updated.createdAt || nowIso()),
+    postcardCount,
+  });
+}
+
+function buildReasonCounts(reports) {
+  return reports.reduce((acc, report) => {
+    const reason = String(report.reason || "OTHER");
+    acc[reason] = Number(acc[reason] || 0) + 1;
+    return acc;
+  }, {});
+}
+
+async function buildAdminReportCaseRecords(reportCases, options = {}) {
+  if (!reportCases.length) return [];
+  const reportTake =
+    typeof options.reportTake === "number" && options.reportTake > 0 ? options.reportTake : null;
+
+  const postcardIds = Array.from(new Set(reportCases.map((item) => String(item.postcardId || ""))));
+  const postcards = await batchGetByIds(TABLES.postcards, postcardIds);
+  const postcardById = new Map(postcards.map((item) => [String(item.id), item]));
+
+  const reportRowsByCaseId = new Map();
+  for (const reportCase of reportCases) {
+    const rows = await queryAllByIndex({
+      tableName: TABLES.postcardReports,
+      indexName: "caseId-createdAt-index",
+      keyExpression: "#c = :c",
+      attrNames: { "#c": "caseId" },
+      attrValues: { ":c": String(reportCase.id) },
+      scanIndexForward: false,
+      limit: reportTake || undefined,
+    });
+    reportRowsByCaseId.set(String(reportCase.id), rows);
+  }
+
+  const reporterUserIds = new Set();
+  for (const rows of reportRowsByCaseId.values()) {
+    for (const row of rows) {
+      if (row.reporterUserId) reporterUserIds.add(String(row.reporterUserId));
+    }
+  }
+
+  const uploaderIds = new Set(
+    reportCases
+      .map((reportCase) => postcardById.get(String(reportCase.postcardId)))
+      .filter(Boolean)
+      .map((postcard) => String(postcard.userId || ""))
+  );
+  const users = await batchGetByIds(TABLES.users, [...reporterUserIds, ...uploaderIds]);
+  const userById = new Map(users.map((item) => [String(item.id), item]));
+
+  return reportCases.map((reportCase) => {
+    const postcard = postcardById.get(String(reportCase.postcardId));
+    const reports = (reportRowsByCaseId.get(String(reportCase.id)) || []).map((row) => ({
+      id: String(row.id),
+      reason: String(row.reason || "OTHER"),
+      description: row.description ? String(row.description) : null,
+      createdAt: toIsoOrNull(row.createdAt) || nowIso(),
+      reporterName: uploaderName(userById.get(String(row.reporterUserId || ""))),
+    }));
+
+    return {
+      caseId: String(reportCase.id),
+      postcardId: String(reportCase.postcardId || ""),
+      version: Number(reportCase.version || 1),
+      status: normalizeReportCaseStatus(reportCase.status) || "PENDING",
+      adminNote: reportCase.adminNote ? String(reportCase.adminNote) : null,
+      createdAt: toIsoOrNull(reportCase.createdAt) || nowIso(),
+      updatedAt: toIsoOrNull(reportCase.updatedAt) || nowIso(),
+      resolvedAt: toIsoOrNull(reportCase.resolvedAt),
+      postcard: {
+        id: String(postcard?.id || reportCase.postcardId || ""),
+        title: String(postcard?.title || "Unknown postcard"),
+        imageUrl: postcard?.imageUrl || null,
+        placeName: postcard?.placeName || null,
+        deletedAt: toIsoOrNull(postcard?.deletedAt),
+        wrongLocationReports: Number(postcard?.wrongLocationReports || 0),
+        reportVersion: Number(postcard?.reportVersion || reportCase.version || 1),
+        uploaderName: uploaderName(userById.get(String(postcard?.userId || ""))),
+      },
+      reportCount: reports.length,
+      reasonCounts: buildReasonCounts(reports),
+      reports,
+    };
+  });
+}
+
+async function buildActiveReportCaseDetailMap(postcards) {
+  if (!postcards.length) return new Map();
+
+  const postcardById = new Map(postcards.map((postcard) => [String(postcard.id), postcard]));
+  const trackedIds = new Set(postcards.map((postcard) => String(postcard.id)));
+  const reportCases = (await scanAll(TABLES.postcardReportCases)).filter((item) =>
+    trackedIds.has(String(item.postcardId || ""))
+  );
+
+  const caseByPostcardId = new Map();
+  for (const reportCase of reportCases) {
+    const postcardId = String(reportCase.postcardId || "");
+    const postcard = postcardById.get(postcardId);
+    if (!postcard) continue;
+    if (Number(reportCase.version || 0) !== Number(postcard.reportVersion || 0)) {
+      continue;
+    }
+
+    const existing = caseByPostcardId.get(postcardId);
+    if (!existing || String(reportCase.updatedAt || "") > String(existing.updatedAt || "")) {
+      caseByPostcardId.set(postcardId, reportCase);
+    }
+  }
+
+  const selectedCases = [...caseByPostcardId.values()];
+  const records = await buildAdminReportCaseRecords(selectedCases, { reportTake: 50 });
+  const byCaseId = new Map(records.map((item) => [item.caseId, item]));
+  const map = new Map();
+  for (const [postcardId, reportCase] of caseByPostcardId.entries()) {
+    const record = byCaseId.get(String(reportCase.id));
+    if (record) {
+      map.set(postcardId, record);
+    }
+  }
+  return map;
+}
+
+async function listAdminPostcards(event) {
+  const auth = await requireManagerUser(event);
+  if (!auth.ok) return auth.response;
+
+  const qs = event.queryStringParameters || {};
+  const keyword = normalizeSearchText(qs.q || qs.keyword || "");
+  const reportedOnly = parseBooleanParam(qs.reportedOnly, false);
+  const limit = parseIntegerParam(qs.limit, 240, 1, 500);
+
+  const [allPostcards, allUsers] = await Promise.all([scanAllPostcards(), scanAll(TABLES.users)]);
+  const userById = new Map(allUsers.map((item) => [String(item.id), item]));
+
+  const filtered = allPostcards.filter((postcard) => {
+    if (!reportedOnly && postcard.deletedAt) return false;
+    const uploader = userById.get(String(postcard.userId || ""));
+    return includesKeyword(
+      [
+        postcard.title,
+        postcard.notes,
+        postcard.placeName,
+        postcard.city,
+        postcard.state,
+        postcard.country,
+        uploader?.email,
+        uploader?.displayName,
+      ],
+      keyword
+    );
+  });
+
+  const sorted = filtered.sort((a, b) => {
+    const reportDiff = Number(b.wrongLocationReports || 0) - Number(a.wrongLocationReports || 0);
+    if (reportDiff !== 0) return reportDiff;
+    return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
+  });
+
+  const activeCaseMap = await buildActiveReportCaseDetailMap(sorted);
+  const withActiveCase = sorted
+    .map((postcard) => {
+      const activeCase = activeCaseMap.get(String(postcard.id));
+      return {
+        ...postcard,
+        activeReportCaseId: activeCase?.caseId ?? null,
+        activeReportCaseStatus: activeCase?.status ?? null,
+        activeReportCaseUpdatedAt: activeCase?.updatedAt ?? null,
+        activeReportAdminNote: activeCase?.adminNote ?? null,
+        activeReportCount: activeCase?.reportCount ?? 0,
+        activeReportReasonCounts: activeCase?.reasonCounts ?? {},
+        activeReportReports: activeCase?.reports ?? [],
+      };
+    })
+    .filter((postcard) => {
+      if (!reportedOnly) return true;
+      return postcard.activeReportCaseId !== null || Number(postcard.wrongLocationReports || 0) > 0;
+    })
+    .slice(0, limit);
+
+  const decorated = await decoratePostcards(withActiveCase, String(auth.user.id));
+  await recordUserAction(event, auth.user.id, reportedOnly ? "ADMIN_POSTCARDS_LIST_REPORTED" : "ADMIN_POSTCARDS_LIST", {
+    reportedOnly,
+    search: keyword,
+  });
+
+  return response(200, decorated);
+}
+
+async function listAdminReports(event) {
+  const auth = await requireManagerUser(event);
+  if (!auth.ok) return auth.response;
+
+  const qs = event.queryStringParameters || {};
+  const keyword = normalizeSearchText(qs.q || qs.keyword || "");
+  const status =
+    qs.status == null || qs.status === "" ? null : normalizeReportCaseStatus(qs.status);
+  if (qs.status != null && qs.status !== "" && !status) {
+    return response(400, { error: "Invalid report status." });
+  }
+  const limit = parseIntegerParam(qs.limit, 200, 1, 400);
+
+  const cases = (await scanAll(TABLES.postcardReportCases))
+    .filter((item) => !status || normalizeReportCaseStatus(item.status) === status)
+    .sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
+
+  const records = await buildAdminReportCaseRecords(cases, { reportTake: 30 });
+  const filtered = records
+    .filter((item) => {
+      if (!keyword) return true;
+      return includesKeyword(
+        [
+          item.postcard.title,
+          item.postcard.placeName,
+          item.postcard.uploaderName,
+          ...item.reports.flatMap((report) => [report.description, report.reporterName, report.reason]),
+        ],
+        keyword
+      );
+    })
+    .slice(0, limit);
+
+  await recordUserAction(event, auth.user.id, "ADMIN_POSTCARD_REPORTS_LIST", {
+    search: keyword,
+    status: status || null,
+  });
+
+  return response(200, filtered);
+}
+
+async function getAdminReportCaseDetail(event, caseId) {
+  const auth = await requireManagerUser(event);
+  if (!auth.ok) return auth.response;
+
+  const reportCaseRes = await ddb.send(
+    new GetCommand({
+      TableName: TABLES.postcardReportCases,
+      Key: { id: caseId },
+    })
+  );
+  if (!reportCaseRes.Item) {
+    return response(404, { error: "Report case not found." });
+  }
+
+  const [record] = await buildAdminReportCaseRecords([reportCaseRes.Item], { reportTake: 300 });
+  if (!record) {
+    return response(404, { error: "Report case not found." });
+  }
+
+  await recordUserAction(event, auth.user.id, "ADMIN_POSTCARD_REPORT_DETAIL", { caseId });
+  return response(200, record);
+}
+
+async function applyAdminReportCaseStatus(event, actorUserId, caseId, nextStatus, adminNote) {
+  const reportCaseRes = await ddb.send(
+    new GetCommand({
+      TableName: TABLES.postcardReportCases,
+      Key: { id: caseId },
+    })
+  );
+  const reportCase = reportCaseRes.Item;
+  if (!reportCase) {
+    return response(404, { error: "Report case not found." });
+  }
+
+  const postcardRes = await ddb.send(
+    new GetCommand({
+      TableName: TABLES.postcards,
+      Key: { id: reportCase.postcardId },
+    })
+  );
+  const postcard = postcardRes.Item;
+  if (!postcard) {
+    return response(404, { error: "Postcard not found for report case." });
+  }
+
+  const now = nowIso();
+  const shouldResolve = nextStatus === "VERIFIED" || nextStatus === "REMOVED";
+  const normalizedAdminNote = adminNote ? String(adminNote).trim().slice(0, 1200) || null : null;
+  const updatedCase = {
+    ...reportCase,
+    status: nextStatus,
+    adminNote: normalizedAdminNote,
+    resolvedAt: shouldResolve ? now : null,
+    resolvedByUserId: shouldResolve ? actorUserId : null,
+    updatedAt: now,
+  };
+  await ddb.send(new PutCommand({ TableName: TABLES.postcardReportCases, Item: updatedCase }));
+
+  let updatedPostcard = { ...postcard };
+  if (nextStatus === "VERIFIED" && Number(postcard.reportVersion || 0) === Number(reportCase.version || 0)) {
+    updatedPostcard = {
+      ...updatedPostcard,
+      wrongLocationReports: 0,
+      reportVersion: Number(postcard.reportVersion || 0) + 1,
+      updatedAt: now,
+    };
+    await ddb.send(new PutCommand({ TableName: TABLES.postcards, Item: updatedPostcard }));
+  } else if (nextStatus === "REMOVED") {
+    updatedPostcard = {
+      ...updatedPostcard,
+      wrongLocationReports: 0,
+      deletedAt: updatedPostcard.deletedAt || now,
+      updatedAt: now,
+    };
+    await ddb.send(new PutCommand({ TableName: TABLES.postcards, Item: updatedPostcard }));
+  }
+
+  await recordUserAction(event, actorUserId, "ADMIN_POSTCARD_REPORT_STATUS_UPDATE", {
+    caseId,
+    postcardId: updatedPostcard.id,
+    status: nextStatus,
+  });
+
+  return response(200, {
+    caseId: String(updatedCase.id),
+    postcardId: String(updatedPostcard.id),
+    status: String(updatedCase.status),
+    reportVersion: Number(updatedPostcard.reportVersion || 1),
+    wrongLocationReports: Number(updatedPostcard.wrongLocationReports || 0),
+    postcardDeletedAt: updatedPostcard.deletedAt || null,
+  });
+}
+
+async function patchAdminReportCaseStatus(event, routeCaseId = null) {
+  const auth = await requireManagerUser(event);
+  if (!auth.ok) return auth.response;
+
+  const body = parseBody(event);
+  const caseId = routeCaseId || String(body.caseId || "").trim();
+  const status = normalizeReportCaseStatus(body.status);
+  if (!caseId || !status) {
+    return response(400, { error: "caseId and status are required." });
+  }
+
+  return applyAdminReportCaseStatus(
+    event,
+    String(auth.user.id),
+    caseId,
+    status,
+    body.adminNote ?? null
+  );
+}
+
+async function listAdminFeedback(event) {
+  const auth = await requireManagerUser(event);
+  if (!auth.ok) return auth.response;
+
+  const qs = event.queryStringParameters || {};
+  const keyword = normalizeSearchText(qs.q || qs.keyword || "");
+  const status =
+    qs.status == null || qs.status === "" ? null : normalizeFeedbackMessageStatus(qs.status);
+  if (qs.status != null && qs.status !== "" && !status) {
+    return response(400, { error: "Invalid feedback status." });
+  }
+  const limit = parseIntegerParam(qs.limit, 300, 1, 500);
+
+  const feedbackRows = await scanAll(TABLES.feedbackMessages);
+  const userIds = Array.from(new Set(feedbackRows.map((item) => String(item.userId || "")).filter(Boolean)));
+  const users = await batchGetByIds(TABLES.users, userIds);
+  const userById = new Map(users.map((item) => [String(item.id), item]));
+
+  const rows = feedbackRows
+    .filter((item) => {
+      const normalized = normalizeFeedbackMessageStatus(item.status) || "OPEN";
+      if (status && normalized !== status) return false;
+      const user = userById.get(String(item.userId || ""));
+      return includesKeyword(
+        [item.subject, item.message, user?.email, user?.displayName],
+        keyword
+      );
+    })
+    .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
+    .slice(0, limit)
+    .map((item) => {
+      const user = userById.get(String(item.userId || ""));
+      return {
+        id: String(item.id),
+        subject: String(item.subject || ""),
+        message: String(item.message || ""),
+        status: normalizeFeedbackMessageStatus(item.status) || "OPEN",
+        createdAt: toIsoOrNull(item.createdAt) || nowIso(),
+        userEmail: normalizeEmail(user?.email || ""),
+        userDisplayName: user?.displayName ? String(user.displayName) : null,
+      };
+    });
+
+  await recordUserAction(event, auth.user.id, "ADMIN_FEEDBACK_LIST", {
+    search: keyword,
+    status: status || null,
+  });
+
+  return response(200, rows);
+}
+
+function normalizeRoutePath(inputPath) {
+  let path = String(inputPath || "/").trim();
+  if (!path.startsWith("/")) path = `/${path}`;
+  if (path.length > 1) {
+    path = path.replace(/\/+$/, "");
+  }
+
+  if (path === "/api") return "/";
+  if (path.startsWith("/api/")) {
+    path = path.slice(4);
+    if (!path.startsWith("/")) path = `/${path}`;
+  }
+
+  return path || "/";
 }
 
 function routeNotFound() {
@@ -1480,7 +2476,8 @@ function routeNotFound() {
 export const handler = async (event) => {
   try {
     const method = event?.requestContext?.http?.method || "GET";
-    const path = event?.rawPath || "/";
+    const rawPath = event?.rawPath || "/";
+    const path = normalizeRoutePath(rawPath);
 
     if (method === "OPTIONS") {
       return { statusCode: 204, headers: CORS_HEADERS, body: "" };
@@ -1488,6 +2485,14 @@ export const handler = async (event) => {
 
     if (method === "GET" && path === "/health") {
       return response(200, { ok: true, service: "pikmin-serverless-api" });
+    }
+
+    if (method === "POST" && path === "/auth/exchange") {
+      return await exchangeGoogleAuthToken(event);
+    }
+
+    if (method === "GET" && path === "/auth/session") {
+      return await getAuthSession(event);
     }
 
     if (method === "GET" && path === "/postcards") {
@@ -1526,9 +2531,41 @@ export const handler = async (event) => {
       return await listMyReports(event);
     }
 
+    if (method === "GET" && path === "/admin/users") {
+      return await listAdminUsers(event);
+    }
+
+    if (method === "PATCH" && path === "/admin/users") {
+      return await patchAdminUser(event);
+    }
+
+    if (method === "GET" && path === "/admin/postcards") {
+      return await listAdminPostcards(event);
+    }
+
+    if (method === "GET" && path === "/admin/reports") {
+      return await listAdminReports(event);
+    }
+
+    if (method === "PATCH" && path === "/admin/reports") {
+      return await patchAdminReportCaseStatus(event);
+    }
+
+    if (method === "GET" && path === "/admin/feedback") {
+      return await listAdminFeedback(event);
+    }
+
     const reportIdMatch = path.match(/^\/reports\/([^/]+)$/);
     if (method === "DELETE" && reportIdMatch) {
       return await deleteReport(event, reportIdMatch[1]);
+    }
+
+    const adminReportCaseMatch = path.match(/^\/admin\/reports\/([^/]+)$/);
+    if (method === "GET" && adminReportCaseMatch) {
+      return await getAdminReportCaseDetail(event, adminReportCaseMatch[1]);
+    }
+    if (method === "PATCH" && adminReportCaseMatch) {
+      return await patchAdminReportCaseStatus(event, adminReportCaseMatch[1]);
     }
 
     const postcardIdMatch = path.match(/^\/postcards\/([^/]+)$/);

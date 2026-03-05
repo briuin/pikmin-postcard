@@ -3,12 +3,13 @@
 import { UserRole } from '@prisma/client';
 import Image from 'next/image';
 import Link from 'next/link';
-import { signIn, useSession } from 'next-auth/react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { signIn, useSession } from '@/lib/auth-client';
 import { usePersistedLocale } from '@/components/use-persisted-locale';
 import { messages, type AdminText } from '@/lib/i18n';
 import { parseJsonResponseOrThrow } from '@/lib/http-response';
 import { getReportReasonLabel, getReportStatusLabel } from '@/lib/postcards/report-label';
+import { apiFetch } from '@/lib/client-api';
 
 type AdminReportDetailPageProps = {
   caseId: string;
@@ -83,6 +84,8 @@ export function AdminReportDetailPage({ caseId }: AdminReportDetailPageProps) {
   const userRole = ((session?.user as { role?: UserRole } | undefined)?.role ?? undefined) as
     | UserRole
     | undefined;
+  const currentUserId = (session?.user as { id?: string } | undefined)?.id ?? null;
+  const currentUserEmail = session?.user?.email ?? null;
   const allowAdmin = canAccessAdmin(userRole);
 
   const loadRecord = useCallback(async () => {
@@ -91,7 +94,14 @@ export function AdminReportDetailPage({ caseId }: AdminReportDetailPageProps) {
     }
     setLoading(true);
     try {
-      const response = await fetch(`/api/admin/reports/${caseId}`, { cache: 'no-store' });
+      const response = await apiFetch(
+        `/api/admin/reports/${caseId}`,
+        { cache: 'no-store' },
+        {
+          userId: currentUserId,
+          userEmail: currentUserEmail
+        }
+      );
       const payload = await parseJsonResponseOrThrow<ReportDetailRecord>(
         response,
         text.reportedStatusSaveFailed
@@ -105,7 +115,7 @@ export function AdminReportDetailPage({ caseId }: AdminReportDetailPageProps) {
     } finally {
       setLoading(false);
     }
-  }, [allowAdmin, caseId, text.reportedStatusSaveFailed]);
+  }, [allowAdmin, caseId, currentUserEmail, currentUserId, text.reportedStatusSaveFailed]);
 
   useEffect(() => {
     if (status !== 'authenticated' || !allowAdmin) {
@@ -140,14 +150,21 @@ export function AdminReportDetailPage({ caseId }: AdminReportDetailPageProps) {
     }
     setSaving(true);
     try {
-      const response = await fetch(`/api/admin/reports/${record.caseId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          status: statusDraft,
-          adminNote: adminNoteDraft
-        })
-      });
+      const response = await apiFetch(
+        `/api/admin/reports/${record.caseId}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            status: statusDraft,
+            adminNote: adminNoteDraft
+          })
+        },
+        {
+          userId: currentUserId,
+          userEmail: currentUserEmail
+        }
+      );
       await parseJsonResponseOrThrow(response, text.reportedStatusSaveFailed);
       setStatusText(text.reportedStatusSaved);
       await loadRecord();

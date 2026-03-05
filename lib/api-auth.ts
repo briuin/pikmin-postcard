@@ -1,3 +1,5 @@
+import crypto from 'node:crypto';
+import { headers } from 'next/headers';
 import { auth } from '@/auth';
 import type { Prisma } from '@prisma/client';
 import { UserApprovalStatus, UserRole } from '@prisma/client';
@@ -10,6 +12,7 @@ type UserIdOptions = {
 };
 
 type AuthenticatedIdentity = {
+  userId?: string;
   email: string;
   name: string | null;
 };
@@ -69,6 +72,86 @@ function buildUserUpsertData(params: {
   };
 }
 
+function fromBase64Url(value: string): Buffer {
+  const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+  return Buffer.from(padded, 'base64');
+}
+
+function parseBearerTokenFromAuthorization(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+  const match = value.match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim() || null;
+}
+
+function verifyBearerToken(
+  token: string,
+  secret: string
+): { sub: string; email: string; name?: string | null; exp: number } | null {
+  try {
+    const [headerPart, payloadPart, signaturePart] = token.split('.');
+    if (!headerPart || !payloadPart || !signaturePart) {
+      return null;
+    }
+
+    const signingInput = `${headerPart}.${payloadPart}`;
+    const expected = crypto.createHmac('sha256', secret).update(signingInput).digest();
+    const signature = fromBase64Url(signaturePart);
+    if (expected.length !== signature.length || !crypto.timingSafeEqual(expected, signature)) {
+      return null;
+    }
+
+    const payload = JSON.parse(fromBase64Url(payloadPart).toString('utf8')) as {
+      sub?: string;
+      email?: string;
+      name?: string | null;
+      exp?: number;
+    };
+
+    if (!payload?.sub || !payload?.email || typeof payload.exp !== 'number') {
+      return null;
+    }
+    if (payload.exp * 1000 <= Date.now()) {
+      return null;
+    }
+
+    return {
+      sub: payload.sub,
+      email: payload.email,
+      name: typeof payload.name === 'string' ? payload.name : null,
+      exp: payload.exp
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function getBearerIdentity(): Promise<AuthenticatedIdentity | null> {
+  const secret = (process.env.APP_JWT_SECRET ?? '').trim();
+  if (!secret) {
+    return null;
+  }
+
+  const requestHeaders = await headers();
+  const token = parseBearerTokenFromAuthorization(requestHeaders.get('authorization'));
+  if (!token) {
+    return null;
+  }
+
+  const payload = verifyBearerToken(token, secret);
+  if (!payload) {
+    return null;
+  }
+
+  return {
+    userId: payload.sub,
+    email: normalizeEmail(payload.email),
+    name: payload.name ?? null
+  };
+}
+
 function toAuthenticatedUser(
   user: NonNullable<AuthenticatedUserRecord>,
   name: string | null
@@ -86,6 +169,11 @@ function toAuthenticatedUser(
 }
 
 export async function getAuthenticatedUserEmail(): Promise<string | null> {
+  const bearerIdentity = await getBearerIdentity();
+  if (bearerIdentity?.email) {
+    return bearerIdentity.email;
+  }
+
   const session = await auth();
   const userEmail = session?.user?.email;
   if (!userEmail) {
@@ -96,6 +184,11 @@ export async function getAuthenticatedUserEmail(): Promise<string | null> {
 }
 
 export async function getAuthenticatedIdentity(): Promise<AuthenticatedIdentity | null> {
+  const bearerIdentity = await getBearerIdentity();
+  if (bearerIdentity?.email) {
+    return bearerIdentity;
+  }
+
   const session = await auth();
   const userEmail = session?.user?.email;
   if (!userEmail) {
@@ -141,6 +234,20 @@ export async function getAuthenticatedUserId(options: UserIdOptions = {}): Promi
   const identity = await getAuthenticatedIdentity();
   if (!identity?.email) {
     return null;
+  }
+
+  if (identity.userId) {
+    if (!options.createIfMissing) {
+      return identity.userId;
+    }
+
+    const existingById = await prisma.user.findUnique({
+      where: { id: identity.userId },
+      select: { id: true }
+    });
+    if (existingById?.id) {
+      return existingById.id;
+    }
   }
 
   return getUserIdByEmail(identity.email, {

@@ -21,6 +21,7 @@ import {
   parseJsonPayload,
   parseJsonResponseOrThrow
 } from '@/lib/http-response';
+import { apiFetch } from '@/lib/client-api';
 
 type UseAdminDashboardControllerArgs = {
   text: AdminText;
@@ -28,6 +29,8 @@ type UseAdminDashboardControllerArgs = {
   isAuthenticated: boolean;
   canAccess: boolean;
   canManageUsers: boolean;
+  currentUserId: string | null;
+  currentUserEmail: string | null;
 };
 
 export function useAdminDashboardController({
@@ -35,7 +38,9 @@ export function useAdminDashboardController({
   parseText,
   isAuthenticated,
   canAccess,
-  canManageUsers
+  canManageUsers,
+  currentUserId,
+  currentUserEmail
 }: UseAdminDashboardControllerArgs) {
   const [activeTab, setActiveTab] = useState<AdminTabKey>('postcards');
   const [users, setUsers] = useState<AdminUserRecord[]>([]);
@@ -78,7 +83,14 @@ export function useAdminDashboardController({
         url.searchParams.set('role', userRoleFilter);
       }
       url.searchParams.set('limit', '500');
-      const response = await fetch(url.toString(), { cache: 'no-store' });
+      const response = await apiFetch(
+        `${url.pathname}${url.search}`,
+        { cache: 'no-store' },
+        {
+          userId: currentUserId,
+          userEmail: currentUserEmail
+        }
+      );
       const payload = await parseJsonPayload(response);
       if (!response.ok || !Array.isArray(payload)) {
         throw new Error(getErrorMessageFromPayload(payload) ?? text.roleSaveFailed);
@@ -97,7 +109,14 @@ export function useAdminDashboardController({
     } finally {
       setIsLoadingUsers(false);
     }
-  }, [canManageUsers, text.roleSaveFailed, userRoleFilter, userSearchText]);
+  }, [
+    canManageUsers,
+    currentUserEmail,
+    currentUserId,
+    text.roleSaveFailed,
+    userRoleFilter,
+    userSearchText
+  ]);
 
   const loadFeedbacks = useCallback(async () => {
     if (!canAccess) {
@@ -111,7 +130,14 @@ export function useAdminDashboardController({
         url.searchParams.set('q', searchText.trim());
       }
       url.searchParams.set('limit', '300');
-      const response = await fetch(url.toString(), { cache: 'no-store' });
+      const response = await apiFetch(
+        `${url.pathname}${url.search}`,
+        { cache: 'no-store' },
+        {
+          userId: currentUserId,
+          userEmail: currentUserEmail
+        }
+      );
       const payload = await parseJsonPayload(response);
       if (!response.ok || !Array.isArray(payload)) {
         throw new Error(getErrorMessageFromPayload(payload) ?? text.feedbackEmpty);
@@ -123,7 +149,7 @@ export function useAdminDashboardController({
     } finally {
       setIsLoadingFeedbacks(false);
     }
-  }, [canAccess, searchText, text.feedbackEmpty]);
+  }, [canAccess, currentUserEmail, currentUserId, searchText, text.feedbackEmpty]);
 
   const loadPostcards = useCallback(
     async (reportedOnly: boolean) => {
@@ -142,7 +168,14 @@ export function useAdminDashboardController({
         }
         url.searchParams.set('limit', '260');
 
-        const response = await fetch(url.toString(), { cache: 'no-store' });
+        const response = await apiFetch(
+          `${url.pathname}${url.search}`,
+          { cache: 'no-store' },
+          {
+            userId: currentUserId,
+            userEmail: currentUserEmail
+          }
+        );
         const payload = await parseJsonPayload(response);
         if (!response.ok || !Array.isArray(payload)) {
           throw new Error(getErrorMessageFromPayload(payload) ?? text.savePostcardFailed);
@@ -181,7 +214,7 @@ export function useAdminDashboardController({
         setIsLoadingPostcards(false);
       }
     },
-    [canAccess, searchText, text.savePostcardFailed]
+    [canAccess, currentUserEmail, currentUserId, searchText, text.savePostcardFailed]
   );
 
   const refreshAll = useCallback(async () => {
@@ -215,18 +248,25 @@ export function useAdminDashboardController({
       setSavingUserAccessId(user.id);
       setStatusText('');
       try {
-        const response = await fetch('/api/admin/users', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: user.id,
-            role: draft.role,
-            approvalStatus: draft.approvalStatus,
-            canCreatePostcard: draft.canCreatePostcard,
-            canSubmitDetection: draft.canSubmitDetection,
-            canVote: draft.canVote
-          })
-        });
+        const response = await apiFetch(
+          '/api/admin/users',
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: user.id,
+              role: draft.role,
+              approvalStatus: draft.approvalStatus,
+              canCreatePostcard: draft.canCreatePostcard,
+              canSubmitDetection: draft.canSubmitDetection,
+              canVote: draft.canVote
+            })
+          },
+          {
+            userId: currentUserId,
+            userEmail: currentUserEmail
+          }
+        );
         await parseJsonResponseOrThrow(response, text.roleSaveFailed);
 
         setStatusText(text.roleSaved);
@@ -237,7 +277,7 @@ export function useAdminDashboardController({
         setSavingUserAccessId(null);
       }
     },
-    [loadUsers, text.roleSaveFailed, text.roleSaved, userAccessDrafts]
+    [currentUserEmail, currentUserId, loadUsers, text.roleSaveFailed, text.roleSaved, userAccessDrafts]
   );
 
   const savePostcard = useCallback(
@@ -248,18 +288,25 @@ export function useAdminDashboardController({
 
       try {
         const parsed = parseLocationInput(draft.locationInput, parseText);
-        const response = await fetch(`/api/postcards/${postcard.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title: draft.title,
-            postcardType: draft.postcardType,
-            notes: draft.notes,
-            placeName: draft.placeName,
-            latitude: parsed.latitude,
-            longitude: parsed.longitude
-          })
-        });
+        const response = await apiFetch(
+          `/api/postcards/${postcard.id}`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title: draft.title,
+              postcardType: draft.postcardType,
+              notes: draft.notes,
+              placeName: draft.placeName,
+              latitude: parsed.latitude,
+              longitude: parsed.longitude
+            })
+          },
+          {
+            userId: currentUserId,
+            userEmail: currentUserEmail
+          }
+        );
         await parseJsonResponseOrThrow(response, text.savePostcardFailed);
 
         setStatusText(text.savePostcardDone);
@@ -270,7 +317,15 @@ export function useAdminDashboardController({
         setSavingPostcardId(null);
       }
     },
-    [loadPostcards, parseText, postcardDrafts, text.savePostcardDone, text.savePostcardFailed]
+    [
+      currentUserEmail,
+      currentUserId,
+      loadPostcards,
+      parseText,
+      postcardDrafts,
+      text.savePostcardDone,
+      text.savePostcardFailed
+    ]
   );
 
   const saveReportedPostcardStatus = useCallback(
@@ -284,15 +339,22 @@ export function useAdminDashboardController({
       setStatusText('');
 
       try {
-        const response = await fetch('/api/admin/reports', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            caseId: postcard.activeReportCaseId,
-            status: draft.status,
-            adminNote: draft.adminNote
-          })
-        });
+        const response = await apiFetch(
+          '/api/admin/reports',
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              caseId: postcard.activeReportCaseId,
+              status: draft.status,
+              adminNote: draft.adminNote
+            })
+          },
+          {
+            userId: currentUserId,
+            userEmail: currentUserEmail
+          }
+        );
         await parseJsonResponseOrThrow(response, text.reportedStatusSaveFailed);
 
         setStatusText(text.reportedStatusSaved);
@@ -303,7 +365,14 @@ export function useAdminDashboardController({
         setSavingReportCaseId(null);
       }
     },
-    [loadPostcards, reportStatusDrafts, text.reportedStatusSaveFailed, text.reportedStatusSaved]
+    [
+      currentUserEmail,
+      currentUserId,
+      loadPostcards,
+      reportStatusDrafts,
+      text.reportedStatusSaveFailed,
+      text.reportedStatusSaved
+    ]
   );
 
   return {

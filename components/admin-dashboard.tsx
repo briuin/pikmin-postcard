@@ -1,8 +1,8 @@
 'use client';
 
 import { UserRole } from '@prisma/client';
-import { signIn, useSession } from 'next-auth/react';
 import { useMemo } from 'react';
+import { signIn, useSession } from '@/lib/auth-client';
 import { AdminFeedbackPanel } from '@/components/admin-dashboard-view/feedback-panel';
 import { AdminPostcardsPanel } from '@/components/admin-dashboard-view/postcards-panel';
 import { AdminSearchControls } from '@/components/admin-dashboard-view/search-controls';
@@ -32,6 +32,8 @@ export function AdminDashboard({ locale }: AdminDashboardProps) {
   const userRole = ((session?.user as { role?: UserRole } | undefined)?.role ?? undefined) as
     | UserRole
     | undefined;
+  const currentUserId = (session?.user as { id?: string } | undefined)?.id ?? null;
+  const currentUserEmail = session?.user?.email ?? null;
   const isAuthenticated = status === 'authenticated';
   const canAccess = isManagerOrAbove(userRole);
   const canManageUsers = userRole === UserRole.ADMIN;
@@ -71,7 +73,9 @@ export function AdminDashboard({ locale }: AdminDashboardProps) {
     parseText,
     isAuthenticated,
     canAccess,
-    canManageUsers
+    canManageUsers,
+    currentUserId,
+    currentUserEmail
   });
 
   const visibleTabs = useMemo<VisibleAdminTab[]>(() => {

@@ -5,8 +5,6 @@ import { notFound } from 'next/navigation';
 import { PostcardCoordinateCopy } from '@/components/postcard-coordinate-copy';
 import { getPostcardTypeLabel } from '@/lib/postcard-type-label';
 import { buildLocationLabel } from '@/lib/postcards/location-label';
-import { findPostcardsForList } from '@/lib/postcards/repository';
-import { maskEmail } from '@/lib/postcards/shared';
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -15,6 +13,29 @@ type PageProps = {
 export const dynamic = 'force-dynamic';
 
 const DEFAULT_SITE_URL = 'https://pikmin.askans.app';
+const DEFAULT_SERVERLESS_API_BASE = 'https://q5wrip39qe.execute-api.us-east-1.amazonaws.com';
+
+type SharedPostcardRecord = {
+  id: string;
+  title: string;
+  notes: string | null;
+  imageUrl: string | null;
+  placeName: string | null;
+  city: string | null;
+  state: string | null;
+  country: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  postcardType: string;
+  locationStatus: string | null;
+  aiConfidence: number | null;
+  aiPlaceGuess: string | null;
+  likeCount: number;
+  dislikeCount: number;
+  wrongLocationReports: number;
+  uploaderName: string;
+  createdAt: string;
+};
 
 function resolveBaseUrl(): URL {
   const candidates = [
@@ -55,16 +76,49 @@ function toAbsoluteUrl(value: string): string {
   }
 }
 
-async function findSharedPostcardById(id: string) {
-  const rows = await findPostcardsForList({
-    where: {
-      id,
-      deletedAt: null
-    },
-    take: 1
-  });
+function resolveServerlessApiBase(): string {
+  return (
+    process.env.NEXT_PUBLIC_SERVERLESS_API_BASE_URL?.trim().replace(/\/$/, '') ||
+    process.env.SERVERLESS_API_BASE_URL?.trim().replace(/\/$/, '') ||
+    DEFAULT_SERVERLESS_API_BASE
+  );
+}
 
-  return rows[0] ?? null;
+async function findSharedPostcardById(id: string) {
+  const base = resolveServerlessApiBase();
+  const response = await fetch(`${base}/postcards/${encodeURIComponent(id)}`, {
+    cache: 'no-store'
+  });
+  if (!response.ok) {
+    return null;
+  }
+
+  const payload = (await response.json()) as Partial<SharedPostcardRecord>;
+  if (!payload || typeof payload.id !== 'string') {
+    return null;
+  }
+
+  return {
+    id: payload.id,
+    title: String(payload.title ?? 'Shared Postcard'),
+    notes: payload.notes ?? null,
+    imageUrl: payload.imageUrl ?? null,
+    placeName: payload.placeName ?? null,
+    city: payload.city ?? null,
+    state: payload.state ?? null,
+    country: payload.country ?? null,
+    latitude: typeof payload.latitude === 'number' ? payload.latitude : null,
+    longitude: typeof payload.longitude === 'number' ? payload.longitude : null,
+    postcardType: String(payload.postcardType ?? 'UNKNOWN'),
+    locationStatus: payload.locationStatus ?? null,
+    aiConfidence: typeof payload.aiConfidence === 'number' ? payload.aiConfidence : null,
+    aiPlaceGuess: payload.aiPlaceGuess ?? null,
+    likeCount: Number(payload.likeCount ?? 0),
+    dislikeCount: Number(payload.dislikeCount ?? 0),
+    wrongLocationReports: Number(payload.wrongLocationReports ?? 0),
+    uploaderName: String(payload.uploaderName ?? 'unknown uploader'),
+    createdAt: String(payload.createdAt ?? new Date().toISOString())
+  } satisfies SharedPostcardRecord;
 }
 
 function buildShareDescription(postcard: NonNullable<Awaited<ReturnType<typeof findSharedPostcardById>>>) {
@@ -139,9 +193,8 @@ export default async function PostcardSharePage({ params }: PageProps) {
   if (!postcard) {
     notFound();
   }
-  const uploaderName =
-    postcard.user?.displayName?.trim() || maskEmail(postcard.user?.email);
-  const createdAt = postcard.createdAt;
+  const uploaderName = postcard.uploaderName;
+  const createdAt = new Date(postcard.createdAt);
   const locationLabel = buildLocationLabel(postcard, 'Unknown place');
   const coordinateText =
     typeof postcard.latitude === 'number' && typeof postcard.longitude === 'number'

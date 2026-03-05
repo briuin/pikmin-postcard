@@ -1,6 +1,6 @@
 'use client';
 
-import { signIn, useSession } from 'next-auth/react';
+import { signIn, useSession } from '@/lib/auth-client';
 import { useState } from 'react';
 import type { Locale } from '@/lib/i18n';
 import { messages } from '@/lib/i18n';
