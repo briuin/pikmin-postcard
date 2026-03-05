@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
 
 export async function GET() {
+  const runtimeEnv = process.env as Record<string, string | undefined>;
   const clientId = (
-    process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ??
-    process.env.GOOGLE_CLIENT_ID ??
+    runtimeEnv.NEXT_PUBLIC_GOOGLE_CLIENT_ID ??
+    runtimeEnv.GOOGLE_CLIENT_ID ??
     ''
   )
     .trim();

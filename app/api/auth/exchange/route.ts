@@ -41,7 +41,12 @@ async function verifyGoogleIdToken(idToken: string): Promise<{
   name: string | null;
   sub: string;
 }> {
-  const clientId = (process.env.GOOGLE_CLIENT_ID ?? process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? '').trim();
+  const runtimeEnv = process.env as Record<string, string | undefined>;
+  const clientId = (
+    runtimeEnv.GOOGLE_CLIENT_ID ??
+    runtimeEnv.NEXT_PUBLIC_GOOGLE_CLIENT_ID ??
+    ''
+  ).trim();
   if (!clientId) {
     throw new Error('GOOGLE_CLIENT_ID is not configured.');
   }
@@ -90,7 +95,8 @@ async function verifyGoogleIdToken(idToken: string): Promise<{
 
 export async function POST(request: Request) {
   try {
-    const secret = (process.env.APP_JWT_SECRET ?? '').trim();
+    const runtimeEnv = process.env as Record<string, string | undefined>;
+    const secret = (runtimeEnv.APP_JWT_SECRET ?? '').trim();
     if (!secret) {
       return NextResponse.json(
         { error: 'APP_JWT_SECRET is not configured.' },

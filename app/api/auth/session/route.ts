@@ -52,7 +52,8 @@ function getBearerToken(request: Request): string | null {
 }
 
 export async function GET(request: Request) {
-  const secret = (process.env.APP_JWT_SECRET ?? '').trim();
+  const runtimeEnv = process.env as Record<string, string | undefined>;
+  const secret = (runtimeEnv.APP_JWT_SECRET ?? '').trim();
   const token = getBearerToken(request);
   if (!secret || !token) {
     return NextResponse.json({ user: null }, { status: 200 });
