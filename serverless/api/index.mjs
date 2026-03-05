@@ -39,6 +39,7 @@ const TABLES = {
   postcards: `${TABLE_PREFIX}-postcards`,
   detectionJobs: `${TABLE_PREFIX}-detection-jobs`,
   postcardFeedback: `${TABLE_PREFIX}-postcard-feedback`,
+  postcardEditHistory: `${TABLE_PREFIX}-postcard-edit-history`,
   postcardReportCases: `${TABLE_PREFIX}-postcard-report-cases`,
   postcardReports: `${TABLE_PREFIX}-postcard-reports`,
   feedbackMessages: `${TABLE_PREFIX}-feedback-messages`,
@@ -285,6 +286,40 @@ function parseBooleanParam(value, defaultValue = false) {
   if (["1", "true", "yes", "y", "on"].includes(normalized)) return true;
   if (["0", "false", "no", "n", "off"].includes(normalized)) return false;
   return defaultValue;
+}
+
+function toNullableString(value) {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  const trimmed = String(value).trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+async function recordPostcardEditHistory({
+  postcardId,
+  userId,
+  action,
+  beforeData,
+  afterData,
+  metadata = null,
+}) {
+  if (!postcardId || !userId) return;
+  const createdAt = nowIso();
+  await ddb.send(
+    new PutCommand({
+      TableName: TABLES.postcardEditHistory,
+      Item: {
+        id: `peh_${crypto.randomUUID().replace(/-/g, "")}`,
+        postcardId,
+        userId,
+        action,
+        beforeData,
+        afterData,
+        metadata,
+        createdAt,
+      },
+    })
+  );
 }
 
 function parseIntegerParam(value, fallback, min, max) {
@@ -1029,23 +1064,51 @@ async function updatePostcard(event, postcardId) {
   const longitude =
     body.longitude === null ? null : body.longitude !== undefined ? parseNumber(body.longitude) : existing.longitude;
   const reverse = await reverseGeocode(latitude, longitude);
+  const imageUrl =
+    body.imageUrl !== undefined
+      ? body.imageUrl === null
+        ? null
+        : String(body.imageUrl)
+      : existing.imageUrl;
+  const originalImageUrl =
+    body.originalImageUrl !== undefined
+      ? body.originalImageUrl === null
+        ? null
+        : String(body.originalImageUrl)
+      : existing.originalImageUrl ?? null;
+
+  const titleCandidate = body.title != null ? String(body.title).trim() : String(existing.title || "");
+  const title = titleCandidate || String(existing.title || "").trim();
+  if (!title) {
+    return response(400, { error: "title is required" });
+  }
 
   const updated = {
     ...existing,
-    title: body.title != null ? String(body.title).trim() || existing.title : existing.title,
+    title,
     postcardType: body.postcardType ? String(body.postcardType).toUpperCase() : existing.postcardType,
     notes: body.notes !== undefined ? (body.notes === null ? null : String(body.notes)) : existing.notes,
     placeName:
       body.placeName !== undefined ? (body.placeName === null ? null : String(body.placeName)) : existing.placeName,
+    imageUrl,
+    originalImageUrl,
+    locationStatus: body.locationStatus ? String(body.locationStatus).toUpperCase() : existing.locationStatus,
     latitude,
     longitude,
-    city: reverse?.city ?? (body.city !== undefined ? body.city : existing.city),
-    state: reverse?.state ?? (body.state !== undefined ? body.state : existing.state),
-    country: reverse?.country ?? (body.country !== undefined ? body.country : existing.country),
+    city: reverse?.city ?? (body.city !== undefined ? toNullableString(body.city) : existing.city),
+    state: reverse?.state ?? (body.state !== undefined ? toNullableString(body.state) : existing.state),
+    country: reverse?.country ?? (body.country !== undefined ? toNullableString(body.country) : existing.country),
     updatedAt: nowIso(),
   };
 
   await ddb.send(new PutCommand({ TableName: TABLES.postcards, Item: updated }));
+  await recordPostcardEditHistory({
+    postcardId,
+    userId: user.id,
+    action: "DETAILS_UPDATED",
+    beforeData: existing,
+    afterData: updated,
+  });
   await recordUserAction(event, user.id, "POSTCARD_EDIT", { postcardId });
 
   const [decorated] = await decoratePostcards([updated], user.id);

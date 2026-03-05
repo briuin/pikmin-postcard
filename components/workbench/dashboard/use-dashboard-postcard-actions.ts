@@ -43,6 +43,75 @@ export function useDashboardPostcardActions({
   const [cropDraft, setCropDraft] = useState<CropDraft>({ ...DEFAULT_CROP_DRAFT });
   const [savingCropPostcardId, setSavingCropPostcardId] = useState<string | null>(null);
 
+  const renderCroppedBlob = useCallback(
+    async (sourceUrl: string, postcardId: string) => {
+      const imageResponse = await fetch(sourceUrl, { cache: 'no-store' });
+      if (!imageResponse.ok) {
+        throw new Error(text.cropSaveFailed);
+      }
+
+      const sourceBlob = await imageResponse.blob();
+      const objectUrl = URL.createObjectURL(sourceBlob);
+
+      try {
+        const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+          const element = new Image();
+          element.onload = () => resolve(element);
+          element.onerror = () => reject(new Error(text.cropSaveFailed));
+          element.src = objectUrl;
+        });
+
+        const imageWidth = image.naturalWidth || image.width;
+        const imageHeight = image.naturalHeight || image.height;
+        if (imageWidth <= 0 || imageHeight <= 0) {
+          throw new Error(text.cropSaveFailed);
+        }
+
+        const normalized = toNormalizedCrop(cropDraft);
+        const left = Math.max(0, Math.round(normalized.x * imageWidth));
+        const top = Math.max(0, Math.round(normalized.y * imageHeight));
+        const width = Math.max(1, Math.round(normalized.width * imageWidth));
+        const height = Math.max(1, Math.round(normalized.height * imageHeight));
+        const boundedWidth = Math.min(width, imageWidth - left);
+        const boundedHeight = Math.min(height, imageHeight - top);
+
+        const canvas = document.createElement('canvas');
+        canvas.width = boundedWidth;
+        canvas.height = boundedHeight;
+        const context = canvas.getContext('2d');
+        if (!context) {
+          throw new Error(text.cropSaveFailed);
+        }
+
+        context.drawImage(
+          image,
+          left,
+          top,
+          boundedWidth,
+          boundedHeight,
+          0,
+          0,
+          boundedWidth,
+          boundedHeight
+        );
+
+        const resultBlob = await new Promise<Blob | null>((resolve) =>
+          canvas.toBlob(resolve, 'image/jpeg', 0.92)
+        );
+        if (!resultBlob) {
+          throw new Error(text.cropSaveFailed);
+        }
+
+        return new File([resultBlob], `recrop-${postcardId}.jpg`, {
+          type: 'image/jpeg'
+        });
+      } finally {
+        URL.revokeObjectURL(objectUrl);
+      }
+    },
+    [cropDraft, text.cropSaveFailed]
+  );
+
   const updatePostcardDraft = useCallback(
     (postcardId: string, patch: Partial<PostcardEditDraft>) => {
       setPostcardDrafts((current) => ({
@@ -188,23 +257,64 @@ export function useDashboardPostcardActions({
       if (!ensureAuthenticated()) {
         return;
       }
+      if (!editingCropOriginalUrl) {
+        setDashboardStatus(text.cropNoImage);
+        return;
+      }
 
       setSavingCropPostcardId(postcardId);
       setDashboardStatus(text.cropSaving);
 
       try {
+        const croppedFile = await renderCroppedBlob(editingCropOriginalUrl, postcardId);
+
+        const uploadResponse = await apiFetch(
+          '/api/upload-image',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              filename: croppedFile.name,
+              contentType: croppedFile.type || 'image/jpeg'
+            })
+          },
+          {
+            userId: currentUserId,
+            userEmail: currentUserEmail
+          }
+        );
+        const uploadPayload = await parseJsonResponseOrThrow<{ uploadUrl?: string; imageUrl?: string }>(
+          uploadResponse,
+          text.cropSaveFailed
+        );
+        if (!uploadPayload.uploadUrl || !uploadPayload.imageUrl) {
+          throw new Error(text.cropSaveFailed);
+        }
+
+        const uploadBinaryResponse = await fetch(uploadPayload.uploadUrl, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': croppedFile.type || 'image/jpeg'
+          },
+          body: croppedFile
+        });
+        if (!uploadBinaryResponse.ok) {
+          throw new Error(text.cropSaveFailed);
+        }
+
         const response = await apiFetch(
           `/api/postcards/${postcardId}`,
           {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ crop: toNormalizedCrop(cropDraft) })
+            body: JSON.stringify({
+              imageUrl: uploadPayload.imageUrl,
+              originalImageUrl: editingCropOriginalUrl
+            })
           },
           {
             userId: currentUserId,
-            userEmail: currentUserEmail,
-            // Crop edit still uses internal Next API route for now.
-            forceInternal: true
+            userEmail: currentUserEmail
           }
         );
         await parseJsonResponseOrThrow(response, text.cropSaveFailed);
@@ -220,13 +330,15 @@ export function useDashboardPostcardActions({
     },
     [
       closeCropEditor,
-      cropDraft,
+      editingCropOriginalUrl,
       ensureAuthenticated,
       currentUserEmail,
       currentUserId,
       loadDashboardData,
       loadPublicPostcards,
+      renderCroppedBlob,
       setDashboardStatus,
+      text.cropNoImage,
       text.cropSaveFailed,
       text.cropSaved,
       text.cropSaving,
