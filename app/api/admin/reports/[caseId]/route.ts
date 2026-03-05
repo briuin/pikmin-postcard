@@ -6,6 +6,7 @@ import {
   saveAdminReportCaseStatus,
   withAdminReportStatusPatch
 } from '@/lib/admin/report-route-helpers';
+import { withOptionalExternalApiProxy } from '@/lib/external-api-proxy';
 import {
   findAdminReportCaseById,
   serializeAdminReportCaseRecord
@@ -39,8 +40,8 @@ async function resolveCaseId(context: RouteContext): Promise<RouteCaseIdResult> 
 
 async function withResolvedCaseId(
   context: RouteContext,
-  run: (caseId: string) => Promise<NextResponse>
-): Promise<NextResponse> {
+  run: (caseId: string) => Promise<Response>
+): Promise<Response> {
   const routeCaseId = await resolveCaseId(context);
   if (!routeCaseId.ok) {
     return routeCaseId.response;
@@ -50,41 +51,51 @@ async function withResolvedCaseId(
 }
 
 export async function GET(request: Request, context: RouteContext) {
-  return withGuardedValue(requireManagerActor(), async (actor) => {
-    return withResolvedCaseId(context, async (caseId) => {
-      await recordUserAction({
-        request,
-        userId: actor.id,
-        action: 'ADMIN_POSTCARD_REPORT_DETAIL',
-        metadata: {
-          caseId
-        }
-      });
+  return withResolvedCaseId(context, async (caseId) => {
+    return withOptionalExternalApiProxy({
+      request,
+      path: `/admin/reports/${encodeURIComponent(caseId)}`,
+      runLocal: async () =>
+        withGuardedValue(requireManagerActor(), async (actor) => {
+          await recordUserAction({
+            request,
+            userId: actor.id,
+            action: 'ADMIN_POSTCARD_REPORT_DETAIL',
+            metadata: {
+              caseId
+            }
+          });
 
-      const row = await findAdminReportCaseById(caseId);
-      if (!row) {
-        return NextResponse.json({ error: 'Report case not found.' }, { status: 404 });
-      }
+          const row = await findAdminReportCaseById(caseId);
+          if (!row) {
+            return NextResponse.json({ error: 'Report case not found.' }, { status: 404 });
+          }
 
-      return NextResponse.json(serializeAdminReportCaseRecord(row), { status: 200 });
+          return NextResponse.json(serializeAdminReportCaseRecord(row), { status: 200 });
+        })
     });
   });
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
-  return withGuardedValue(requireManagerActor(), async (actor) => {
-    return withResolvedCaseId(context, async (caseId) => {
-      return withAdminReportStatusPatch(
-        () => request.json().then((payload) => adminReportCasePatchSchema.parse(payload)),
-        async (body) =>
-          saveAdminReportCaseStatus({
-            request,
-            actorId: actor.id,
-            caseId,
-            status: body.status,
-            adminNote: body.adminNote ?? null
-          })
-      );
+  return withResolvedCaseId(context, async (caseId) => {
+    return withOptionalExternalApiProxy({
+      request,
+      path: `/admin/reports/${encodeURIComponent(caseId)}`,
+      runLocal: async () =>
+        withGuardedValue(requireManagerActor(), async (actor) => {
+          return withAdminReportStatusPatch(
+            () => request.json().then((payload) => adminReportCasePatchSchema.parse(payload)),
+            async (body) =>
+              saveAdminReportCaseStatus({
+                request,
+                actorId: actor.id,
+                caseId,
+                status: body.status,
+                adminNote: body.adminNote ?? null
+              })
+          );
+        })
     });
   });
 }
