@@ -5,6 +5,8 @@ RUN npm ci
 
 FROM public.ecr.aws/docker/library/node:20-bookworm-slim AS builder
 WORKDIR /app
+ARG NEXT_PUBLIC_SERVERLESS_API_BASE_URL=""
+ENV NEXT_PUBLIC_SERVERLESS_API_BASE_URL=${NEXT_PUBLIC_SERVERLESS_API_BASE_URL}
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN mkdir -p public
@@ -15,6 +17,8 @@ FROM public.ecr.aws/docker/library/node:20-bookworm-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
+ARG NEXT_PUBLIC_SERVERLESS_API_BASE_URL=""
+ENV NEXT_PUBLIC_SERVERLESS_API_BASE_URL=${NEXT_PUBLIC_SERVERLESS_API_BASE_URL}
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=builder /app/public ./public

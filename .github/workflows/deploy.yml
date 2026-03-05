@@ -16,6 +16,7 @@ env:
   ECS_SERVICE: pikmin-postcard-service
   ECS_TASK_DEFINITION: infra/ecs-task-definition.json
   CONTAINER_NAME: pikmin-postcard-app
+  NEXT_PUBLIC_SERVERLESS_API_BASE_URL: https://q5wrip39qe.execute-api.us-east-1.amazonaws.com
 
 jobs:
   deploy:
@@ -38,6 +39,8 @@ jobs:
         run: npm run lint
 
       - name: Build
+        env:
+          NEXT_PUBLIC_SERVERLESS_API_BASE_URL: ${{ env.NEXT_PUBLIC_SERVERLESS_API_BASE_URL }}
         run: npm run build
 
       - name: Configure AWS credentials (OIDC)
@@ -56,7 +59,9 @@ jobs:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker build \
+            --build-arg NEXT_PUBLIC_SERVERLESS_API_BASE_URL="$NEXT_PUBLIC_SERVERLESS_API_BASE_URL" \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 

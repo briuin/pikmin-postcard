@@ -45,6 +45,10 @@
         {
           "name": "NEXTAUTH_URL",
           "value": "https://pikmin.askans.app"
+        },
+        {
+          "name": "NEXT_PUBLIC_SERVERLESS_API_BASE_URL",
+          "value": "https://q5wrip39qe.execute-api.us-east-1.amazonaws.com"
         }
       ],
       "secrets": [
