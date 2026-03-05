@@ -26,8 +26,10 @@ const OpenMap = dynamic(
 );
 
 export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWorkbenchProps) {
-  const { status: sessionStatus } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
   const isAuthenticated = sessionStatus === 'authenticated';
+  const currentUserId = (session?.user as { id?: string } | undefined)?.id ?? null;
+  const currentUserEmail = session?.user?.email ?? null;
   const text = messages[locale].workbench;
 
   const showExplore = mode === 'explore' || mode === 'full';
@@ -41,18 +43,24 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
   const explore = useExploreController({
     text,
     isAuthenticated,
+    currentUserId,
+    currentUserEmail,
     showExplore
   });
 
   const create = useCreateController({
     text,
     isAuthenticated,
+    currentUserId,
+    currentUserEmail,
     loadPublicPostcards: explore.loadPublicPostcards
   });
 
   const { loadDashboardData, ...dashboard } = useDashboardController({
     text,
     ensureAuthenticated,
+    currentUserId,
+    currentUserEmail,
     loadPublicPostcards: explore.loadPublicPostcards
   });
 

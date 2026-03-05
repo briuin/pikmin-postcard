@@ -5,6 +5,7 @@ import { useState } from 'react';
 import type { Locale } from '@/lib/i18n';
 import { messages } from '@/lib/i18n';
 import { parseJsonResponseOrThrow } from '@/lib/http-response';
+import { apiFetch } from '@/lib/client-api';
 
 type FeedbackSectionProps = {
   locale: Locale;
@@ -13,9 +14,11 @@ type FeedbackSectionProps = {
 export function FeedbackSection({ locale }: FeedbackSectionProps) {
   const text = messages[locale].feedback;
   const authText = messages[locale].workbench;
-  const { status } = useSession();
+  const { data: session, status } = useSession();
   const isAuthenticated = status === 'authenticated';
   const isLoading = status === 'loading';
+  const currentUserId = session?.user?.id ?? null;
+  const currentUserEmail = session?.user?.email ?? null;
 
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
@@ -31,14 +34,21 @@ export function FeedbackSection({ locale }: FeedbackSectionProps) {
     setIsSubmitting(true);
     setStatusText('');
     try {
-      const response = await fetch('/api/feedback', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          subject,
-          message
-        })
-      });
+      const response = await apiFetch(
+        '/api/feedback',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            subject,
+            message
+          })
+        },
+        {
+          userId: currentUserId,
+          userEmail: currentUserEmail
+        }
+      );
       await parseJsonResponseOrThrow(response, text.failed);
 
       setSubject('');

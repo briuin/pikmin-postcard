@@ -7,13 +7,21 @@ import type {
   PostcardRecord
 } from '@/components/workbench/types';
 import { buildPostcardDraft } from '@/components/workbench/dashboard/shared';
+import { apiFetch } from '@/lib/client-api';
 
 type UseDashboardDataLoaderArgs = {
   text: WorkbenchText;
+  currentUserId: string | null;
+  currentUserEmail: string | null;
   setDashboardStatus: (value: string) => void;
 };
 
-export function useDashboardDataLoader({ text, setDashboardStatus }: UseDashboardDataLoaderArgs) {
+export function useDashboardDataLoader({
+  text,
+  currentUserId,
+  currentUserEmail,
+  setDashboardStatus
+}: UseDashboardDataLoaderArgs) {
   const [jobs, setJobs] = useState<DetectionJobRecord[]>([]);
   const [myPostcards, setMyPostcards] = useState<PostcardRecord[]>([]);
   const [savedPostcards, setSavedPostcards] = useState<PostcardRecord[]>([]);
@@ -39,11 +47,26 @@ export function useDashboardDataLoader({ text, setDashboardStatus }: UseDashboar
 
     try {
       const [jobsResponse, mineResponse, savedResponse, reportsResponse, profileResponse] = await Promise.all([
-        fetch('/api/location-from-image', { cache: 'no-store' }),
-        fetch('/api/postcards?mine=1', { cache: 'no-store' }),
-        fetch('/api/postcards?saved=1', { cache: 'no-store' }),
-        fetch('/api/reports', { cache: 'no-store' }),
-        fetch('/api/profile', { cache: 'no-store' })
+        apiFetch('/api/location-from-image', { cache: 'no-store' }, {
+          userId: currentUserId,
+          userEmail: currentUserEmail
+        }),
+        apiFetch('/api/postcards?mine=1', { cache: 'no-store' }, {
+          userId: currentUserId,
+          userEmail: currentUserEmail
+        }),
+        apiFetch('/api/postcards?saved=1', { cache: 'no-store' }, {
+          userId: currentUserId,
+          userEmail: currentUserEmail
+        }),
+        apiFetch('/api/reports', { cache: 'no-store' }, {
+          userId: currentUserId,
+          userEmail: currentUserEmail
+        }),
+        apiFetch('/api/profile', { cache: 'no-store' }, {
+          userId: currentUserId,
+          userEmail: currentUserEmail
+        })
       ]);
 
       if (!jobsResponse.ok) {
@@ -94,7 +117,14 @@ export function useDashboardDataLoader({ text, setDashboardStatus }: UseDashboar
       setIsLoadingReports(false);
       setIsLoadingProfile(false);
     }
-  }, [setDashboardStatus, text.dashboardLoadJobsFailed, text.dashboardLoadMineFailed, text.dashboardUnknownError]);
+  }, [
+    currentUserEmail,
+    currentUserId,
+    setDashboardStatus,
+    text.dashboardLoadJobsFailed,
+    text.dashboardLoadMineFailed,
+    text.dashboardUnknownError
+  ]);
 
   return {
     jobs,

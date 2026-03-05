@@ -8,12 +8,16 @@ import { useDashboardMutations } from '@/components/workbench/dashboard/use-dash
 type UseDashboardControllerArgs = {
   text: WorkbenchText;
   ensureAuthenticated: () => boolean;
+  currentUserId: string | null;
+  currentUserEmail: string | null;
   loadPublicPostcards: () => Promise<void>;
 };
 
 export function useDashboardController({
   text,
   ensureAuthenticated,
+  currentUserId,
+  currentUserEmail,
   loadPublicPostcards
 }: UseDashboardControllerArgs) {
   const [dashboardStatus, setDashboardStatus] = useState('');
@@ -36,6 +40,8 @@ export function useDashboardController({
     loadDashboardData
   } = useDashboardDataLoader({
     text,
+    currentUserId,
+    currentUserEmail,
     setDashboardStatus
   });
 
@@ -65,6 +71,8 @@ export function useDashboardController({
   } = useDashboardMutations({
     text,
     ensureAuthenticated,
+    currentUserId,
+    currentUserEmail,
     loadPublicPostcards,
     loadDashboardData,
     setDashboardStatus,

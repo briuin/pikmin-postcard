@@ -3,10 +3,13 @@ import type { WorkbenchText } from '@/lib/i18n';
 import type { DetectionJobRecord, PostcardRecord } from '@/components/workbench/types';
 import { deriveOriginalImageUrl } from '@/components/workbench/utils';
 import { parseJsonResponseOrThrow } from '@/lib/http-response';
+import { apiFetch } from '@/lib/client-api';
 
 type UseDashboardJobActionsArgs = {
   text: WorkbenchText;
   ensureAuthenticated: () => boolean;
+  currentUserId: string | null;
+  currentUserEmail: string | null;
   loadPublicPostcards: () => Promise<void>;
   loadDashboardData: () => Promise<void>;
   setDashboardStatus: (value: string) => void;
@@ -16,6 +19,8 @@ type UseDashboardJobActionsArgs = {
 export function useDashboardJobActions({
   text,
   ensureAuthenticated,
+  currentUserId,
+  currentUserEmail,
   loadPublicPostcards,
   loadDashboardData,
   setDashboardStatus,
@@ -52,25 +57,32 @@ export function useDashboardJobActions({
       setDashboardStatus(text.aiSaveSaving);
 
       try {
-        const response = await fetch('/api/postcards', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title,
-            postcardType: 'UNKNOWN',
-            imageUrl: job.imageUrl,
-            originalImageUrl: deriveOriginalImageUrl(job.imageUrl) ?? undefined,
-            placeName: job.placeGuess ?? undefined,
-            latitude: job.latitude,
-            longitude: job.longitude,
-            aiLatitude: job.latitude,
-            aiLongitude: job.longitude,
-            aiConfidence: job.confidence ?? undefined,
-            aiPlaceGuess: job.placeGuess ?? undefined,
-            locationStatus: 'USER_CONFIRMED',
-            locationModelVersion: job.modelVersion ?? undefined
-          })
-        });
+        const response = await apiFetch(
+          '/api/postcards',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title,
+              postcardType: 'UNKNOWN',
+              imageUrl: job.imageUrl,
+              originalImageUrl: deriveOriginalImageUrl(job.imageUrl) ?? undefined,
+              placeName: job.placeGuess ?? undefined,
+              latitude: job.latitude,
+              longitude: job.longitude,
+              aiLatitude: job.latitude,
+              aiLongitude: job.longitude,
+              aiConfidence: job.confidence ?? undefined,
+              aiPlaceGuess: job.placeGuess ?? undefined,
+              locationStatus: 'USER_CONFIRMED',
+              locationModelVersion: job.modelVersion ?? undefined
+            })
+          },
+          {
+            userId: currentUserId,
+            userEmail: currentUserEmail
+          }
+        );
         await parseJsonResponseOrThrow(response, text.aiSaveFailed);
 
         await Promise.all([loadDashboardData(), loadPublicPostcards()]);
@@ -83,6 +95,8 @@ export function useDashboardJobActions({
     },
     [
       ensureAuthenticated,
+      currentUserEmail,
+      currentUserId,
       isJobAlreadySaved,
       loadDashboardData,
       loadPublicPostcards,

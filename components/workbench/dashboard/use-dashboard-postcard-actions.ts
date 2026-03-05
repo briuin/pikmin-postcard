@@ -11,10 +11,13 @@ import {
 } from '@/components/workbench/utils';
 import { buildPostcardDraft, DEFAULT_CROP_DRAFT } from '@/components/workbench/dashboard/shared';
 import { parseJsonResponseOrThrow } from '@/lib/http-response';
+import { apiFetch } from '@/lib/client-api';
 
 type UseDashboardPostcardActionsArgs = {
   text: WorkbenchText;
   ensureAuthenticated: () => boolean;
+  currentUserId: string | null;
+  currentUserEmail: string | null;
   loadPublicPostcards: () => Promise<void>;
   loadDashboardData: () => Promise<void>;
   setDashboardStatus: (value: string) => void;
@@ -25,6 +28,8 @@ type UseDashboardPostcardActionsArgs = {
 export function useDashboardPostcardActions({
   text,
   ensureAuthenticated,
+  currentUserId,
+  currentUserEmail,
   loadPublicPostcards,
   loadDashboardData,
   setDashboardStatus,
@@ -111,18 +116,25 @@ export function useDashboardPostcardActions({
       setDashboardStatus(text.editPostcardSaving);
 
       try {
-        const response = await fetch(`/api/postcards/${postcard.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title,
-            postcardType: draft.postcardType,
-            notes: draft.notes.trim() ? draft.notes : null,
-            placeName: draft.placeName.trim() ? draft.placeName : null,
-            latitude,
-            longitude
-          })
-        });
+        const response = await apiFetch(
+          `/api/postcards/${postcard.id}`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title,
+              postcardType: draft.postcardType,
+              notes: draft.notes.trim() ? draft.notes : null,
+              placeName: draft.placeName.trim() ? draft.placeName : null,
+              latitude,
+              longitude
+            })
+          },
+          {
+            userId: currentUserId,
+            userEmail: currentUserEmail
+          }
+        );
         await parseJsonResponseOrThrow(response, text.editPostcardFailed);
 
         await Promise.all([loadDashboardData(), loadPublicPostcards()]);
@@ -135,6 +147,8 @@ export function useDashboardPostcardActions({
     },
     [
       ensureAuthenticated,
+      currentUserEmail,
+      currentUserId,
       loadDashboardData,
       loadPublicPostcards,
       postcardDrafts,
@@ -179,11 +193,20 @@ export function useDashboardPostcardActions({
       setDashboardStatus(text.cropSaving);
 
       try {
-        const response = await fetch(`/api/postcards/${postcardId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ crop: toNormalizedCrop(cropDraft) })
-        });
+        const response = await apiFetch(
+          `/api/postcards/${postcardId}`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ crop: toNormalizedCrop(cropDraft) })
+          },
+          {
+            userId: currentUserId,
+            userEmail: currentUserEmail,
+            // Crop edit still uses internal Next API route for now.
+            forceInternal: true
+          }
+        );
         await parseJsonResponseOrThrow(response, text.cropSaveFailed);
 
         await Promise.all([loadDashboardData(), loadPublicPostcards()]);
@@ -199,6 +222,8 @@ export function useDashboardPostcardActions({
       closeCropEditor,
       cropDraft,
       ensureAuthenticated,
+      currentUserEmail,
+      currentUserId,
       loadDashboardData,
       loadPublicPostcards,
       setDashboardStatus,
@@ -219,9 +244,16 @@ export function useDashboardPostcardActions({
       setDashboardStatus(text.removeRunning);
 
       try {
-        const response = await fetch(`/api/postcards/${postcard.id}`, {
-          method: 'DELETE'
-        });
+        const response = await apiFetch(
+          `/api/postcards/${postcard.id}`,
+          {
+            method: 'DELETE'
+          },
+          {
+            userId: currentUserId,
+            userEmail: currentUserEmail
+          }
+        );
         await parseJsonResponseOrThrow(response, text.removeFailed);
 
         if (editingCropPostcardId === postcard.id) {
@@ -240,6 +272,8 @@ export function useDashboardPostcardActions({
       closeCropEditor,
       editingCropPostcardId,
       ensureAuthenticated,
+      currentUserEmail,
+      currentUserId,
       loadDashboardData,
       loadPublicPostcards,
       setDashboardStatus,

@@ -6,6 +6,7 @@ import 'next-auth/jwt';
 declare module 'next-auth' {
   interface Session {
     user: {
+      id?: string;
       role: UserRole;
       approvalStatus: UserApprovalStatus;
     } & DefaultSession['user'];

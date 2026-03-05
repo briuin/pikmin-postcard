@@ -13,6 +13,7 @@ import type { ExploreReportInput } from '@/components/workbench/explore-view/typ
 import { useExploreGeolocationController } from '@/components/workbench/explore/use-geolocation-controller';
 import type { WorkbenchText } from '@/lib/i18n';
 import { parseJsonResponseOrThrow } from '@/lib/http-response';
+import { apiFetch } from '@/lib/client-api';
 import type {
   ExploreSort,
   PostcardRecord,
@@ -22,10 +23,18 @@ import type {
 type UseExploreControllerArgs = {
   text: WorkbenchText;
   isAuthenticated: boolean;
+  currentUserId: string | null;
+  currentUserEmail: string | null;
   showExplore: boolean;
 };
 
-export function useExploreController({ text, isAuthenticated, showExplore }: UseExploreControllerArgs) {
+export function useExploreController({
+  text,
+  isAuthenticated,
+  currentUserId,
+  currentUserEmail,
+  showExplore
+}: UseExploreControllerArgs) {
   const [searchText, setSearchText] = useState('');
   const [focusedMarkerId, setFocusedMarkerId] = useState<string | null>(null);
   const [postcards, setPostcards] = useState<PostcardRecord[]>([]);
@@ -76,7 +85,10 @@ export function useExploreController({ text, isAuthenticated, showExplore }: Use
         searchText
       });
 
-      const response = await fetch(`/api/postcards?${params.toString()}`, { cache: 'no-store' });
+      const response = await apiFetch(`/api/postcards?${params.toString()}`, { cache: 'no-store' }, {
+        userId: currentUserId,
+        userEmail: currentUserEmail
+      });
       if (!response.ok) {
         throw new Error(text.exploreLoadFailed);
       }
@@ -98,6 +110,8 @@ export function useExploreController({ text, isAuthenticated, showExplore }: Use
       setIsLoadingPublic(false);
     }
   }, [
+    currentUserEmail,
+    currentUserId,
     mapBounds,
     showExplore,
     exploreSort,
@@ -122,7 +136,7 @@ export function useExploreController({ text, isAuthenticated, showExplore }: Use
       setFeedbackPendingKey(key);
 
       try {
-        const response = await fetch(`/api/postcards/${postcardId}/feedback`, {
+        const response = await apiFetch(`/api/postcards/${postcardId}/feedback`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(
@@ -134,6 +148,9 @@ export function useExploreController({ text, isAuthenticated, showExplore }: Use
                 }
               : { action }
           )
+        }, {
+          userId: currentUserId,
+          userEmail: currentUserEmail
         });
 
         const payload = await parseJsonResponseOrThrow<{
@@ -154,6 +171,8 @@ export function useExploreController({ text, isAuthenticated, showExplore }: Use
       }
     },
     [
+      currentUserEmail,
+      currentUserId,
       isAuthenticated,
       loadPublicPostcards,
       text

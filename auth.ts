@@ -97,6 +97,7 @@ export const { handlers, auth } = NextAuth({
     },
     async session({ session, token }) {
       if (session.user) {
+        session.user.id = typeof token.userId === 'string' ? token.userId : '';
         session.user.role =
           token.role === UserRole.ADMIN || token.role === UserRole.MANAGER
             ? token.role

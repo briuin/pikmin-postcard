@@ -6,14 +6,23 @@ import type { WorkbenchText } from '@/lib/i18n';
 import type { PostcardType } from '@/components/workbench/types';
 import { parseLocationInput } from '@/components/workbench/utils';
 import { parseJsonResponseOrThrow } from '@/lib/http-response';
+import { apiFetch } from '@/lib/client-api';
 
 type UseCreateControllerArgs = {
   text: WorkbenchText;
   isAuthenticated: boolean;
+  currentUserId: string | null;
+  currentUserEmail: string | null;
   loadPublicPostcards: () => Promise<void>;
 };
 
-export function useCreateController({ text, isAuthenticated, loadPublicPostcards }: UseCreateControllerArgs) {
+export function useCreateController({
+  text,
+  isAuthenticated,
+  currentUserId,
+  currentUserEmail,
+  loadPublicPostcards
+}: UseCreateControllerArgs) {
   const router = useRouter();
 
   const [aiFile, setAiFile] = useState<File | null>(null);
@@ -62,13 +71,58 @@ export function useCreateController({ text, isAuthenticated, loadPublicPostcards
       setCreateStatus(text.aiSubmitting);
 
       try {
-        const formData = new FormData();
-        formData.append('image', aiFile);
+        const uploadMetaResponse = await apiFetch(
+          '/api/upload-image',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              filename: aiFile.name,
+              contentType: aiFile.type || 'image/jpeg'
+            })
+          },
+          {
+            userId: currentUserId,
+            userEmail: currentUserEmail
+          }
+        );
 
-        const response = await fetch('/api/location-from-image', {
-          method: 'POST',
-          body: formData
+        const uploadMeta = await parseJsonResponseOrThrow<{
+          uploadUrl?: string;
+          imageUrl?: string;
+        }>(uploadMetaResponse, text.manualImageUploadFailed);
+
+        if (!uploadMeta.uploadUrl || !uploadMeta.imageUrl) {
+          throw new Error(text.manualImageUploadFailed);
+        }
+
+        const uploadBinaryResponse = await fetch(uploadMeta.uploadUrl, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': aiFile.type || 'image/jpeg'
+          },
+          body: aiFile
         });
+
+        if (!uploadBinaryResponse.ok) {
+          throw new Error(text.manualImageUploadFailed);
+        }
+
+        const response = await apiFetch(
+          '/api/location-from-image',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              imageUrl: uploadMeta.imageUrl,
+              mimeType: aiFile.type || 'image/jpeg'
+            })
+          },
+          {
+            userId: currentUserId,
+            userEmail: currentUserEmail
+          }
+        );
 
         if (response.status === 401) {
           throw new Error(text.aiUnauthorized);
@@ -83,7 +137,7 @@ export function useCreateController({ text, isAuthenticated, loadPublicPostcards
         setAiFile(null);
         setAiInputVersion((current) => current + 1);
         setQueuedAiJobId(payload.id ?? null);
-        setQueuedAiImageUrl(payload.imageUrl ?? null);
+        setQueuedAiImageUrl(payload.imageUrl ?? uploadMeta.imageUrl ?? null);
         setCreateStatus(text.aiDetectionSubmitted(payload.id ?? 'unknown'));
         aiRedirectTimerRef.current = setTimeout(() => {
           router.push('/dashboard');
@@ -94,7 +148,14 @@ export function useCreateController({ text, isAuthenticated, loadPublicPostcards
         setIsSubmittingAi(false);
       }
     },
-    [aiFile, ensureCreateAuthenticated, router, text]
+    [
+      aiFile,
+      currentUserEmail,
+      currentUserId,
+      ensureCreateAuthenticated,
+      router,
+      text
+    ]
   );
 
   const saveManualPostcard = useCallback(async () => {
@@ -129,41 +190,67 @@ export function useCreateController({ text, isAuthenticated, loadPublicPostcards
     setCreateStatus(text.manualUploadingImage);
 
     try {
-      const uploadForm = new FormData();
-      uploadForm.append('image', manualFile);
-
-      const uploadResponse = await fetch('/api/upload-image', {
-        method: 'POST',
-        body: uploadForm
-      });
+      const uploadResponse = await apiFetch(
+        '/api/upload-image',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filename: manualFile.name,
+            contentType: manualFile.type || 'image/jpeg'
+          })
+        },
+        {
+          userId: currentUserId,
+          userEmail: currentUserEmail
+        }
+      );
 
       if (uploadResponse.status === 401) {
         throw new Error(text.aiUnauthorized);
       }
 
-      const uploadPayload = await parseJsonResponseOrThrow<{ imageUrl?: string }>(
+      const uploadPayload = await parseJsonResponseOrThrow<{ uploadUrl?: string; imageUrl?: string }>(
         uploadResponse,
         text.manualImageUploadFailed
       );
-      if (!uploadPayload.imageUrl) {
+      if (!uploadPayload.imageUrl || !uploadPayload.uploadUrl) {
+        throw new Error(text.manualImageUploadFailed);
+      }
+
+      const uploadBinaryResponse = await fetch(uploadPayload.uploadUrl, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': manualFile.type || 'image/jpeg'
+        },
+        body: manualFile
+      });
+      if (!uploadBinaryResponse.ok) {
         throw new Error(text.manualImageUploadFailed);
       }
 
       setCreateStatus(text.manualSaving);
 
-      const createResponse = await fetch('/api/postcards', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: manualTitle,
-          postcardType: manualPostcardType,
-          notes: manualNotes,
-          imageUrl: uploadPayload.imageUrl,
-          latitude: coords.latitude,
-          longitude: coords.longitude,
-          locationStatus: 'MANUAL'
-        })
-      });
+      const createResponse = await apiFetch(
+        '/api/postcards',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: manualTitle,
+            postcardType: manualPostcardType,
+            notes: manualNotes,
+            imageUrl: uploadPayload.imageUrl,
+            latitude: coords.latitude,
+            longitude: coords.longitude,
+            locationStatus: 'MANUAL'
+          })
+        },
+        {
+          userId: currentUserId,
+          userEmail: currentUserEmail
+        }
+      );
 
       if (createResponse.status === 401) {
         throw new Error(text.aiUnauthorized);
@@ -185,6 +272,8 @@ export function useCreateController({ text, isAuthenticated, loadPublicPostcards
   }, [
     ensureCreateAuthenticated,
     loadPublicPostcards,
+    currentUserEmail,
+    currentUserId,
     manualFile,
     manualLocationInput,
     manualNotes,

@@ -9,6 +9,8 @@ import { useDashboardReportActions } from '@/components/workbench/dashboard/use-
 type UseDashboardMutationsArgs = {
   text: WorkbenchText;
   ensureAuthenticated: () => boolean;
+  currentUserId: string | null;
+  currentUserEmail: string | null;
   loadPublicPostcards: () => Promise<void>;
   loadDashboardData: () => Promise<void>;
   setDashboardStatus: (value: string) => void;
@@ -22,6 +24,8 @@ type UseDashboardMutationsArgs = {
 export function useDashboardMutations({
   text,
   ensureAuthenticated,
+  currentUserId,
+  currentUserEmail,
   loadPublicPostcards,
   loadDashboardData,
   setDashboardStatus,
@@ -36,6 +40,8 @@ export function useDashboardMutations({
   const { savingJobId, isJobAlreadySaved, saveDetectedJobAsPostcard } = useDashboardJobActions({
     text,
     ensureAuthenticated,
+    currentUserId,
+    currentUserEmail,
     loadPublicPostcards,
     loadDashboardData,
     setDashboardStatus,
@@ -59,6 +65,8 @@ export function useDashboardMutations({
   } = useDashboardPostcardActions({
     text,
     ensureAuthenticated,
+    currentUserId,
+    currentUserEmail,
     loadPublicPostcards,
     loadDashboardData,
     setDashboardStatus,
@@ -69,6 +77,8 @@ export function useDashboardMutations({
   const { isSavingProfile, saveProfileDisplayName } = useDashboardProfileActions({
     text,
     ensureAuthenticated,
+    currentUserId,
+    currentUserEmail,
     loadPublicPostcards,
     setDashboardStatus,
     profileDisplayName,
@@ -78,6 +88,8 @@ export function useDashboardMutations({
   const { cancelingReportId, cancelReport } = useDashboardReportActions({
     text,
     ensureAuthenticated,
+    currentUserId,
+    currentUserEmail,
     loadDashboardData,
     loadPublicPostcards,
     setDashboardStatus
