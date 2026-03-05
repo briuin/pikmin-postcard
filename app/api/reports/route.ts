@@ -1,8 +1,6 @@
-import { NextResponse } from 'next/server';
 import { requireAuthenticatedUserId, withGuardedValue } from '@/lib/api-guards';
 import { withOptionalExternalApiProxy } from '@/lib/external-api-proxy';
-import { listDashboardReportsByReporter } from '@/lib/postcards/report-workflow';
-import { recordUserAction } from '@/lib/user-action-log';
+import { listDashboardReportsLocal } from '@/lib/postcards/local-report-route-service';
 
 export async function GET(request: Request) {
   return withOptionalExternalApiProxy({
@@ -11,24 +9,7 @@ export async function GET(request: Request) {
     runLocal: async () =>
       withGuardedValue(
         requireAuthenticatedUserId({ createIfMissing: true }),
-        async (userId) => {
-          await recordUserAction({
-            request,
-            userId,
-            action: 'MY_POSTCARD_REPORTS_LIST'
-          });
-
-          const rows = await listDashboardReportsByReporter(userId);
-          return NextResponse.json(
-            rows.map((row) => ({
-              ...row,
-              postcardDeletedAt: row.postcardDeletedAt?.toISOString() ?? null,
-              reportedAt: row.reportedAt.toISOString(),
-              statusUpdatedAt: row.statusUpdatedAt.toISOString()
-            })),
-            { status: 200 }
-          );
-        }
+        async (userId) => listDashboardReportsLocal({ request, userId })
       )
   });
 }

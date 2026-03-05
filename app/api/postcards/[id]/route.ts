@@ -1,24 +1,19 @@
 import { NextResponse } from 'next/server';
-import { PostcardReportStatus } from '@prisma/client';
-import { isManagerOrAboveRole } from '@/lib/api-auth';
 import { requireApprovedActor } from '@/lib/api-guards';
 import { withOptionalExternalApiProxy } from '@/lib/external-api-proxy';
-import { serializePostcards } from '@/lib/postcards/list';
-import { findPostcardsForList } from '@/lib/postcards/repository';
-import { findAdminEditableReportCaseStateByPostcardId } from '@/lib/postcards/report-workflow';
-import { recordUserAction } from '@/lib/user-action-log';
+import {
+  type ApprovedPostcardActor,
+  getPostcardByIdLocal,
+  softDeletePostcardLocal,
+  updatePostcardLocal
+} from '@/lib/postcards/local-postcard-route-service';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
-type ApprovedActor = {
-  id: string;
-  role: Parameters<typeof isManagerOrAboveRole>[0];
-};
-
 type PostcardRouteContextResult =
-  | { ok: true; actor: ApprovedActor; id: string }
+  | { ok: true; actor: ApprovedPostcardActor; id: string }
   | { ok: false; response: NextResponse };
 
 async function resolveApprovedPostcardRouteContext(
@@ -39,14 +34,17 @@ async function resolveApprovedPostcardRouteContext(
 
   return {
     ok: true,
-    actor: guard.value,
+    actor: {
+      id: guard.value.id,
+      role: guard.value.role
+    },
     id
   };
 }
 
 async function withApprovedPostcardRouteContext(
   context: RouteContext,
-  run: (routeContext: { actor: ApprovedActor; id: string }) => Promise<NextResponse>
+  run: (routeContext: { actor: ApprovedPostcardActor; id: string }) => Promise<NextResponse>
 ): Promise<NextResponse> {
   const routeContext = await resolveApprovedPostcardRouteContext(context);
   if (!routeContext.ok) {
@@ -59,34 +57,16 @@ async function withApprovedPostcardRouteContext(
   });
 }
 
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
   const { id } = await context.params;
   if (!id) {
     return NextResponse.json({ error: 'Missing postcard id.' }, { status: 400 });
   }
 
   return withOptionalExternalApiProxy({
-    request: _request,
+    request,
     path: `/postcards/${encodeURIComponent(id)}`,
-    runLocal: async () => {
-      const rows = await findPostcardsForList({
-        where: {
-          id,
-          deletedAt: null
-        },
-        orderBy: {
-          createdAt: 'desc'
-        },
-        take: 1
-      });
-
-      if (rows.length === 0) {
-        return NextResponse.json({ error: 'Postcard not found.' }, { status: 404 });
-      }
-
-      const serialized = serializePostcards(rows);
-      return NextResponse.json(serialized[0], { status: 200 });
-    }
+    runLocal: async () => getPostcardByIdLocal(id)
   });
 }
 
@@ -100,91 +80,13 @@ export async function PATCH(request: Request, context: RouteContext) {
     request,
     path: `/postcards/${encodeURIComponent(routeParams.id)}`,
     runLocal: async () =>
-      withApprovedPostcardRouteContext(context, async ({ actor, id }) => {
-        const {
-          applyPostcardCropUpdate,
-          applyPostcardDetailsUpdate,
-          cropUpdateSchema,
-          postcardUpdateSchema
-        } = await import('@/lib/postcards/manage');
-
-        const canEditAny = isManagerOrAboveRole(actor.role);
-        if (canEditAny) {
-          const reportCaseStatus = await findAdminEditableReportCaseStateByPostcardId(id);
-          if (reportCaseStatus && reportCaseStatus !== PostcardReportStatus.IN_PROGRESS) {
-            return NextResponse.json(
-              { error: 'Admin can edit reported postcards only when report status is IN_PROGRESS.' },
-              { status: 403 }
-            );
-          }
-        }
-
-        try {
-          const body = await request.json();
-          await recordUserAction({
-            request,
-            userId: actor.id,
-            action:
-              body && typeof body === 'object' && 'crop' in body
-                ? 'POSTCARD_CROP_EDIT'
-                : 'POSTCARD_EDIT',
-            metadata: {
-              postcardId: id
-            }
-          });
-
-          if (body && typeof body === 'object' && 'crop' in body) {
-            const payload = cropUpdateSchema.parse(body);
-            const result = await applyPostcardCropUpdate({
-              postcardId: id,
-              actorId: actor.id,
-              canEditAny,
-              crop: payload.crop
-            });
-
-            if (result.kind === 'not_found') {
-              return NextResponse.json({ error: 'Postcard not found.' }, { status: 404 });
-            }
-            if (result.kind === 'missing_source') {
-              return NextResponse.json(
-                { error: 'No image source is available for crop edit.' },
-                { status: 400 }
-              );
-            }
-
-            return NextResponse.json(
-              {
-                ok: true,
-                imageUrl: result.imageUrl,
-                originalImageUrl: result.originalImageUrl
-              },
-              { status: 200 }
-            );
-          }
-
-          const payload = postcardUpdateSchema.parse(body);
-          const updated = await applyPostcardDetailsUpdate({
-            postcardId: id,
-            actorId: actor.id,
-            canEditAny,
-            payload
-          });
-
-          if (!updated) {
-            return NextResponse.json({ error: 'Postcard not found.' }, { status: 404 });
-          }
-
-          return NextResponse.json(updated, { status: 200 });
-        } catch (error) {
-          return NextResponse.json(
-            {
-              error: 'Failed to update postcard.',
-              details: error instanceof Error ? error.message : 'Unknown error'
-            },
-            { status: 400 }
-          );
-        }
-      })
+      withApprovedPostcardRouteContext(context, async ({ actor, id }) =>
+        updatePostcardLocal({
+          request,
+          postcardId: id,
+          actor
+        })
+      )
   });
 }
 
@@ -198,28 +100,12 @@ export async function DELETE(request: Request, context: RouteContext) {
     request,
     path: `/postcards/${encodeURIComponent(routeParams.id)}`,
     runLocal: async () =>
-      withApprovedPostcardRouteContext(context, async ({ actor, id }) => {
-        const { softDeletePostcard } = await import('@/lib/postcards/manage');
-
-        await recordUserAction({
+      withApprovedPostcardRouteContext(context, async ({ actor, id }) =>
+        softDeletePostcardLocal({
           request,
-          userId: actor.id,
-          action: 'POSTCARD_SOFT_DELETE',
-          metadata: {
-            postcardId: id
-          }
-        });
-
-        const deleted = await softDeletePostcard({
           postcardId: id,
           actorId: actor.id
-        });
-
-        if (!deleted) {
-          return NextResponse.json({ error: 'Postcard not found.' }, { status: 404 });
-        }
-
-        return NextResponse.json({ ok: true }, { status: 200 });
-      })
+        })
+      )
   });
 }
