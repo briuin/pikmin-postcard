@@ -46,8 +46,8 @@ function shouldUseExternalServerlessApi(context: ApiFetchContext = {}): boolean 
     return false;
   }
 
-  const enabled = (process.env.NEXT_PUBLIC_USE_EXTERNAL_SERVERLESS_API ?? '').trim().toLowerCase() === 'true';
-  if (!enabled) {
+  const mode = (process.env.NEXT_PUBLIC_USE_EXTERNAL_SERVERLESS_API ?? '').trim().toLowerCase();
+  if (mode === 'false') {
     return false;
   }
 
@@ -112,7 +112,7 @@ export function buildApiUrl(path: string, context: ApiFetchContext = {}): string
 }
 
 export function isServerlessApiUrl(url: string): boolean {
-  if ((process.env.NEXT_PUBLIC_USE_EXTERNAL_SERVERLESS_API ?? '').trim().toLowerCase() !== 'true') {
+  if ((process.env.NEXT_PUBLIC_USE_EXTERNAL_SERVERLESS_API ?? '').trim().toLowerCase() === 'false') {
     return false;
   }
   const base = getServerlessApiBaseUrl();

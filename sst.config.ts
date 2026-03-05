@@ -30,7 +30,7 @@ export default $config({
     const publicApiBaseUrl =
       process.env.NEXT_PUBLIC_SERVERLESS_API_BASE_URL?.trim() || "";
     const useExternalServerlessApi =
-      process.env.NEXT_PUBLIC_USE_EXTERNAL_SERVERLESS_API?.trim() || "false";
+      process.env.NEXT_PUBLIC_USE_EXTERNAL_SERVERLESS_API?.trim() || "true";
     const publicGoogleClientId =
       process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim() ||
       process.env.GOOGLE_CLIENT_ID?.trim() ||

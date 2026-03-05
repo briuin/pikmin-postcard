@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import { headers } from 'next/headers';
 import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -14,6 +13,7 @@ type PageProps = {
 export const dynamic = 'force-dynamic';
 
 const DEFAULT_SITE_URL = 'https://pikmin.askans.app';
+const DEFAULT_SERVERLESS_API_BASE = 'https://q5wrip39qe.execute-api.us-east-1.amazonaws.com';
 
 type SharedPostcardRecord = {
   id: string;
@@ -76,20 +76,17 @@ function toAbsoluteUrl(value: string): string {
   }
 }
 
-async function resolveRequestOrigin(): Promise<string> {
-  const requestHeaders = await headers();
-  const host = requestHeaders.get('x-forwarded-host') ?? requestHeaders.get('host');
-  if (host) {
-    const proto = requestHeaders.get('x-forwarded-proto') ?? 'https';
-    return `${proto}://${host}`;
-  }
-
-  return resolveBaseUrl().toString().replace(/\/$/, '');
+function resolveServerlessApiBase(): string {
+  return (
+    process.env.NEXT_PUBLIC_SERVERLESS_API_BASE_URL?.trim().replace(/\/$/, '') ||
+    process.env.SERVERLESS_API_BASE_URL?.trim().replace(/\/$/, '') ||
+    DEFAULT_SERVERLESS_API_BASE
+  );
 }
 
 async function findSharedPostcardById(id: string) {
-  const origin = await resolveRequestOrigin();
-  const response = await fetch(`${origin}/api/postcards/${encodeURIComponent(id)}`, {
+  const base = resolveServerlessApiBase();
+  const response = await fetch(`${base}/postcards/${encodeURIComponent(id)}`, {
     cache: 'no-store'
   });
   if (!response.ok) {
