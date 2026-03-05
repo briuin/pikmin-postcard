@@ -113,9 +113,9 @@ export function ExploreSection({
 
   return (
     <article
-      className={`${panelClassName} grid min-h-0 grid-cols-[minmax(320px,390px)_minmax(0,1fr)] items-stretch gap-2 max-[1080px]:grid-cols-1`}
+      className={`${panelClassName} grid h-full min-h-0 grid-cols-[minmax(320px,390px)_minmax(0,1fr)] items-stretch gap-2 max-[1080px]:h-auto max-[1080px]:grid-cols-1`}
     >
-      <aside className="grid min-h-0 content-stretch grid-rows-[auto_auto_auto_minmax(0,1fr)] gap-2 max-[1080px]:order-2 max-[1080px]:grid-rows-[auto_auto_auto_auto]">
+      <aside className="grid h-full min-h-0 content-stretch grid-rows-[auto_auto_auto_minmax(0,1fr)] gap-2 overflow-hidden max-[1080px]:order-2 max-[1080px]:h-auto max-[1080px]:grid-rows-[auto_auto_auto_auto] max-[1080px]:overflow-visible">
         <ExploreSummary
           text={text}
           visiblePostcardsCount={visiblePostcards.length}
@@ -151,7 +151,7 @@ export function ExploreSection({
         />
       </aside>
 
-      <div className="min-w-0 max-[1080px]:order-1">{mapNode}</div>
+      <div className="min-w-0 h-full min-h-0 max-[1080px]:order-1">{mapNode}</div>
 
       {selectedPostcard ? (
         <ExplorePostcardModal

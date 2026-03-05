@@ -9,7 +9,7 @@ export {
   smallMutedClassName
 } from '@/components/workbench/shared-panel-styles';
 export const exploreResultsClassName =
-  'flex min-h-0 flex-col gap-2 overflow-auto pr-1 max-[1080px]:max-h-none max-[1080px]:overflow-visible max-[1080px]:pr-0';
+  'flex min-h-0 max-h-full flex-col gap-2 overflow-auto overscroll-contain pr-1 max-[1080px]:max-h-none max-[1080px]:overflow-visible max-[1080px]:pr-0';
 export const cardThumbClassName =
   'h-auto max-h-[320px] w-full rounded-[14px] border border-[#d7e8df] bg-[#eef6f2] object-cover shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]';
 export const modalChipClassName =

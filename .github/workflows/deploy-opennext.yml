@@ -1,6 +1,9 @@
 name: Deploy Web to Lambda (OpenNext)
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       stage:
@@ -19,6 +22,8 @@ permissions:
 
 env:
   AWS_REGION: us-east-1
+  DEPLOY_STAGE: ${{ github.event.inputs.stage || 'production' }}
+  ENABLE_DOMAIN_CUTOVER: ${{ github.event.inputs.enable_domain_cutover || 'false' }}
   NEXT_PUBLIC_SERVERLESS_API_BASE_URL: https://q5wrip39qe.execute-api.us-east-1.amazonaws.com
   S3_BUCKET_NAME: pikmin-postcard-images-041913718278-20260226
   S3_REGION: us-east-1
@@ -103,13 +108,13 @@ jobs:
       - name: Deploy OpenNext frontend
         env:
           CI: "true"
-          OPENNEXT_ENABLE_DOMAIN: ${{ inputs.enable_domain_cutover }}
+          OPENNEXT_ENABLE_DOMAIN: ${{ env.ENABLE_DOMAIN_CUTOVER }}
         run: |
-          npx sst deploy --stage "${{ inputs.stage }}" --yes
+          npx sst deploy --stage "${{ env.DEPLOY_STAGE }}" --yes
 
       - name: Print deployment outputs
         run: |
-          npx sst state export --stage "${{ inputs.stage }}" > /tmp/sst-state.json
+          npx sst state export --stage "${{ env.DEPLOY_STAGE }}" > /tmp/sst-state.json
           node -e "
             const fs = require('fs');
             const state = JSON.parse(fs.readFileSync('/tmp/sst-state.json', 'utf8'));
