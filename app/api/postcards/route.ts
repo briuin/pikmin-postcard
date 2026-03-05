@@ -7,6 +7,7 @@ import {
   requireAuthenticatedUserId,
   withGuardedValue
 } from '@/lib/api-guards';
+import { proxyExternalApiGet } from '@/lib/external-api-proxy';
 import { prisma } from '@/lib/prisma';
 import {
   attachViewerFeedback,
@@ -44,6 +45,13 @@ export async function GET(request: Request) {
   const mineOnly = url.searchParams.get('mine') === '1';
   const savedOnly = url.searchParams.get('saved') === '1';
   const viewerUserId = await getAuthenticatedUserId();
+
+  if (!mineOnly && !savedOnly) {
+    const proxied = await proxyExternalApiGet(`/postcards?${url.searchParams.toString()}`);
+    if (proxied) {
+      return proxied;
+    }
+  }
 
   if (mineOnly) {
     return withGuardedValue(

@@ -2,14 +2,8 @@ import { NextResponse } from 'next/server';
 import { PostcardReportStatus } from '@prisma/client';
 import { isManagerOrAboveRole } from '@/lib/api-auth';
 import { requireApprovedActor } from '@/lib/api-guards';
+import { proxyExternalApiGet } from '@/lib/external-api-proxy';
 import { serializePostcards } from '@/lib/postcards/list';
-import {
-  applyPostcardCropUpdate,
-  applyPostcardDetailsUpdate,
-  cropUpdateSchema,
-  postcardUpdateSchema,
-  softDeletePostcard
-} from '@/lib/postcards/manage';
 import { findPostcardsForList } from '@/lib/postcards/repository';
 import { findAdminEditableReportCaseStateByPostcardId } from '@/lib/postcards/report-workflow';
 import { recordUserAction } from '@/lib/user-action-log';
@@ -71,6 +65,11 @@ export async function GET(_request: Request, context: RouteContext) {
     return NextResponse.json({ error: 'Missing postcard id.' }, { status: 400 });
   }
 
+  const proxied = await proxyExternalApiGet(`/postcards/${encodeURIComponent(id)}`);
+  if (proxied) {
+    return proxied;
+  }
+
   const rows = await findPostcardsForList({
     where: {
       id,
@@ -92,6 +91,13 @@ export async function GET(_request: Request, context: RouteContext) {
 
 export async function PATCH(request: Request, context: RouteContext) {
   return withApprovedPostcardRouteContext(context, async ({ actor, id }) => {
+    const {
+      applyPostcardCropUpdate,
+      applyPostcardDetailsUpdate,
+      cropUpdateSchema,
+      postcardUpdateSchema
+    } = await import('@/lib/postcards/manage');
+
     const canEditAny = isManagerOrAboveRole(actor.role);
     if (canEditAny) {
       const reportCaseStatus = await findAdminEditableReportCaseStateByPostcardId(id);
@@ -170,6 +176,8 @@ export async function PATCH(request: Request, context: RouteContext) {
 
 export async function DELETE(request: Request, context: RouteContext) {
   return withApprovedPostcardRouteContext(context, async ({ actor, id }) => {
+    const { softDeletePostcard } = await import('@/lib/postcards/manage');
+
     await recordUserAction({
       request,
       userId: actor.id,
