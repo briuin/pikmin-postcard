@@ -1,0 +1,118 @@
+name: Deploy Web to Lambda (OpenNext)
+
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: SST stage
+        required: true
+        default: production
+      enable_domain_cutover:
+        description: Switch pikmin.askans.app DNS to OpenNext frontend
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  NEXT_PUBLIC_SERVERLESS_API_BASE_URL: https://q5wrip39qe.execute-api.us-east-1.amazonaws.com
+  S3_BUCKET_NAME: pikmin-postcard-images-041913718278-20260226
+  S3_REGION: us-east-1
+  S3_PUBLIC_BASE_URL: https://pikmin-postcard-images-041913718278-20260226.s3.us-east-1.amazonaws.com
+  DDB_TABLE_PREFIX: pikmin-postcard
+  OPENNEXT_DOMAIN_NAME: pikmin.askans.app
+  OPENNEXT_ROUTE53_ZONE_ID: Z07732472U0GRGAK1E05W
+  NEW_USER_APPROVAL_MODE: auto
+  GEMINI_MODEL: gemini-2.5-flash
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Load auth and AI secrets from SSM
+        run: |
+          GOOGLE_CLIENT_ID=$(aws ssm get-parameter \
+            --name /pikmin-postcard/GOOGLE_CLIENT_ID \
+            --with-decryption \
+            --query 'Parameter.Value' \
+            --output text)
+          GOOGLE_CLIENT_SECRET=$(aws ssm get-parameter \
+            --name /pikmin-postcard/GOOGLE_CLIENT_SECRET \
+            --with-decryption \
+            --query 'Parameter.Value' \
+            --output text)
+          NEXTAUTH_SECRET=$(aws ssm get-parameter \
+            --name /pikmin-postcard/NEXTAUTH_SECRET \
+            --with-decryption \
+            --query 'Parameter.Value' \
+            --output text)
+          APP_JWT_SECRET=$(aws ssm get-parameter \
+            --name /pikmin-postcard/APP_JWT_SECRET \
+            --with-decryption \
+            --query 'Parameter.Value' \
+            --output text)
+          GOOGLE_GENERATIVE_AI_API_KEY=$(aws ssm get-parameter \
+            --name /pikmin-postcard/GOOGLE_GENERATIVE_AI_API_KEY \
+            --with-decryption \
+            --query 'Parameter.Value' \
+            --output text)
+
+          echo "::add-mask::$GOOGLE_CLIENT_ID"
+          echo "::add-mask::$GOOGLE_CLIENT_SECRET"
+          echo "::add-mask::$NEXTAUTH_SECRET"
+          echo "::add-mask::$APP_JWT_SECRET"
+          echo "::add-mask::$GOOGLE_GENERATIVE_AI_API_KEY"
+
+          {
+            echo "GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID"
+            echo "NEXT_PUBLIC_GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID"
+            echo "GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET"
+            echo "NEXTAUTH_SECRET=$NEXTAUTH_SECRET"
+            echo "APP_JWT_SECRET=$APP_JWT_SECRET"
+            echo "GOOGLE_GENERATIVE_AI_API_KEY=$GOOGLE_GENERATIVE_AI_API_KEY"
+            echo "NEXTAUTH_URL=https://${{ env.OPENNEXT_DOMAIN_NAME }}"
+            echo "AUTH_URL=https://${{ env.OPENNEXT_DOMAIN_NAME }}"
+          } >> "$GITHUB_ENV"
+
+      - name: Install SST providers
+        run: npx sst install
+
+      - name: Deploy OpenNext frontend
+        env:
+          CI: "true"
+          OPENNEXT_ENABLE_DOMAIN: ${{ inputs.enable_domain_cutover }}
+        run: |
+          npx sst deploy --stage "${{ inputs.stage }}" --yes
+
+      - name: Print deployment outputs
+        run: |
+          npx sst state export --stage "${{ inputs.stage }}" > /tmp/sst-state.json
+          node -e "
+            const fs = require('fs');
+            const state = JSON.parse(fs.readFileSync('/tmp/sst-state.json', 'utf8'));
+            const stack = (state?.latest?.resources || []).find((resource) => resource?.type === 'pulumi:pulumi:Stack');
+            console.log(JSON.stringify(stack?.outputs || {}, null, 2));
+          "

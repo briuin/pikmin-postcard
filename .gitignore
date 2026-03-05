@@ -18,3 +18,8 @@ yarn-error.log*
 # misc
 .DS_Store
 coverage
+
+# sst / opennext artifacts
+.sst
+.open-next
+sst-env.d.ts

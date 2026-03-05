@@ -4,6 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "opennext:deploy": "sst deploy --stage production",
+    "opennext:deploy:preview": "sst deploy --stage preview",
+    "opennext:outputs": "sst state export --stage production",
+    "opennext:remove:preview": "sst remove --stage preview",
     "clean:next": "node scripts/clean-next.mjs",
     "prebuild": "npm run clean:next",
     "build": "next build",
@@ -43,6 +47,7 @@
     "eslint-config-next": "^15.1.7",
     "postcss": "^8.5.6",
     "prisma": "^6.4.1",
+    "sst": "^4.1.10",
     "tailwindcss": "^4.2.1",
     "typescript": "^5.7.3"
   }

@@ -19,6 +19,10 @@ This project is being migrated from `ECS + RDS` to `Lambda + API Gateway + Dynam
   - `POST /postcards`
   - `POST /postcards/{id}/feedback`
   - `POST /upload-image`
+- OpenNext (SST) deployment scaffold is added for Next.js frontend on Lambda + CloudFront:
+  - `sst.config.ts`
+  - `.github/workflows/deploy-opennext.yml`
+  - domain cutover toggle via `OPENNEXT_ENABLE_DOMAIN`
 
 ## Commands
 
@@ -27,21 +31,26 @@ npm run ddb:provision -- --region us-east-1 --prefix pikmin-postcard
 npm run ddb:migrate -- --region us-east-1 --prefix pikmin-postcard
 npm run ddb:verify -- --region us-east-1 --prefix pikmin-postcard
 ./scripts/deploy-serverless-api.sh
+npx sst deploy --stage production
 ```
 
 ## Next cutover work (required for full migration)
 
-1. Point frontend API base URL to API Gateway endpoint.
-2. Move all remaining routes to Lambda handlers:
+1. Deploy OpenNext frontend to a preview stage and verify:
+   - login
+   - explore/create/dashboard/admin routes
+   - image upload and AI flow
+2. Cut DNS to OpenNext (`OPENNEXT_ENABLE_DOMAIN=true`) when preview is verified.
+3. Move all remaining routes to Lambda handlers:
    - auth/session bridging
    - admin routes
    - report workflow routes
    - profile/feedback routes
    - AI detection queue routes
-3. Replace Prisma repository usage in app runtime with Dynamo-backed services.
-4. Run dual-write window (RDS + Dynamo) and validate parity.
-5. Cut read path to Dynamo-only.
-6. Decommission ECS + ALB + RDS after verification.
+4. Replace Prisma repository usage in app runtime with Dynamo-backed services.
+5. Run dual-write window (RDS + Dynamo) and validate parity.
+6. Cut read path to Dynamo-only.
+7. Decommission ECS + ALB + RDS after verification.
 
 ## Notes
 

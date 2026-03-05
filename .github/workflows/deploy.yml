@@ -1,8 +1,6 @@
-name: Deploy to AWS ECS
+name: Deploy to AWS ECS (Legacy)
 
 on:
-  push:
-    branches: ["main"]
   workflow_dispatch:
 
 permissions:
