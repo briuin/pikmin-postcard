@@ -1,10 +1,9 @@
 import crypto from 'node:crypto';
 import { headers } from 'next/headers';
 import { auth } from '@/auth';
-import type { Prisma } from '@prisma/client';
 import { UserApprovalStatus, UserRole } from '@prisma/client';
-import { prisma } from '@/lib/prisma';
-import { defaultApprovalStatusForRole, isApprovedStatus } from '@/lib/user-approval';
+import { userRepo, type UserRepoRecord } from '@/lib/repos/users';
+import { isApprovedStatus } from '@/lib/user-approval';
 import { normalizeEmail, roleForEmail } from '@/lib/user-role';
 
 type UserIdOptions = {
@@ -27,50 +26,6 @@ type AuthenticatedUser = {
   canSubmitDetection: boolean;
   canVote: boolean;
 };
-
-const authenticatedUserSelect = {
-  id: true,
-  email: true,
-  role: true,
-  approvalStatus: true,
-  canCreatePostcard: true,
-  canSubmitDetection: true,
-  canVote: true
-} as const;
-
-type AuthenticatedUserRecord = Prisma.UserGetPayload<{
-  select: typeof authenticatedUserSelect;
-}>;
-
-function getDefaultUserAuthValues(email: string) {
-  const defaultRole = roleForEmail(email);
-  const defaultApprovalStatus = defaultApprovalStatusForRole(defaultRole);
-  return {
-    defaultRole,
-    defaultApprovalStatus
-  };
-}
-
-function buildUserUpsertData(params: {
-  normalizedEmail: string;
-  displayName: string | null;
-  defaultRole: UserRole;
-  defaultApprovalStatus: UserApprovalStatus;
-}) {
-  return {
-    where: { email: params.normalizedEmail },
-    update:
-      params.defaultRole === UserRole.ADMIN
-        ? { role: UserRole.ADMIN, approvalStatus: UserApprovalStatus.APPROVED }
-        : {},
-    create: {
-      email: params.normalizedEmail,
-      displayName: params.displayName,
-      role: params.defaultRole,
-      approvalStatus: params.defaultApprovalStatus
-    }
-  };
-}
 
 function fromBase64Url(value: string): Buffer {
   const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
@@ -153,7 +108,7 @@ async function getBearerIdentity(): Promise<AuthenticatedIdentity | null> {
 }
 
 function toAuthenticatedUser(
-  user: NonNullable<AuthenticatedUserRecord>,
+  user: UserRepoRecord,
   name: string | null
 ): AuthenticatedUser {
   return {
@@ -208,24 +163,18 @@ export async function getUserIdByEmail(
 ): Promise<string | null> {
   const normalizedEmail = normalizeEmail(email);
   const displayName = options.defaultDisplayName?.trim();
-  const { defaultRole, defaultApprovalStatus } = getDefaultUserAuthValues(normalizedEmail);
+  const forceAdmin = roleForEmail(normalizedEmail) === UserRole.ADMIN;
 
   if (options.createIfMissing) {
-    const user = await prisma.user.upsert(
-      buildUserUpsertData({
-        normalizedEmail,
-        displayName: displayName && displayName.length > 0 ? displayName : null,
-        defaultRole,
-        defaultApprovalStatus
-      })
-    );
+    const user = await userRepo.upsertByEmail({
+      email: normalizedEmail,
+      displayName: displayName && displayName.length > 0 ? displayName : null,
+      forceAdmin
+    });
     return user.id;
   }
 
-  const user = await prisma.user.findUnique({
-    where: { email: normalizedEmail },
-    select: { id: true }
-  });
+  const user = await userRepo.findByEmail(normalizedEmail);
 
   return user?.id ?? null;
 }
@@ -241,10 +190,7 @@ export async function getAuthenticatedUserId(options: UserIdOptions = {}): Promi
       return identity.userId;
     }
 
-    const existingById = await prisma.user.findUnique({
-      where: { id: identity.userId },
-      select: { id: true }
-    });
+    const existingById = await userRepo.findById(identity.userId);
     if (existingById?.id) {
       return existingById.id;
     }
@@ -265,26 +211,19 @@ export async function getAuthenticatedUser(
   }
 
   const normalizedEmail = normalizeEmail(identity.email);
-  const { defaultRole, defaultApprovalStatus } = getDefaultUserAuthValues(normalizedEmail);
+  const forceAdmin = roleForEmail(normalizedEmail) === UserRole.ADMIN;
 
   if (options.createIfMissing) {
-    const user = await prisma.user.upsert({
-      ...buildUserUpsertData({
-        normalizedEmail,
-        displayName: identity.name,
-        defaultRole,
-        defaultApprovalStatus
-      }),
-      select: authenticatedUserSelect
+    const user = await userRepo.upsertByEmail({
+      email: normalizedEmail,
+      displayName: identity.name,
+      forceAdmin
     });
 
     return toAuthenticatedUser(user, identity.name);
   }
 
-  const user = await prisma.user.findUnique({
-    where: { email: normalizedEmail },
-    select: authenticatedUserSelect
-  });
+  const user = await userRepo.findByEmail(normalizedEmail);
 
   if (!user) {
     return null;

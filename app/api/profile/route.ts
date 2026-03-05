@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getAuthenticatedIdentity, getAuthenticatedUserId } from '@/lib/api-auth';
-import { prisma } from '@/lib/prisma';
+import { userRepo } from '@/lib/repos/users';
 import { recordUserAction } from '@/lib/user-action-log';
 
 const profilePatchSchema = z.object({
@@ -21,13 +21,7 @@ export async function GET(request: Request) {
     action: 'PROFILE_GET'
   });
 
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      email: true,
-      displayName: true
-    }
-  });
+  const user = await userRepo.findById(userId);
 
   return NextResponse.json(
     {
@@ -55,16 +49,18 @@ export async function PATCH(request: Request) {
       }
     });
 
-    const user = await prisma.user.update({
-      where: { id: userId },
-      data: { displayName: payload.displayName },
-      select: {
-        email: true,
-        displayName: true
-      }
-    });
+    const user = await userRepo.updateDisplayNameById(userId, payload.displayName);
+    if (!user) {
+      return NextResponse.json({ error: 'User not found.' }, { status: 404 });
+    }
 
-    return NextResponse.json(user, { status: 200 });
+    return NextResponse.json(
+      {
+        email: user.email,
+        displayName: user.displayName
+      },
+      { status: 200 }
+    );
   } catch (error) {
     return NextResponse.json(
       {
