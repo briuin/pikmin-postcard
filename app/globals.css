@@ -42,6 +42,16 @@ main {
 main.explore-main {
   max-width: none;
   margin: 0;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+@media (max-width: 1080px) {
+  main.explore-main {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
 }
 
 h1,

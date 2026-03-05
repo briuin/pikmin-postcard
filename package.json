@@ -19,6 +19,7 @@
     "ddb:clear": "node scripts/clear-dynamodb-tables.mjs",
     "ddb:migrate": "node scripts/migrate-prisma-to-dynamodb.mjs",
     "ddb:verify": "node scripts/verify-dynamodb-counts.mjs",
+    "seed:postcards": "node scripts/seed-random-postcards.mjs",
     "serverless:deploy:api": "./scripts/deploy-serverless-api.sh"
   },
   "dependencies": {

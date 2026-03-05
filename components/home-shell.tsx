@@ -54,7 +54,7 @@ export function HomeShell({ page, reportCaseId }: HomeShellProps) {
   const rootClassName = [
     'grid gap-3',
     page === 'explore'
-      ? 'grid-rows-[auto_minmax(0,1fr)] min-h-[calc(100vh-2.6rem)] overflow-hidden max-[1080px]:min-h-0 max-[1080px]:overflow-visible'
+      ? 'grid-rows-[auto_minmax(0,1fr)] h-full min-h-0 overflow-hidden max-[1080px]:h-auto max-[1080px]:overflow-visible'
       : ''
   ]
     .filter(Boolean)
