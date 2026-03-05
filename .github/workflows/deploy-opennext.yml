@@ -25,6 +25,7 @@ env:
   DEPLOY_STAGE: ${{ github.event.inputs.stage || 'production' }}
   ENABLE_DOMAIN_CUTOVER: ${{ github.event.inputs.enable_domain_cutover || 'false' }}
   NEXT_PUBLIC_SERVERLESS_API_BASE_URL: https://q5wrip39qe.execute-api.us-east-1.amazonaws.com
+  NEXT_PUBLIC_USE_EXTERNAL_SERVERLESS_API: "false"
   S3_BUCKET_NAME: pikmin-postcard-images-041913718278-20260226
   S3_REGION: us-east-1
   S3_PUBLIC_BASE_URL: https://pikmin-postcard-images-041913718278-20260226.s3.us-east-1.amazonaws.com
@@ -57,39 +58,28 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Load auth and AI secrets from SSM
+      - name: Load auth and AI secrets from GitHub Secrets
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
+          APP_JWT_SECRET: ${{ secrets.APP_JWT_SECRET }}
+          GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
         run: |
-          GOOGLE_CLIENT_ID=$(aws ssm get-parameter \
-            --name /pikmin-postcard/GOOGLE_CLIENT_ID \
-            --with-decryption \
-            --query 'Parameter.Value' \
-            --output text)
-          GOOGLE_CLIENT_SECRET=$(aws ssm get-parameter \
-            --name /pikmin-postcard/GOOGLE_CLIENT_SECRET \
-            --with-decryption \
-            --query 'Parameter.Value' \
-            --output text)
-          NEXTAUTH_SECRET=$(aws ssm get-parameter \
-            --name /pikmin-postcard/NEXTAUTH_SECRET \
-            --with-decryption \
-            --query 'Parameter.Value' \
-            --output text)
-          APP_JWT_SECRET=$(aws ssm get-parameter \
-            --name /pikmin-postcard/APP_JWT_SECRET \
-            --with-decryption \
-            --query 'Parameter.Value' \
-            --output text)
-          GOOGLE_GENERATIVE_AI_API_KEY=$(aws ssm get-parameter \
-            --name /pikmin-postcard/GOOGLE_GENERATIVE_AI_API_KEY \
-            --with-decryption \
-            --query 'Parameter.Value' \
-            --output text)
+          missing=0
+          for key in GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET NEXTAUTH_SECRET APP_JWT_SECRET GOOGLE_GENERATIVE_AI_API_KEY; do
+            value="${!key}"
+            if [ -z "$value" ]; then
+              echo "::error::Missing required GitHub secret: $key"
+              missing=1
+            else
+              echo "::add-mask::$value"
+            fi
+          done
 
-          echo "::add-mask::$GOOGLE_CLIENT_ID"
-          echo "::add-mask::$GOOGLE_CLIENT_SECRET"
-          echo "::add-mask::$NEXTAUTH_SECRET"
-          echo "::add-mask::$APP_JWT_SECRET"
-          echo "::add-mask::$GOOGLE_GENERATIVE_AI_API_KEY"
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
 
           {
             echo "GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID"
