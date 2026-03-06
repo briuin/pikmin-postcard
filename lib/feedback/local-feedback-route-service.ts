@@ -1,7 +1,8 @@
+import { PutCommand } from '@aws-sdk/lib-dynamodb';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { apiError, getUnknownErrorDetails } from '@/lib/backend/contracts';
-import { prisma } from '@/lib/prisma';
+import { ddbDoc, ddbTables, newId, nowIso } from '@/lib/repos/dynamodb/shared';
 import { recordUserAction } from '@/lib/user-action-log';
 
 const feedbackCreateSchema = z.object({
@@ -25,20 +26,24 @@ export async function createFeedbackLocal(args: {
         messageLength: body.message.length
       }
     });
-    const created = await prisma.feedbackMessage.create({
-      data: {
-        userId: actorId,
-        subject: body.subject,
-        message: body.message
-      },
-      select: {
-        id: true,
-        subject: true,
-        message: true,
-        status: true,
-        createdAt: true
-      }
-    });
+    const createdAt = nowIso();
+    const created = {
+      id: newId('fbm'),
+      userId: actorId,
+      subject: body.subject,
+      message: body.message,
+      status: 'OPEN',
+      createdAt,
+      updatedAt: createdAt
+    };
+
+    await ddbDoc.send(
+      new PutCommand({
+        TableName: ddbTables.feedbackMessages,
+        Item: created
+      })
+    );
+
     return NextResponse.json(created, { status: 201 });
   } catch (error) {
     return apiError(400, 'Invalid feedback payload.', getUnknownErrorDetails(error));

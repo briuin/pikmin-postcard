@@ -1,22 +1,22 @@
-import { DetectionJobStatus, PostcardType } from '@prisma/client';
+import { PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { DetectionJobStatus, LocationStatus, PostcardType } from '@prisma/client';
 import { buildCroppedPostcardImage } from '@/lib/location-detection/crop';
-import { detectWithGemini, type GeminiDetectionSuccess } from '@/lib/location-detection/gemini';
-import { reverseGeocodeCoordinates, type ReverseGeocodeResult } from '@/lib/reverse-geocode';
-import { hasMissingOriginalImageColumnError } from '@/lib/postcards/shared';
-import { prisma } from '@/lib/prisma';
+import { detectWithGemini } from '@/lib/location-detection/gemini';
+import { reverseGeocodeCoordinates } from '@/lib/reverse-geocode';
+import {
+  ddbDoc,
+  ddbTables,
+  newId,
+  nowIso,
+  queryAllByIndex
+} from '@/lib/repos/dynamodb/shared';
+import { postcardRepo } from '@/lib/repos/postcards';
 import {
   assertSupportedImage,
   buildObjectKey,
   buildVariantObjectKey,
   uploadBytesToStorage
 } from '@/lib/storage';
-
-type CreateAutoPostcardParams = {
-  userId: string;
-  imageUrl: string;
-  originalImageUrl: string;
-  detection: GeminiDetectionSuccess;
-};
 
 export type ProcessDetectionJobParams = {
   jobId: string;
@@ -39,26 +39,77 @@ export type QueueDetectionJobResult = {
   processParams: ProcessDetectionJobParams;
 };
 
-function buildAutoPostcardData(
-  params: CreateAutoPostcardParams & {
-    includeOriginalImageUrl: boolean;
-    reverseLocation: ReverseGeocodeResult | null;
-  }
-) {
-  const title = params.detection.location.place_guess?.trim()
-    ? `AI: ${params.detection.location.place_guess}`
-    : 'AI detected postcard';
+type DetectionJobRow = {
+  id: string;
+  userId: string;
+  imageUrl: string;
+  status: string;
+  latitude: number | null;
+  longitude: number | null;
+  confidence: number | null;
+  placeGuess: string | null;
+  errorMessage: string | null;
+  modelVersion: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
 
+function normalizeJobStatus(value: unknown): DetectionJobStatus {
+  const status = String(value || '').toUpperCase();
+  switch (status) {
+    case DetectionJobStatus.PROCESSING:
+      return DetectionJobStatus.PROCESSING;
+    case DetectionJobStatus.SUCCEEDED:
+      return DetectionJobStatus.SUCCEEDED;
+    case DetectionJobStatus.FAILED:
+      return DetectionJobStatus.FAILED;
+    default:
+      return DetectionJobStatus.QUEUED;
+  }
+}
+
+function toJobRow(input: Record<string, unknown>): DetectionJobRow {
   return {
+    id: String(input.id || ''),
+    userId: String(input.userId || ''),
+    imageUrl: String(input.imageUrl || ''),
+    status: normalizeJobStatus(input.status),
+    latitude: typeof input.latitude === 'number' ? input.latitude : null,
+    longitude: typeof input.longitude === 'number' ? input.longitude : null,
+    confidence: typeof input.confidence === 'number' ? input.confidence : null,
+    placeGuess: typeof input.placeGuess === 'string' ? input.placeGuess : null,
+    errorMessage: typeof input.errorMessage === 'string' ? input.errorMessage : null,
+    modelVersion: typeof input.modelVersion === 'string' ? input.modelVersion : null,
+    completedAt: typeof input.completedAt === 'string' ? input.completedAt : null,
+    createdAt: String(input.createdAt || nowIso()),
+    updatedAt: String(input.updatedAt || nowIso())
+  };
+}
+
+async function createAutoPostcard(params: {
+  userId: string;
+  imageUrl: string;
+  originalImageUrl: string;
+  detection: Awaited<ReturnType<typeof detectWithGemini>>;
+}): Promise<void> {
+  const reverseLocation = await reverseGeocodeCoordinates(
+    params.detection.location.latitude,
+    params.detection.location.longitude
+  );
+
+  await postcardRepo.create({
     userId: params.userId,
-    title,
+    title: params.detection.location.place_guess?.trim()
+      ? `AI: ${params.detection.location.place_guess}`
+      : 'AI detected postcard',
     postcardType: PostcardType.UNKNOWN,
     notes: 'Auto-created from AI detection upload.',
     imageUrl: params.imageUrl,
-    ...(params.includeOriginalImageUrl ? { originalImageUrl: params.originalImageUrl } : {}),
-    city: params.reverseLocation?.city,
-    state: params.reverseLocation?.state,
-    country: params.reverseLocation?.country,
+    originalImageUrl: params.originalImageUrl,
+    city: reverseLocation?.city,
+    state: reverseLocation?.state,
+    country: reverseLocation?.country,
     placeName: params.detection.location.place_guess,
     latitude: params.detection.location.latitude,
     longitude: params.detection.location.longitude,
@@ -66,46 +117,23 @@ function buildAutoPostcardData(
     aiLongitude: params.detection.location.longitude,
     aiConfidence: params.detection.location.confidence,
     aiPlaceGuess: params.detection.location.place_guess,
-    locationStatus: 'AUTO' as const,
+    locationStatus: LocationStatus.AUTO,
     locationModelVersion: params.detection.modelVersion
-  };
-}
-
-async function createAutoPostcard(params: CreateAutoPostcardParams): Promise<void> {
-  const reverseLocation = await reverseGeocodeCoordinates(
-    params.detection.location.latitude,
-    params.detection.location.longitude
-  );
-
-  try {
-    await prisma.postcard.create({
-      data: buildAutoPostcardData({
-        ...params,
-        includeOriginalImageUrl: true,
-        reverseLocation
-      })
-    });
-  } catch (error) {
-    if (!hasMissingOriginalImageColumnError(error)) {
-      throw error;
-    }
-
-    await prisma.postcard.create({
-      data: buildAutoPostcardData({
-        ...params,
-        includeOriginalImageUrl: false,
-        reverseLocation
-      })
-    });
-  }
-}
-
-export async function listDetectionJobsForUser(userId: string) {
-  return prisma.detectionJob.findMany({
-    where: { userId },
-    orderBy: { createdAt: 'desc' },
-    take: 200
   });
+}
+
+export async function listDetectionJobsForUser(userId: string): Promise<DetectionJobRow[]> {
+  const rows = await queryAllByIndex({
+    tableName: ddbTables.detectionJobs,
+    indexName: 'userId-createdAt-index',
+    keyExpression: '#u = :u',
+    attrNames: { '#u': 'userId' },
+    attrValues: { ':u': userId },
+    scanIndexForward: false,
+    limit: 200
+  });
+
+  return rows.map(toJobRow);
 }
 
 export async function queueDetectionJob({
@@ -125,20 +153,36 @@ export async function queueDetectionJob({
     contentType: file.type
   });
 
-  const job = await prisma.detectionJob.create({
-    data: {
-      userId,
-      imageUrl: originalImageUrl,
-      status: DetectionJobStatus.QUEUED
-    }
-  });
+  const jobId = newId('dj');
+  const createdAt = nowIso();
+
+  await ddbDoc.send(
+    new PutCommand({
+      TableName: ddbTables.detectionJobs,
+      Item: {
+        id: jobId,
+        userId,
+        imageUrl: originalImageUrl,
+        status: DetectionJobStatus.QUEUED,
+        latitude: null,
+        longitude: null,
+        confidence: null,
+        placeGuess: null,
+        errorMessage: null,
+        modelVersion: null,
+        completedAt: null,
+        createdAt,
+        updatedAt: createdAt
+      }
+    })
+  );
 
   return {
-    id: job.id,
-    status: job.status,
+    id: jobId,
+    status: DetectionJobStatus.QUEUED,
     imageUrl: originalImageUrl,
     processParams: {
-      jobId: job.id,
+      jobId,
       userId,
       mimeType: file.type,
       fileBytes,
@@ -150,12 +194,20 @@ export async function queueDetectionJob({
 
 export async function processDetectionJob(params: ProcessDetectionJobParams): Promise<void> {
   try {
-    await prisma.detectionJob.update({
-      where: { id: params.jobId },
-      data: {
-        status: DetectionJobStatus.PROCESSING
-      }
-    });
+    await ddbDoc.send(
+      new UpdateCommand({
+        TableName: ddbTables.detectionJobs,
+        Key: { id: params.jobId },
+        UpdateExpression: 'SET #status = :status, updatedAt = :updatedAt',
+        ExpressionAttributeNames: {
+          '#status': 'status'
+        },
+        ExpressionAttributeValues: {
+          ':status': DetectionJobStatus.PROCESSING,
+          ':updatedAt': nowIso()
+        }
+      })
+    );
 
     const detection = await detectWithGemini(params.mimeType, params.fileBytes);
     let postcardImageUrl = params.originalImageUrl;
@@ -178,31 +230,45 @@ export async function processDetectionJob(params: ProcessDetectionJobParams): Pr
       });
     }
 
-    await prisma.detectionJob.update({
-      where: { id: params.jobId },
-      data: {
-        status: DetectionJobStatus.SUCCEEDED,
-        imageUrl: postcardImageUrl,
-        latitude: detection.location.latitude,
-        longitude: detection.location.longitude,
-        confidence: detection.location.confidence,
-        placeGuess: detection.location.place_guess,
-        modelVersion: detection.modelVersion,
-        completedAt: new Date(),
-        errorMessage: null
-      }
+    await ddbDoc.send(
+      new UpdateCommand({
+        TableName: ddbTables.detectionJobs,
+        Key: { id: params.jobId },
+        UpdateExpression:
+          'SET #status = :status, imageUrl = :imageUrl, latitude = :lat, longitude = :lon, confidence = :conf, placeGuess = :placeGuess, modelVersion = :modelVersion, completedAt = :completedAt, errorMessage = :errorMessage, updatedAt = :updatedAt',
+        ExpressionAttributeNames: {
+          '#status': 'status'
+        },
+        ExpressionAttributeValues: {
+          ':status': DetectionJobStatus.SUCCEEDED,
+          ':imageUrl': postcardImageUrl,
+          ':lat': detection.location.latitude,
+          ':lon': detection.location.longitude,
+          ':conf': detection.location.confidence,
+          ':placeGuess': detection.location.place_guess,
+          ':modelVersion': detection.modelVersion,
+          ':completedAt': nowIso(),
+          ':errorMessage': null,
+          ':updatedAt': nowIso()
+        }
+      })
+    );
+
+    const existingPostcards = await queryAllByIndex({
+      tableName: ddbTables.postcards,
+      indexName: 'userId-createdAt-index',
+      keyExpression: '#u = :u',
+      attrNames: { '#u': 'userId' },
+      attrValues: { ':u': params.userId },
+      scanIndexForward: false,
+      limit: 400
     });
 
-    const existingPostcard = await prisma.postcard.findFirst({
-      where: {
-        userId: params.userId,
-        imageUrl: postcardImageUrl,
-        deletedAt: null
-      },
-      select: { id: true }
-    });
+    const alreadyCreated = existingPostcards.some(
+      (item) => !item.deletedAt && String(item.imageUrl || '') === postcardImageUrl
+    );
 
-    if (!existingPostcard) {
+    if (!alreadyCreated) {
       await createAutoPostcard({
         userId: params.userId,
         imageUrl: postcardImageUrl,
@@ -212,13 +278,23 @@ export async function processDetectionJob(params: ProcessDetectionJobParams): Pr
     }
   } catch (error) {
     console.error('Detection job failed', { jobId: params.jobId, error });
-    await prisma.detectionJob.update({
-      where: { id: params.jobId },
-      data: {
-        status: DetectionJobStatus.FAILED,
-        errorMessage: error instanceof Error ? error.message : 'Unknown detection error.',
-        completedAt: new Date()
-      }
-    });
+
+    await ddbDoc.send(
+      new UpdateCommand({
+        TableName: ddbTables.detectionJobs,
+        Key: { id: params.jobId },
+        UpdateExpression:
+          'SET #status = :status, errorMessage = :errorMessage, completedAt = :completedAt, updatedAt = :updatedAt',
+        ExpressionAttributeNames: {
+          '#status': 'status'
+        },
+        ExpressionAttributeValues: {
+          ':status': DetectionJobStatus.FAILED,
+          ':errorMessage': error instanceof Error ? error.message : 'Unknown detection error.',
+          ':completedAt': nowIso(),
+          ':updatedAt': nowIso()
+        }
+      })
+    );
   }
 }

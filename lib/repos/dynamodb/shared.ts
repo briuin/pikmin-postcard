@@ -15,10 +15,13 @@ export const ddbTables = {
   postcards: `${tablePrefix}-postcards`,
   tags: `${tablePrefix}-tags`,
   postcardTags: `${tablePrefix}-postcard-tags`,
+  detectionJobs: `${tablePrefix}-detection-jobs`,
   postcardFeedback: `${tablePrefix}-postcard-feedback`,
   postcardEditHistory: `${tablePrefix}-postcard-edit-history`,
   postcardReportCases: `${tablePrefix}-postcard-report-cases`,
-  postcardReports: `${tablePrefix}-postcard-reports`
+  postcardReports: `${tablePrefix}-postcard-reports`,
+  feedbackMessages: `${tablePrefix}-feedback-messages`,
+  userActionLogs: `${tablePrefix}-user-action-logs`
 } as const;
 
 export const ddbDoc = DynamoDBDocumentClient.from(new DynamoDBClient({ region }), {

@@ -32,7 +32,6 @@ export default $config({
     const appBackendMode =
       process.env.APP_BACKEND_MODE?.trim() ||
       (serverApiBaseUrl ? "proxy" : "local");
-    const appDataStore = process.env.APP_DATA_STORE?.trim() || "dynamodb";
     const publicGoogleClientId =
       process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim() ||
       process.env.GOOGLE_CLIENT_ID?.trim() ||
@@ -65,7 +64,6 @@ export default $config({
       environment: {
         SERVERLESS_API_BASE_URL: serverApiBaseUrl,
         APP_BACKEND_MODE: appBackendMode,
-        APP_DATA_STORE: appDataStore,
         NEXT_PUBLIC_GOOGLE_CLIENT_ID: publicGoogleClientId,
         GOOGLE_CLIENT_ID: requiredEnv("GOOGLE_CLIENT_ID"),
         GOOGLE_CLIENT_SECRET: requiredEnv("GOOGLE_CLIENT_SECRET"),

@@ -27,7 +27,6 @@ The deployment config also uses:
 
 - `APP_BACKEND_MODE` (recommended: `proxy`)
 - `SERVERLESS_API_BASE_URL` (HTTP API base URL)
-- `APP_DATA_STORE` (recommended: `dynamodb` for production)
 
 ## Domain cutover
 

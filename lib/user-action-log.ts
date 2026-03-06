@@ -1,14 +1,16 @@
-import type { Prisma } from '@prisma/client';
-import { prisma } from '@/lib/prisma';
+import { PutCommand } from '@aws-sdk/lib-dynamodb';
+import { ddbDoc, ddbTables, newId, nowIso } from '@/lib/repos/dynamodb/shared';
 
 type RecordUserActionInput = {
   request: Request;
   userId: string;
   action: string;
-  metadata?: Prisma.InputJsonValue;
+  metadata?: Record<string, unknown> | Array<unknown> | string | number | boolean | null;
 };
 
-export function buildUploadedFileActionMetadata(file: File): Prisma.InputJsonValue {
+export function buildUploadedFileActionMetadata(
+  file: File
+): Record<string, string | number> {
   return {
     fileName: file.name,
     mimeType: file.type,
@@ -57,17 +59,22 @@ function extractPath(request: Request): string {
 
 export async function recordUserAction(input: RecordUserActionInput): Promise<void> {
   try {
-    await prisma.userActionLog.create({
-      data: {
-        userId: input.userId,
-        action: input.action.slice(0, 120),
-        method: input.request.method.slice(0, 20),
-        path: extractPath(input.request),
-        ipAddress: extractClientIp(input.request),
-        userAgent: input.request.headers.get('user-agent')?.slice(0, 500) ?? null,
-        metadata: input.metadata ?? undefined
-      }
-    });
+    await ddbDoc.send(
+      new PutCommand({
+        TableName: ddbTables.userActionLogs,
+        Item: {
+          id: newId('ual'),
+          userId: input.userId,
+          action: input.action.slice(0, 120),
+          method: input.request.method.slice(0, 20),
+          path: extractPath(input.request),
+          ipAddress: extractClientIp(input.request),
+          userAgent: input.request.headers.get('user-agent')?.slice(0, 500) ?? null,
+          metadata: input.metadata ?? null,
+          createdAt: nowIso()
+        }
+      })
+    );
   } catch (error) {
     console.error('Failed to record user action log', {
       action: input.action,

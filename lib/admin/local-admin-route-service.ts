@@ -1,4 +1,4 @@
-import { FeedbackMessageStatus, PostcardReportStatus, Prisma } from '@prisma/client';
+import { FeedbackMessageStatus, PostcardReportStatus } from '@prisma/client';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import {
@@ -12,7 +12,6 @@ import {
   updateAdminUserAccess,
   updateUserAccessSchema
 } from '@/lib/admin/users';
-import { prisma } from '@/lib/prisma';
 import { serializePostcards } from '@/lib/postcards/list';
 import { buildPostcardSearchFilter } from '@/lib/postcards/query';
 import { findPostcardsForList } from '@/lib/postcards/repository';
@@ -22,6 +21,13 @@ import {
   listAdminReportCases,
   serializeAdminReportCaseRecord
 } from '@/lib/postcards/report-workflow';
+import {
+  batchGetByIds,
+  ddbTables,
+  includesKeyword,
+  normalizeSearchText,
+  scanAll
+} from '@/lib/repos/dynamodb/shared';
 import { recordUserAction } from '@/lib/user-action-log';
 
 const adminPostcardQuerySchema = z.object({
@@ -154,7 +160,7 @@ export async function listAdminPostcardsLocal(args: {
     }
   });
 
-  const whereAnd: Prisma.PostcardWhereInput[] = query.reportedOnly ? [] : [{ deletedAt: null }];
+  const whereAnd: Array<Record<string, unknown>> = query.reportedOnly ? [] : [{ deletedAt: null }];
   if (query.reportedOnly) {
     whereAnd.push({
       reportCases: {
@@ -225,6 +231,8 @@ export async function listAdminFeedbackLocal(args: {
   }
 
   const query = parse.data;
+  const keyword = normalizeSearchText(query.q);
+
   await recordUserAction({
     request: args.request,
     userId: args.actorId,
@@ -235,50 +243,55 @@ export async function listAdminFeedbackLocal(args: {
     }
   });
 
-  const whereAnd: Array<Record<string, unknown>> = [];
-  if (query.status) {
-    whereAnd.push({ status: query.status });
-  }
-  if (query.q && query.q.length > 0) {
-    whereAnd.push({
-      OR: [
-        { subject: { contains: query.q, mode: 'insensitive' } },
-        { message: { contains: query.q, mode: 'insensitive' } },
-        { user: { email: { contains: query.q, mode: 'insensitive' } } },
-        { user: { displayName: { contains: query.q, mode: 'insensitive' } } }
-      ]
-    });
-  }
+  const feedbackRows = await scanAll(ddbTables.feedbackMessages);
+  const userIds = Array.from(
+    new Set(
+      feedbackRows
+        .map((item) => String(item.userId || '').trim())
+        .filter((value) => value.length > 0)
+    )
+  );
+  const users = await batchGetByIds(ddbTables.users, userIds);
+  const userById = new Map(
+    users.map((item) => [String(item.id || ''), item])
+  );
 
-  const rows = await prisma.feedbackMessage.findMany({
-    where: whereAnd.length > 0 ? { AND: whereAnd } : undefined,
-    orderBy: { createdAt: 'desc' },
-    take: query.limit,
-    select: {
-      id: true,
-      subject: true,
-      message: true,
-      status: true,
-      createdAt: true,
-      user: {
-        select: {
-          email: true,
-          displayName: true
-        }
+  const rows = feedbackRows
+    .filter((item) => {
+      const status = String(item.status || FeedbackMessageStatus.OPEN).toUpperCase();
+      if (query.status && status !== query.status) {
+        return false;
       }
-    }
-  });
+      const user = userById.get(String(item.userId || ''));
+      return includesKeyword(
+        [
+          item.subject,
+          item.message,
+          user?.email,
+          user?.displayName
+        ],
+        keyword
+      );
+    })
+    .sort((left, right) =>
+      String(right.createdAt || '').localeCompare(String(left.createdAt || ''))
+    )
+    .slice(0, query.limit);
 
   return NextResponse.json(
-    rows.map((item) => ({
-      id: item.id,
-      subject: item.subject,
-      message: item.message,
-      status: item.status,
-      createdAt: item.createdAt,
-      userEmail: item.user.email,
-      userDisplayName: item.user.displayName
-    })),
+    rows.map((item) => {
+      const user = userById.get(String(item.userId || ''));
+      return {
+        id: String(item.id || ''),
+        subject: String(item.subject || ''),
+        message: String(item.message || ''),
+        status: String(item.status || FeedbackMessageStatus.OPEN),
+        createdAt: String(item.createdAt || new Date().toISOString()),
+        userEmail: String(user?.email || ''),
+        userDisplayName:
+          typeof user?.displayName === 'string' ? String(user.displayName) : null
+      };
+    }),
     { status: 200 }
   );
 }
