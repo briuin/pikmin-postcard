@@ -1,6 +1,5 @@
 import { PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { DetectionJobStatus, LocationStatus, PostcardType } from '@prisma/client';
-import { buildCroppedPostcardImage } from '@/lib/location-detection/crop';
 import { detectWithGemini } from '@/lib/location-detection/gemini';
 import { reverseGeocodeCoordinates } from '@/lib/reverse-geocode';
 import {
@@ -213,6 +212,7 @@ export async function processDetectionJob(params: ProcessDetectionJobParams): Pr
     let postcardImageUrl = params.originalImageUrl;
 
     try {
+      const { buildCroppedPostcardImage } = await import('@/lib/location-detection/crop');
       const cropped = await buildCroppedPostcardImage({
         mimeType: params.mimeType,
         fileBytes: params.fileBytes

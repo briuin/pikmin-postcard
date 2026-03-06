@@ -391,6 +391,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
             return;
           }
+
+          clearClientAuthToken();
+          if (!cancelled) {
+            setSession(null);
+            setStatus('unauthenticated');
+          }
+          return;
         }
       } catch {
         // fall back to token payload

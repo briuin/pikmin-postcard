@@ -16,6 +16,11 @@ type AuthenticatedIdentity = {
   name: string | null;
 };
 
+type BearerIdentityResult =
+  | { kind: 'absent' }
+  | { kind: 'invalid' }
+  | { kind: 'ok'; identity: AuthenticatedIdentity };
+
 type AuthenticatedUser = {
   id: string;
   email: string;
@@ -83,27 +88,31 @@ function verifyBearerToken(
   }
 }
 
-async function getBearerIdentity(): Promise<AuthenticatedIdentity | null> {
+async function getBearerIdentityResult(): Promise<BearerIdentityResult> {
   const secret = (process.env.APP_JWT_SECRET ?? '').trim();
   if (!secret) {
-    return null;
+    return { kind: 'absent' };
   }
 
   const requestHeaders = await headers();
-  const token = parseBearerTokenFromAuthorization(requestHeaders.get('authorization'));
+  const authorization = requestHeaders.get('authorization');
+  const token = parseBearerTokenFromAuthorization(authorization);
   if (!token) {
-    return null;
+    return { kind: 'absent' };
   }
 
   const payload = verifyBearerToken(token, secret);
   if (!payload) {
-    return null;
+    return { kind: 'invalid' };
   }
 
   return {
-    userId: payload.sub,
-    email: normalizeEmail(payload.email),
-    name: payload.name ?? null
+    kind: 'ok',
+    identity: {
+      userId: payload.sub,
+      email: normalizeEmail(payload.email),
+      name: payload.name ?? null
+    }
   };
 }
 
@@ -124,9 +133,12 @@ function toAuthenticatedUser(
 }
 
 export async function getAuthenticatedUserEmail(): Promise<string | null> {
-  const bearerIdentity = await getBearerIdentity();
-  if (bearerIdentity?.email) {
-    return bearerIdentity.email;
+  const bearer = await getBearerIdentityResult();
+  if (bearer.kind === 'ok') {
+    return bearer.identity.email;
+  }
+  if (bearer.kind === 'invalid') {
+    return null;
   }
 
   const session = await auth();
@@ -139,9 +151,12 @@ export async function getAuthenticatedUserEmail(): Promise<string | null> {
 }
 
 export async function getAuthenticatedIdentity(): Promise<AuthenticatedIdentity | null> {
-  const bearerIdentity = await getBearerIdentity();
-  if (bearerIdentity?.email) {
-    return bearerIdentity;
+  const bearer = await getBearerIdentityResult();
+  if (bearer.kind === 'ok') {
+    return bearer.identity;
+  }
+  if (bearer.kind === 'invalid') {
+    return null;
   }
 
   const session = await auth();
