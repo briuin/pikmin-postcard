@@ -19,7 +19,7 @@ import {
 } from '@/lib/backend/local-backends';
 import { type AppBackend } from '@/lib/backend/types';
 
-const localBackend: AppBackend = {
+export const localAppBackend: AppBackend = {
   postcards: localPostcardsBackend,
   reports: localReportsBackend,
   admin: localAdminBackend,
@@ -29,7 +29,7 @@ const localBackend: AppBackend = {
   detection: localDetectionBackend
 };
 
-const externalBackend: AppBackend = {
+export const externalAppBackend: AppBackend = {
   postcards: externalPostcardsBackend,
   reports: externalReportsBackend,
   admin: externalAdminBackend,
@@ -41,7 +41,7 @@ const externalBackend: AppBackend = {
 
 export function getAppBackend(): AppBackend {
   if (isExternalServerlessApiEnabled()) {
-    return externalBackend;
+    return externalAppBackend;
   }
-  return localBackend;
+  return localAppBackend;
 }
