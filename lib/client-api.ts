@@ -1,3 +1,5 @@
+import { mapInternalApiPathToServerless } from '@/lib/backend/api-path-map';
+
 export type ApiFetchContext = {
   userId?: string | null;
   userEmail?: string | null;
@@ -52,49 +54,6 @@ function shouldUseExternalServerlessApi(context: ApiFetchContext = {}): boolean 
   }
 
   return Boolean(getServerlessApiBaseUrl());
-}
-
-function mapInternalApiPathToServerless(path: string): string | null {
-  const normalized = path.trim();
-
-  if (/^\/api\/postcards(?:\/.*)?$/.test(normalized)) {
-    return normalized.replace(/^\/api/, '');
-  }
-  if (/^\/api\/profile$/.test(normalized)) {
-    return '/profile';
-  }
-  if (/^\/api\/reports(?:\/.*)?$/.test(normalized)) {
-    return normalized.replace(/^\/api/, '');
-  }
-  if (/^\/api\/admin\/users$/.test(normalized)) {
-    return '/admin/users';
-  }
-  if (/^\/api\/admin\/postcards$/.test(normalized)) {
-    return '/admin/postcards';
-  }
-  if (/^\/api\/admin\/feedback$/.test(normalized)) {
-    return '/admin/feedback';
-  }
-  if (/^\/api\/admin\/reports(?:\/.*)?$/.test(normalized)) {
-    return normalized.replace(/^\/api/, '');
-  }
-  if (/^\/api\/feedback$/.test(normalized)) {
-    return '/feedback';
-  }
-  if (/^\/api\/location-from-image$/.test(normalized)) {
-    return '/location-from-image';
-  }
-  if (/^\/api\/upload-image$/.test(normalized)) {
-    return '/upload-image';
-  }
-  if (/^\/api\/auth\/exchange$/.test(normalized)) {
-    return '/auth/exchange';
-  }
-  if (/^\/api\/auth\/session$/.test(normalized)) {
-    return '/auth/session';
-  }
-
-  return null;
 }
 
 export function buildApiUrl(path: string, context: ApiFetchContext = {}): string {
