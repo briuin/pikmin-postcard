@@ -1,6 +1,8 @@
 import crypto from 'node:crypto';
 import { NextResponse } from 'next/server';
-import { ensureUserByEmail } from '@/lib/dynamo-users';
+import { UserRole } from '@/lib/domain/enums';
+import { userRepo } from '@/lib/repos/users';
+import { roleForEmail } from '@/lib/user-role';
 
 type GoogleTokenInfo = {
   aud?: string;
@@ -111,9 +113,10 @@ export async function POST(request: Request) {
     }
 
     const googleIdentity = await verifyGoogleIdToken(idToken);
-    const user = await ensureUserByEmail({
+    const user = await userRepo.upsertByEmail({
       email: googleIdentity.email,
-      displayName: googleIdentity.name
+      displayName: googleIdentity.name,
+      forceAdmin: roleForEmail(googleIdentity.email) === UserRole.ADMIN
     });
 
     const token = createAppJwt(
