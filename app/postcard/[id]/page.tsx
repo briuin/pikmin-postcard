@@ -3,10 +3,6 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { PostcardCoordinateCopy } from '@/components/postcard-coordinate-copy';
-import {
-  resolveServerlessApiBaseUrl,
-  shouldProxyToServerless
-} from '@/lib/backend/backend-mode';
 import { getPostcardTypeLabel } from '@/lib/postcard-type-label';
 import { buildLocationLabel } from '@/lib/postcards/location-label';
 
@@ -79,18 +75,8 @@ function toAbsoluteUrl(value: string): string {
   }
 }
 
-function resolveServerlessApiBase(): string {
-  if (!shouldProxyToServerless()) {
-    return '';
-  }
-  return resolveServerlessApiBaseUrl();
-}
-
 async function findSharedPostcardById(id: string) {
-  const base = resolveServerlessApiBase();
-  const endpoint = base
-    ? `${base}/postcards/${encodeURIComponent(id)}`
-    : new URL(`/api/postcards/${encodeURIComponent(id)}`, resolveBaseUrl()).toString();
+  const endpoint = new URL(`/api/postcards/${encodeURIComponent(id)}`, resolveBaseUrl()).toString();
   const response = await fetch(endpoint, {
     cache: 'no-store'
   });

@@ -24,8 +24,6 @@ env:
   AWS_REGION: us-east-1
   DEPLOY_STAGE: ${{ github.event.inputs.stage || 'production' }}
   ENABLE_DOMAIN_CUTOVER: ${{ github.event_name == 'push' && 'true' || github.event.inputs.enable_domain_cutover || 'false' }}
-  APP_BACKEND_MODE: proxy
-  SERVERLESS_API_BASE_URL: https://q5wrip39qe.execute-api.us-east-1.amazonaws.com
   S3_BUCKET_NAME: pikmin-postcard-images-041913718278-20260226
   S3_REGION: us-east-1
   S3_PUBLIC_BASE_URL: https://pikmin-postcard-images-041913718278-20260226.s3.us-east-1.amazonaws.com

@@ -15,18 +15,15 @@ This project deploys the Next.js frontend to AWS Lambda + CloudFront using SST's
    - `stage`: `production` (or `preview`)
    - `enable_domain_cutover`: `false` for first deploy
 
-The workflow loads sensitive values from SSM:
+The workflow loads sensitive values from GitHub Secrets:
 
-- `/pikmin-postcard/GOOGLE_CLIENT_ID`
-- `/pikmin-postcard/GOOGLE_CLIENT_SECRET`
-- `/pikmin-postcard/NEXTAUTH_SECRET`
-- `/pikmin-postcard/APP_JWT_SECRET`
-- `/pikmin-postcard/GOOGLE_GENERATIVE_AI_API_KEY`
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `NEXTAUTH_SECRET`
+- `APP_JWT_SECRET`
+- `GOOGLE_GENERATIVE_AI_API_KEY`
 
-The deployment config also uses:
-
-- `APP_BACKEND_MODE` (recommended: `proxy`)
-- `SERVERLESS_API_BASE_URL` (HTTP API base URL)
+The web app now uses same-domain Next.js route handlers (`/api/...`) for both local and production.
 
 ## Domain cutover
 
