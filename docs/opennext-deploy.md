@@ -19,7 +19,6 @@ The workflow loads sensitive values from GitHub Secrets:
 
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
-- `NEXTAUTH_SECRET`
 - `APP_JWT_SECRET`
 - `GOOGLE_GENERATIVE_AI_API_KEY`
 

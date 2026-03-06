@@ -38,8 +38,6 @@ type SharedPostcardRecord = {
 
 function resolveBaseUrl(): URL {
   const candidates = [
-    process.env.AUTH_URL,
-    process.env.NEXTAUTH_URL,
     process.env.NEXT_PUBLIC_APP_URL,
     process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
     DEFAULT_SITE_URL

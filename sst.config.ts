@@ -34,7 +34,6 @@ export default $config({
     const s3PublicBaseUrl = process.env.S3_PUBLIC_BASE_URL?.trim() || "";
     const googleClientId = requiredEnv("GOOGLE_CLIENT_ID");
     const googleClientSecret = requiredEnv("GOOGLE_CLIENT_SECRET");
-    const nextAuthSecret = requiredEnv("NEXTAUTH_SECRET");
     const appJwtSecret = requiredEnv("APP_JWT_SECRET");
     const geminiApiKey = requiredEnv("GOOGLE_GENERATIVE_AI_API_KEY");
     const geminiModel = process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash";
@@ -137,9 +136,6 @@ export default $config({
         NEXT_PUBLIC_GOOGLE_CLIENT_ID: publicGoogleClientId,
         GOOGLE_CLIENT_ID: googleClientId,
         GOOGLE_CLIENT_SECRET: googleClientSecret,
-        NEXTAUTH_URL: process.env.NEXTAUTH_URL?.trim() || `https://${domainName}`,
-        AUTH_URL: process.env.AUTH_URL?.trim() || `https://${domainName}`,
-        NEXTAUTH_SECRET: nextAuthSecret,
         APP_JWT_SECRET: appJwtSecret,
         GOOGLE_GENERATIVE_AI_API_KEY: geminiApiKey,
         GEMINI_MODEL: geminiModel,

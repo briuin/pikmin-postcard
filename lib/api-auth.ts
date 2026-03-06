@@ -1,6 +1,5 @@
 import crypto from 'node:crypto';
 import { headers } from 'next/headers';
-import { auth } from '@/auth';
 import { UserApprovalStatus, UserRole } from '@prisma/client';
 import { userRepo, type UserRepoRecord } from '@/lib/repos/users';
 import { isApprovedStatus } from '@/lib/user-approval';
@@ -134,42 +133,12 @@ function toAuthenticatedUser(
 
 export async function getAuthenticatedUserEmail(): Promise<string | null> {
   const bearer = await getBearerIdentityResult();
-  if (bearer.kind === 'ok') {
-    return bearer.identity.email;
-  }
-  if (bearer.kind === 'invalid') {
-    return null;
-  }
-
-  const session = await auth();
-  const userEmail = session?.user?.email;
-  if (!userEmail) {
-    return null;
-  }
-
-  return userEmail;
+  return bearer.kind === 'ok' ? bearer.identity.email : null;
 }
 
 export async function getAuthenticatedIdentity(): Promise<AuthenticatedIdentity | null> {
   const bearer = await getBearerIdentityResult();
-  if (bearer.kind === 'ok') {
-    return bearer.identity;
-  }
-  if (bearer.kind === 'invalid') {
-    return null;
-  }
-
-  const session = await auth();
-  const userEmail = session?.user?.email;
-  if (!userEmail) {
-    return null;
-  }
-
-  const normalizedName = session.user?.name?.trim();
-  return {
-    email: userEmail,
-    name: normalizedName && normalizedName.length > 0 ? normalizedName : null
-  };
+  return bearer.kind === 'ok' ? bearer.identity : null;
 }
 
 export async function getUserIdByEmail(
