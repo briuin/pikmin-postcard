@@ -1,4 +1,3 @@
-import sharp from 'sharp';
 import { buildObjectKey, buildVariantObjectKey, uploadBytesToStorage } from '@/lib/storage';
 
 export type CropInput = {
@@ -12,11 +11,22 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+async function loadSharp() {
+  try {
+    const sharpModule = await import('sharp');
+    return sharpModule.default;
+  } catch {
+    throw new Error('Image crop dependency is unavailable on this server.');
+  }
+}
+
 export async function recropPostcardAndUpload(params: {
   postcardId: string;
   sourceImageUrl: string;
   crop: CropInput;
 }): Promise<string> {
+  const sharp = await loadSharp();
+
   const originalResponse = await fetch(params.sourceImageUrl, { cache: 'no-store' });
   if (!originalResponse.ok) {
     throw new Error('Failed to load source image for recrop.');

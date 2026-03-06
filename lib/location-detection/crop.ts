@@ -1,4 +1,3 @@
-import sharp from 'sharp';
 import { z } from 'zod';
 import { extractJsonObject, generateGeminiText } from '@/lib/location-detection/gemini';
 
@@ -25,6 +24,15 @@ const postcardCropPairSchema = z.object({
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+async function loadSharp() {
+  try {
+    const sharpModule = await import('sharp');
+    return sharpModule.default;
+  } catch {
+    throw new Error('Image crop dependency is unavailable on this server.');
+  }
 }
 
 function getFallbackCropBox(): CropBoxResult {
@@ -197,6 +205,7 @@ export async function buildCroppedPostcardImage(params: {
   mimeType: string;
   fileBytes: Buffer;
 }): Promise<{ bytes: Buffer; contentType: string; cropConfidence: number }> {
+  const sharp = await loadSharp();
   const metadata = await sharp(params.fileBytes).metadata();
   const imageWidth = metadata.width ?? 0;
   const imageHeight = metadata.height ?? 0;

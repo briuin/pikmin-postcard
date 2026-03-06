@@ -281,13 +281,6 @@ export async function updatePostcardLocal(args: {
   actor: ApprovedPostcardActor;
 }): Promise<NextResponse> {
   const { request, postcardId, actor } = args;
-  const {
-    applyPostcardCropUpdate,
-    applyPostcardDetailsUpdate,
-    cropUpdateSchema,
-    postcardUpdateSchema
-  } = await import('@/lib/postcards/manage');
-
   const canEditAny = isManagerOrAboveRole(actor.role);
   if (canEditAny) {
     const reportCaseStatus = await findAdminEditableReportCaseStateByPostcardId(postcardId);
@@ -300,6 +293,13 @@ export async function updatePostcardLocal(args: {
   }
 
   try {
+    const {
+      applyPostcardCropUpdate,
+      applyPostcardDetailsUpdate,
+      cropUpdateSchema,
+      postcardUpdateSchema
+    } = await import('@/lib/postcards/manage');
+
     const body = await request.json();
     await recordUserAction({
       request,
@@ -354,12 +354,13 @@ export async function updatePostcardLocal(args: {
 
     return NextResponse.json(updated, { status: 200 });
   } catch (error) {
+    const status = error instanceof z.ZodError ? 400 : 500;
     return NextResponse.json(
       {
         error: 'Failed to update postcard.',
         details: error instanceof Error ? error.message : 'Unknown error'
       },
-      { status: 400 }
+      { status }
     );
   }
 }
