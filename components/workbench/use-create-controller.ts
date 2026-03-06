@@ -71,52 +71,14 @@ export function useCreateController({
       setCreateStatus(text.aiSubmitting);
 
       try {
-        const uploadMetaResponse = await apiFetch(
-          '/api/upload-image',
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              filename: aiFile.name,
-              contentType: aiFile.type || 'image/jpeg'
-            })
-          },
-          {
-            userId: currentUserId,
-            userEmail: currentUserEmail
-          }
-        );
-
-        const uploadMeta = await parseJsonResponseOrThrow<{
-          uploadUrl?: string;
-          imageUrl?: string;
-        }>(uploadMetaResponse, text.manualImageUploadFailed);
-
-        if (!uploadMeta.uploadUrl || !uploadMeta.imageUrl) {
-          throw new Error(text.manualImageUploadFailed);
-        }
-
-        const uploadBinaryResponse = await fetch(uploadMeta.uploadUrl, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': aiFile.type || 'image/jpeg'
-          },
-          body: aiFile
-        });
-
-        if (!uploadBinaryResponse.ok) {
-          throw new Error(text.manualImageUploadFailed);
-        }
+        const formData = new FormData();
+        formData.append('image', aiFile);
 
         const response = await apiFetch(
           '/api/location-from-image',
           {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              imageUrl: uploadMeta.imageUrl,
-              mimeType: aiFile.type || 'image/jpeg'
-            })
+            body: formData
           },
           {
             userId: currentUserId,
@@ -137,7 +99,7 @@ export function useCreateController({
         setAiFile(null);
         setAiInputVersion((current) => current + 1);
         setQueuedAiJobId(payload.id ?? null);
-        setQueuedAiImageUrl(payload.imageUrl ?? uploadMeta.imageUrl ?? null);
+        setQueuedAiImageUrl(payload.imageUrl ?? null);
         setCreateStatus(text.aiDetectionSubmitted(payload.id ?? 'unknown'));
         aiRedirectTimerRef.current = setTimeout(() => {
           router.push('/dashboard');
@@ -190,15 +152,14 @@ export function useCreateController({
     setCreateStatus(text.manualUploadingImage);
 
     try {
+      const uploadFormData = new FormData();
+      uploadFormData.append('image', manualFile);
+
       const uploadResponse = await apiFetch(
         '/api/upload-image',
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            filename: manualFile.name,
-            contentType: manualFile.type || 'image/jpeg'
-          })
+          body: uploadFormData
         },
         {
           userId: currentUserId,
@@ -210,22 +171,11 @@ export function useCreateController({
         throw new Error(text.aiUnauthorized);
       }
 
-      const uploadPayload = await parseJsonResponseOrThrow<{ uploadUrl?: string; imageUrl?: string }>(
+      const uploadPayload = await parseJsonResponseOrThrow<{ imageUrl?: string }>(
         uploadResponse,
         text.manualImageUploadFailed
       );
-      if (!uploadPayload.imageUrl || !uploadPayload.uploadUrl) {
-        throw new Error(text.manualImageUploadFailed);
-      }
-
-      const uploadBinaryResponse = await fetch(uploadPayload.uploadUrl, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': manualFile.type || 'image/jpeg'
-        },
-        body: manualFile
-      });
-      if (!uploadBinaryResponse.ok) {
+      if (!uploadPayload.imageUrl) {
         throw new Error(text.manualImageUploadFailed);
       }
 

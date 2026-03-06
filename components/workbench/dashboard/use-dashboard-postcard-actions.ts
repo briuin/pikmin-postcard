@@ -268,37 +268,25 @@ export function useDashboardPostcardActions({
       try {
         const croppedFile = await renderCroppedBlob(editingCropOriginalUrl, postcardId);
 
+        const formData = new FormData();
+        formData.append('image', croppedFile);
+
         const uploadResponse = await apiFetch(
           '/api/upload-image',
           {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              filename: croppedFile.name,
-              contentType: croppedFile.type || 'image/jpeg'
-            })
+            body: formData
           },
           {
             userId: currentUserId,
             userEmail: currentUserEmail
           }
         );
-        const uploadPayload = await parseJsonResponseOrThrow<{ uploadUrl?: string; imageUrl?: string }>(
+        const uploadPayload = await parseJsonResponseOrThrow<{ imageUrl?: string }>(
           uploadResponse,
           text.cropSaveFailed
         );
-        if (!uploadPayload.uploadUrl || !uploadPayload.imageUrl) {
-          throw new Error(text.cropSaveFailed);
-        }
-
-        const uploadBinaryResponse = await fetch(uploadPayload.uploadUrl, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': croppedFile.type || 'image/jpeg'
-          },
-          body: croppedFile
-        });
-        if (!uploadBinaryResponse.ok) {
+        if (!uploadPayload.imageUrl) {
           throw new Error(text.cropSaveFailed);
         }
 
