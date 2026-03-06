@@ -8,7 +8,8 @@ import {
 } from '@aws-sdk/lib-dynamodb';
 
 const region = process.env.AWS_REGION || process.env.S3_REGION || 'us-east-1';
-const tablePrefix = process.env.DDB_TABLE_PREFIX || 'pikmin-postcard';
+const tablePrefix =
+  String(process.env.DDB_TABLE_PREFIX || 'pikmin-postcard-dev').trim() || 'pikmin-postcard-dev';
 
 export const ddbTables = {
   users: `${tablePrefix}-users`,

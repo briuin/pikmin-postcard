@@ -164,7 +164,7 @@ async function main() {
   const { count, email } = parseArgs(process.argv.slice(2));
 
   const region = process.env.AWS_REGION || process.env.S3_REGION || 'us-east-1';
-  const prefix = process.env.DDB_TABLE_PREFIX || 'pikmin-postcard';
+  const prefix = String(process.env.DDB_TABLE_PREFIX || 'pikmin-postcard-dev').trim() || 'pikmin-postcard-dev';
   const usersTableName = `${prefix}-users`;
   const postcardsTableName = `${prefix}-postcards`;
 

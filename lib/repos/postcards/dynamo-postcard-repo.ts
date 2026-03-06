@@ -481,6 +481,42 @@ async function loadReportedPostcardIds(): Promise<Set<string>> {
   );
 }
 
+async function findRowsForList(
+  args: Omit<Prisma.PostcardFindManyArgs, 'select'>
+): Promise<{
+  rows: DynamoPostcardRow[];
+  total: number;
+  usersById: Map<string, DynamoUserRow>;
+}> {
+  const allRows = await scanAll(ddbTables.postcards);
+  const postcards = allRows
+    .map((row) => toDynamoPostcardRow(row))
+    .filter((row): row is DynamoPostcardRow => Boolean(row));
+
+  const userIds = Array.from(new Set(postcards.map((row) => row.userId)));
+  const [usersById, reportedPostcardIds] = await Promise.all([
+    loadUsersByIds(userIds),
+    loadReportedPostcardIds()
+  ]);
+
+  const filtered = postcards.filter((row) =>
+    matchesWhereClause(row, args.where, {
+      usersById,
+      reportedPostcardIds
+    })
+  );
+  const ordered = applyOrderBy(filtered, args.orderBy);
+  const total = ordered.length;
+  const skipped = typeof args.skip === 'number' && args.skip > 0 ? ordered.slice(args.skip) : ordered;
+  const rows = typeof args.take === 'number' ? skipped.slice(0, args.take) : skipped;
+
+  return {
+    rows,
+    total,
+    usersById
+  };
+}
+
 function toListRow(
   row: DynamoPostcardRow,
   user: DynamoUserRow | undefined,
@@ -524,49 +560,47 @@ function toListRow(
 }
 
 async function findForList(args: Omit<Prisma.PostcardFindManyArgs, 'select'>): Promise<PostcardListRow[]> {
-  const allRows = await scanAll(ddbTables.postcards);
-  const postcards = allRows
-    .map((row) => toDynamoPostcardRow(row))
-    .filter((row): row is DynamoPostcardRow => Boolean(row));
+  const { rows, usersById } = await findRowsForList(args);
+  const tagsByPostcardId = await loadTagsByPostcardIds(rows.map((row) => row.id));
+  return rows.map((row) => toListRow(row, usersById.get(row.userId), tagsByPostcardId.get(row.id) ?? []));
+}
 
-  const userIds = Array.from(new Set(postcards.map((row) => row.userId)));
-  const [usersById, reportedPostcardIds] = await Promise.all([
-    loadUsersByIds(userIds),
-    loadReportedPostcardIds()
-  ]);
+async function findForListWithTotal(
+  args: Omit<Prisma.PostcardFindManyArgs, 'select'>
+): Promise<{
+  rows: PostcardListRow[];
+  total: number;
+}> {
+  const { rows, total, usersById } = await findRowsForList(args);
+  const tagsByPostcardId = await loadTagsByPostcardIds(rows.map((row) => row.id));
+  return {
+    rows: rows.map((row) => toListRow(row, usersById.get(row.userId), tagsByPostcardId.get(row.id) ?? [])),
+    total
+  };
+}
 
-  const filtered = postcards.filter((row) =>
-    matchesWhereClause(row, args.where, {
-      usersById,
-      reportedPostcardIds
+async function findById(postcardId: string): Promise<PostcardListRow | null> {
+  const result = await ddbDoc.send(
+    new GetCommand({
+      TableName: ddbTables.postcards,
+      Key: { id: postcardId }
     })
   );
+  const row = toDynamoPostcardRow(result.Item as UnknownRecord);
+  if (!row || row.deletedAt) {
+    return null;
+  }
 
-  const ordered = applyOrderBy(filtered, args.orderBy);
-  const skipped = typeof args.skip === 'number' && args.skip > 0 ? ordered.slice(args.skip) : ordered;
-  const limited = typeof args.take === 'number' ? skipped.slice(0, args.take) : skipped;
-
-  const tagsByPostcardId = await loadTagsByPostcardIds(limited.map((row) => row.id));
-  return limited.map((row) => toListRow(row, usersById.get(row.userId), tagsByPostcardId.get(row.id) ?? []));
+  const [usersById, tagsByPostcardId] = await Promise.all([
+    loadUsersByIds([row.userId]),
+    loadTagsByPostcardIds([row.id])
+  ]);
+  return toListRow(row, usersById.get(row.userId), tagsByPostcardId.get(row.id) ?? []);
 }
 
 async function count(where: Prisma.PostcardWhereInput): Promise<number> {
-  const allRows = await scanAll(ddbTables.postcards);
-  const postcards = allRows
-    .map((row) => toDynamoPostcardRow(row))
-    .filter((row): row is DynamoPostcardRow => Boolean(row));
-  const userIds = Array.from(new Set(postcards.map((row) => row.userId)));
-  const [usersById, reportedPostcardIds] = await Promise.all([
-    loadUsersByIds(userIds),
-    loadReportedPostcardIds()
-  ]);
-
-  return postcards.filter((row) =>
-    matchesWhereClause(row, where, {
-      usersById,
-      reportedPostcardIds
-    })
-  ).length;
+  const result = await findRowsForList({ where });
+  return result.total;
 }
 
 async function create(input: CreatePostcardInput): Promise<Record<string, unknown>> {
@@ -1275,6 +1309,8 @@ async function submitFeedback(
 
 export const dynamoPostcardRepo: PostcardRepo = {
   findForList,
+  findForListWithTotal,
+  findById,
   count,
   create,
   findCropSource,

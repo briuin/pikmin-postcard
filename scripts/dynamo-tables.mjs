@@ -1,4 +1,4 @@
-export function getTableNames(prefix = "pikmin-postcard") {
+export function getTableNames(prefix = "pikmin-postcard-dev") {
   return {
     users: `${prefix}-users`,
     postcards: `${prefix}-postcards`,
@@ -24,7 +24,7 @@ function simpleTable(tableName, hashKey, extra = {}) {
   };
 }
 
-export function getTableDefinitions(prefix = "pikmin-postcard") {
+export function getTableDefinitions(prefix = "pikmin-postcard-dev") {
   const names = getTableNames(prefix);
 
   return [

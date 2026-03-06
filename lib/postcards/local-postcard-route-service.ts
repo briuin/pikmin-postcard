@@ -19,7 +19,11 @@ import {
 } from '@/lib/postcards/feedback-mutations';
 import { serializePostcards } from '@/lib/postcards/list';
 import { buildPublicOrderBy, buildPublicWhere, parsePublicQuery } from '@/lib/postcards/query';
-import { countPostcards, findPostcardsForList } from '@/lib/postcards/repository';
+import {
+  findPostcardById,
+  findPostcardsForList,
+  findPostcardsForListWithTotal
+} from '@/lib/postcards/repository';
 import { findAdminEditableReportCaseStateByPostcardId } from '@/lib/postcards/report-workflow';
 import { reverseGeocodeCoordinates } from '@/lib/reverse-geocode';
 import { recordUserAction } from '@/lib/user-action-log';
@@ -169,14 +173,11 @@ export async function listPublicPostcardsLocal(args: {
   const where = buildPublicWhere(query);
   const orderBy = buildPublicOrderBy(query.sort);
 
-  const [postcards, total] = await Promise.all([
-    findPostcardsForList({
-      where,
-      orderBy,
-      take: query.limit + 1
-    }),
-    countPostcards(where)
-  ]);
+  const { rows: postcards, total } = await findPostcardsForListWithTotal({
+    where,
+    orderBy,
+    take: query.limit + 1
+  });
 
   const hasMore = postcards.length > query.limit;
   const items = hasMore ? postcards.slice(0, query.limit) : postcards;
@@ -256,22 +257,12 @@ export async function createPostcardLocal(args: {
 }
 
 export async function getPostcardByIdLocal(postcardId: string): Promise<NextResponse> {
-  const rows = await findPostcardsForList({
-    where: {
-      id: postcardId,
-      deletedAt: null
-    },
-    orderBy: {
-      createdAt: 'desc'
-    },
-    take: 1
-  });
-
-  if (rows.length === 0) {
+  const postcard = await findPostcardById(postcardId);
+  if (!postcard) {
     return NextResponse.json({ error: 'Postcard not found.' }, { status: 404 });
   }
 
-  const serialized = serializePostcards(rows);
+  const serialized = serializePostcards([postcard]);
   return NextResponse.json(serialized[0], { status: 200 });
 }
 

@@ -78,6 +78,11 @@ export type PostcardCropSource = {
 
 export type PostcardRepo = {
   findForList(args: Omit<Prisma.PostcardFindManyArgs, 'select'>): Promise<PostcardListRow[]>;
+  findForListWithTotal(args: Omit<Prisma.PostcardFindManyArgs, 'select'>): Promise<{
+    rows: PostcardListRow[];
+    total: number;
+  }>;
+  findById(postcardId: string): Promise<PostcardListRow | null>;
   count(where: Prisma.PostcardWhereInput): Promise<number>;
   create(input: CreatePostcardInput): Promise<Record<string, unknown>>;
   findCropSource(params: { postcardId: string; userId?: string }): Promise<PostcardCropSource | null>;

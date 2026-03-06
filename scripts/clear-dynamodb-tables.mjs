@@ -65,7 +65,16 @@ async function clearTable(doc, tableName) {
 
 async function main() {
   const region = getArg("region", process.env.AWS_REGION || "us-east-1");
-  const prefix = getArg("prefix", process.env.DDB_TABLE_PREFIX || "pikmin-postcard");
+  const prefix = getArg(
+    "prefix",
+    String(process.env.DDB_TABLE_PREFIX || "pikmin-postcard-dev").trim() || "pikmin-postcard-dev"
+  );
+  const allowNonDevPrefix = String(process.env.ALLOW_NON_DEV_DDB_PREFIX || "").trim() === "1";
+  if (!allowNonDevPrefix && !prefix.endsWith("-dev")) {
+    throw new Error(
+      `Refusing to clear non-dev DynamoDB prefix "${prefix}". Set ALLOW_NON_DEV_DDB_PREFIX=1 to override.`
+    );
+  }
 
   const tables = Object.values(getTableNames(prefix));
   const doc = DynamoDBDocumentClient.from(new DynamoDBClient({ region }));

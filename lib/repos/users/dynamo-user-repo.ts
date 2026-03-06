@@ -7,7 +7,8 @@ import { normalizeEmail, roleForEmail } from '@/lib/user-role';
 import type { UpsertUserByEmailInput, UserRepo, UserRepoRecord } from '@/lib/repos/users/types';
 
 const region = process.env.AWS_REGION || process.env.S3_REGION || 'us-east-1';
-const tablePrefix = process.env.DDB_TABLE_PREFIX || 'pikmin-postcard';
+const tablePrefix =
+  String(process.env.DDB_TABLE_PREFIX || 'pikmin-postcard-dev').trim() || 'pikmin-postcard-dev';
 const usersTableName = `${tablePrefix}-users`;
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({ region }), {

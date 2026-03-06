@@ -6,7 +6,8 @@ import { defaultApprovalStatusForRole } from '@/lib/user-approval';
 import { normalizeEmail, roleForEmail } from '@/lib/user-role';
 
 const region = process.env.AWS_REGION || process.env.S3_REGION || 'us-east-1';
-const tablePrefix = process.env.DDB_TABLE_PREFIX || 'pikmin-postcard';
+const tablePrefix =
+  String(process.env.DDB_TABLE_PREFIX || 'pikmin-postcard-dev').trim() || 'pikmin-postcard-dev';
 const usersTableName = `${tablePrefix}-users`;
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({ region }), {

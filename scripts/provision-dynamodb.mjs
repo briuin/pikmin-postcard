@@ -37,7 +37,10 @@ async function ensureTable(client, definition) {
 
 async function main() {
   const region = getArg("region", process.env.AWS_REGION || "us-east-1");
-  const prefix = getArg("prefix", process.env.DDB_TABLE_PREFIX || "pikmin-postcard");
+  const prefix = getArg(
+    "prefix",
+    String(process.env.DDB_TABLE_PREFIX || "pikmin-postcard-dev").trim() || "pikmin-postcard-dev"
+  );
   const client = new DynamoDBClient({ region });
 
   console.log(`region=${region}`);

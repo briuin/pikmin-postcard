@@ -7,6 +7,16 @@ export async function findPostcardsForList(
   return postcardRepo.findForList(args);
 }
 
+export async function findPostcardsForListWithTotal(
+  args: Omit<Prisma.PostcardFindManyArgs, 'select'>
+): Promise<{ rows: PostcardListRow[]; total: number }> {
+  return postcardRepo.findForListWithTotal(args);
+}
+
+export async function findPostcardById(postcardId: string): Promise<PostcardListRow | null> {
+  return postcardRepo.findById(postcardId);
+}
+
 export async function countPostcards(where: Prisma.PostcardWhereInput): Promise<number> {
   return postcardRepo.count(where);
 }
