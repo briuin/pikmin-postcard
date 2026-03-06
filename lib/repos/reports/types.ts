@@ -1,21 +1,10 @@
 import type { PostcardReportStatus } from '@prisma/client';
-
-export type DashboardReportListItem = {
-  reportId: string;
-  caseId: string;
-  postcardId: string;
-  postcardTitle: string;
-  postcardImageUrl: string | null;
-  postcardPlaceName: string | null;
-  postcardDeletedAt: Date | null;
-  reportReason: string;
-  reportDescription: string | null;
-  reportVersion: number;
-  status: PostcardReportStatus;
-  adminNote: string | null;
-  reportedAt: Date;
-  statusUpdatedAt: Date;
-};
+import type {
+  ActiveReportCaseDetail,
+  AdminReportCaseRecord,
+  DashboardReportListItem,
+  ReportCaseStatusUpdateResult
+} from '@/lib/postcards/report-types';
 
 export type CancelDashboardReportResult =
   | { kind: 'not_found' }
@@ -28,4 +17,30 @@ export type ReportRepo = {
     userId: string;
     reportId: string;
   }): Promise<CancelDashboardReportResult>;
+  findActiveReportCaseDetailMapForPostcards(
+    postcardIds: string[]
+  ): Promise<Map<string, ActiveReportCaseDetail>>;
+  listAdminReportCases(params: {
+    status?: PostcardReportStatus;
+    search?: string;
+    limit: number;
+    reportTake?: number;
+  }): Promise<AdminReportCaseRecord[]>;
+  findAdminEditableReportCaseStateByPostcardId(
+    postcardId: string
+  ): Promise<PostcardReportStatus | null>;
+  updateReportCaseStatus(params: {
+    caseId: string;
+    nextStatus: PostcardReportStatus;
+    adminNote?: string | null;
+    resolverUserId: string;
+  }): Promise<ReportCaseStatusUpdateResult | null>;
+  findAdminReportCaseById(caseId: string): Promise<AdminReportCaseRecord | null>;
 };
+
+export type {
+  ActiveReportCaseDetail,
+  AdminReportCaseRecord,
+  DashboardReportListItem,
+  ReportCaseStatusUpdateResult
+} from '@/lib/postcards/report-types';

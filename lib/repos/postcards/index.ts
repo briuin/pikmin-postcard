@@ -4,6 +4,9 @@ import { prismaPostcardRepo } from '@/lib/repos/postcards/prisma-postcard-repo';
 export const postcardRepo: PostcardRepo = prismaPostcardRepo;
 
 export type {
+  CropBox,
+  CreatePostcardInput,
+  PostcardCropSource,
   PostcardFeedbackRow,
   PostcardListRow,
   PostcardRepo,

@@ -7,12 +7,11 @@ import {
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { isManagerOrAboveRole } from '@/lib/api-auth';
-import { prisma } from '@/lib/prisma';
 import {
   attachViewerFeedback,
   findViewerFeedbackRowsForPostcards
 } from '@/lib/postcards/feedback';
-import { postcardRepo } from '@/lib/repos/postcards';
+import { postcardRepo, type CreatePostcardInput } from '@/lib/repos/postcards';
 import {
   type FeedbackReportReasonInput,
   submitPostcardFeedback,
@@ -22,7 +21,6 @@ import { serializePostcards } from '@/lib/postcards/list';
 import { buildPublicOrderBy, buildPublicWhere, parsePublicQuery } from '@/lib/postcards/query';
 import { countPostcards, findPostcardsForList } from '@/lib/postcards/repository';
 import { findAdminEditableReportCaseStateByPostcardId } from '@/lib/postcards/report-workflow';
-import { hasMissingOriginalImageColumnError } from '@/lib/postcards/shared';
 import { reverseGeocodeCoordinates } from '@/lib/reverse-geocode';
 import { recordUserAction } from '@/lib/user-action-log';
 
@@ -222,12 +220,13 @@ export async function createPostcardLocal(args: {
       }
     });
 
-    const baseData = {
+    const createData: CreatePostcardInput = {
       userId: actorId,
       title: body.title,
       postcardType: body.postcardType,
       notes: body.notes,
       imageUrl: body.imageUrl,
+      originalImageUrl: body.originalImageUrl,
       city: reverseLocation?.city ?? body.city,
       state: reverseLocation?.state ?? body.state,
       country: reverseLocation?.country ?? body.country,
@@ -242,23 +241,7 @@ export async function createPostcardLocal(args: {
       locationModelVersion: body.locationModelVersion ?? process.env.GEMINI_MODEL ?? 'unknown'
     };
 
-    let postcard;
-    try {
-      postcard = await prisma.postcard.create({
-        data: {
-          ...baseData,
-          originalImageUrl: body.originalImageUrl
-        }
-      });
-    } catch (error) {
-      if (!hasMissingOriginalImageColumnError(error)) {
-        throw error;
-      }
-
-      postcard = await prisma.postcard.create({
-        data: baseData
-      });
-    }
+    const postcard = await postcardRepo.create(createData);
 
     return NextResponse.json(postcard, { status: 201 });
   } catch (error) {

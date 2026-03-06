@@ -1,8 +1,15 @@
-import { type FeedbackAction, type PostcardReportReason, Prisma } from '@prisma/client';
+import {
+  type FeedbackAction,
+  type LocationStatus,
+  type PostcardReportReason,
+  type PostcardType,
+  Prisma
+} from '@prisma/client';
 import {
   postcardListSelectWithOriginalImageUrl,
   postcardListSelectWithoutOriginalImageUrl
 } from '@/lib/postcards/list';
+import type { EditablePostcard } from '@/lib/postcards/edit-history';
 import type { ViewerFeedback } from '@/lib/postcards/viewer-feedback';
 
 export type PostcardListRow =
@@ -35,9 +42,69 @@ export type SubmitPostcardFeedbackResult = {
   viewerFeedback: ViewerFeedback;
 };
 
+export type CreatePostcardInput = {
+  userId: string;
+  title: string;
+  postcardType: PostcardType;
+  notes?: string | null;
+  imageUrl?: string | null;
+  originalImageUrl?: string | null;
+  city?: string | null;
+  state?: string | null;
+  country?: string | null;
+  placeName?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  aiLatitude?: number | null;
+  aiLongitude?: number | null;
+  aiConfidence?: number | null;
+  aiPlaceGuess?: string | null;
+  locationStatus?: LocationStatus | null;
+  locationModelVersion?: string | null;
+};
+
+export type CropBox = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+export type PostcardCropSource = {
+  id: string;
+  imageUrl: string | null;
+  originalImageUrl: string | null;
+};
+
 export type PostcardRepo = {
   findForList(args: Omit<Prisma.PostcardFindManyArgs, 'select'>): Promise<PostcardListRow[]>;
   count(where: Prisma.PostcardWhereInput): Promise<number>;
+  create(input: CreatePostcardInput): Promise<Record<string, unknown>>;
+  findCropSource(params: { postcardId: string; userId?: string }): Promise<PostcardCropSource | null>;
+  findEditableForActor(params: {
+    postcardId: string;
+    actorId: string;
+    canEditAny: boolean;
+  }): Promise<EditablePostcard | null>;
+  applyCropUpdateWithHistory(params: {
+    postcardId: string;
+    actorId: string;
+    canEditAny: boolean;
+    imageUrl: string;
+    originalImageUrl?: string | null;
+    crop: CropBox;
+  }): Promise<{ imageUrl: string | null; originalImageUrl: string | null } | null>;
+  applyDetailsUpdateWithHistory(params: {
+    postcardId: string;
+    actorId: string;
+    canEditAny: boolean;
+    updateData: Prisma.PostcardUpdateInput;
+  }): Promise<EditablePostcard | null>;
+  softDeleteWithHistory(params: {
+    postcardId: string;
+    actorId: string;
+    deletedAt: Date;
+  }): Promise<boolean>;
   findSavedPostcardIdsByUser(params: { userId: string; take: number }): Promise<string[]>;
   findViewerFeedbackRowsForPostcards(params: {
     userId: string;
