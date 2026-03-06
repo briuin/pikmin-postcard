@@ -6,6 +6,7 @@ This project deploys the Next.js frontend to AWS Lambda + CloudFront using SST's
 
 - `sst.config.ts`: OpenNext infrastructure definition
 - `.github/workflows/deploy-opennext.yml`: GitHub Actions deploy workflow (push to `main` + manual trigger)
+- `.github/workflows/backfill-geo-buckets.yml`: manual-only Dynamo geo bucket backfill workflow
 
 ## Workflow usage
 
@@ -23,6 +24,17 @@ The workflow loads sensitive values from GitHub Secrets:
 - `GOOGLE_GENERATIVE_AI_API_KEY`
 
 The web app now uses same-domain Next.js route handlers (`/api/...`) for both local and production.
+
+## Geo Bucket Backfill (Manual)
+
+The normal deploy workflow does not run postcard geo backfill anymore.
+Run `Backfill Postcard Geo Buckets` only when needed (for example after introducing a new geo bucket field/index or changing bucket degrees).
+
+Recommended flow:
+
+1. Trigger the workflow with `dry_run=true` first.
+2. Review the reported number of rows to update.
+3. Trigger again with `dry_run=false` to apply changes.
 
 ## Domain cutover
 

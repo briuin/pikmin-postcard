@@ -1,0 +1,56 @@
+name: Backfill Postcard Geo Buckets
+
+on:
+  workflow_dispatch:
+    inputs:
+      region:
+        description: AWS region
+        required: true
+        default: us-east-1
+      table_prefix:
+        description: DynamoDB table prefix
+        required: true
+        default: pikmin-postcard
+      dry_run:
+        description: Preview updates without writing changes
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ${{ github.event.inputs.region || 'us-east-1' }}
+      DDB_TABLE_PREFIX: ${{ github.event.inputs.table_prefix || 'pikmin-postcard' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Backfill postcard geo buckets (dry run)
+        if: ${{ github.event.inputs.dry_run == 'true' }}
+        run: npm run ddb:backfill:geo -- --dry-run
+
+      - name: Backfill postcard geo buckets
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        run: npm run ddb:backfill:geo
