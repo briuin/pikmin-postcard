@@ -65,6 +65,10 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Ensure DynamoDB tables and indexes
+        run: |
+          npm run ddb:provision -- --region "${{ env.AWS_REGION }}" --prefix "${{ env.DDB_TABLE_PREFIX }}"
+
       - name: Load auth and AI secrets from GitHub Secrets
         env:
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
