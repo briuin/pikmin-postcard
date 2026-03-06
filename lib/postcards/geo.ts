@@ -5,19 +5,89 @@ export type GeoBounds = {
   west: number;
 };
 
-const DEFAULT_GEO_BUCKET_DEGREES = 2;
+const DEFAULT_GEO_BUCKET_LEVEL_DEGREES = [2, 8, 60] as const;
+
+export type GeoBucketLayer = {
+  fieldName: 'geoBucket' | 'geoBucketMedium' | 'geoBucketCoarse';
+  indexName:
+    | 'geoBucket-createdAt-index'
+    | 'geoBucketMedium-createdAt-index'
+    | 'geoBucketCoarse-createdAt-index';
+  degrees: number;
+};
+
+export type GeoBucketFieldValues = {
+  geoBucket: string | null;
+  geoBucketMedium: string | null;
+  geoBucketCoarse: string | null;
+};
 
 function toInteger(value: string): number | null {
   const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 30) {
+  if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 180) {
     return null;
   }
   return parsed;
 }
 
+function parseGeoBucketLevelsFromEnv():
+  | readonly [number, number, number]
+  | null {
+  const raw = String(process.env.POSTCARD_GEO_BUCKET_LEVELS || '').trim();
+  if (!raw) {
+    return null;
+  }
+  const uniqueSorted = Array.from(
+    new Set(
+      raw
+        .split(',')
+        .map((value) => toInteger(value.trim()))
+        .filter((value): value is number => typeof value === 'number')
+    )
+  ).sort((left, right) => left - right);
+
+  if (uniqueSorted.length !== 3) {
+    return null;
+  }
+  return [
+    uniqueSorted[0],
+    uniqueSorted[1],
+    uniqueSorted[2]
+  ] as const;
+}
+
+export function getGeoBucketLevelDegrees():
+  readonly [number, number, number] {
+  const parsed = parseGeoBucketLevelsFromEnv();
+  return parsed ?? DEFAULT_GEO_BUCKET_LEVEL_DEGREES;
+}
+
+export function getGeoBucketLayers(): readonly GeoBucketLayer[] {
+  const [fine, medium, coarse] = getGeoBucketLevelDegrees();
+  return [
+    {
+      fieldName: 'geoBucket',
+      indexName: 'geoBucket-createdAt-index',
+      degrees: fine
+    },
+    {
+      fieldName: 'geoBucketMedium',
+      indexName: 'geoBucketMedium-createdAt-index',
+      degrees: medium
+    },
+    {
+      fieldName: 'geoBucketCoarse',
+      indexName: 'geoBucketCoarse-createdAt-index',
+      degrees: coarse
+    }
+  ];
+}
+
 export function getGeoBucketDegrees(): number {
-  const parsed = toInteger(String(process.env.POSTCARD_GEO_BUCKET_DEGREES || '').trim());
-  return parsed ?? DEFAULT_GEO_BUCKET_DEGREES;
+  const parsed = toInteger(
+    String(process.env.POSTCARD_GEO_BUCKET_DEGREES || '').trim()
+  );
+  return parsed ?? getGeoBucketLevelDegrees()[0];
 }
 
 export function clampLatitude(value: number): number {
@@ -90,6 +160,30 @@ export function buildGeoBucketFromCoordinates(
     latIndex: latitudeToBucketIndex(latitude, bucketDegrees),
     lonIndex: longitudeToBucketIndex(longitude, bucketDegrees)
   });
+}
+
+export function buildGeoBucketFieldsFromCoordinates(
+  latitude: number | null | undefined,
+  longitude: number | null | undefined
+): GeoBucketFieldValues {
+  const layers = getGeoBucketLayers();
+  return {
+    geoBucket: buildGeoBucketFromCoordinates(
+      latitude,
+      longitude,
+      layers[0].degrees
+    ),
+    geoBucketMedium: buildGeoBucketFromCoordinates(
+      latitude,
+      longitude,
+      layers[1].degrees
+    ),
+    geoBucketCoarse: buildGeoBucketFromCoordinates(
+      latitude,
+      longitude,
+      layers[2].degrees
+    )
+  };
 }
 
 export function isCoordinateInBounds(

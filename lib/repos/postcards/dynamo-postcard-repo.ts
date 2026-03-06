@@ -15,10 +15,11 @@ import {
 } from '@/lib/domain/enums';
 import { toEditSnapshot, type EditablePostcard } from '@/lib/postcards/edit-history';
 import {
-  buildGeoBucketFromCoordinates,
+  buildGeoBucketFieldsFromCoordinates,
   enumerateGeoBucketsForBounds,
-  getGeoBucketDegrees,
+  getGeoBucketLayers,
   isCoordinateInBounds,
+  type GeoBucketLayer,
   type GeoBounds
 } from '@/lib/postcards/geo';
 import { buildPublicOrderBy } from '@/lib/postcards/query';
@@ -78,6 +79,8 @@ type DynamoPostcardRow = {
   locationStatus?: string;
   locationModelVersion?: string | null;
   geoBucket?: string | null;
+  geoBucketMedium?: string | null;
+  geoBucketCoarse?: string | null;
   deletedAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
@@ -185,6 +188,8 @@ function toDynamoPostcardRow(item: UnknownRecord | null | undefined): DynamoPost
     locationStatus: String(item.locationStatus || LocationStatus.AUTO).toUpperCase(),
     locationModelVersion: toNullableString(item.locationModelVersion),
     geoBucket: toNullableString(item.geoBucket),
+    geoBucketMedium: toNullableString(item.geoBucketMedium),
+    geoBucketCoarse: toNullableString(item.geoBucketCoarse),
     deletedAt: toNullableString(item.deletedAt),
     createdAt: toNullableString(item.createdAt) || nowIso(),
     updatedAt: toNullableString(item.updatedAt) || nowIso()
@@ -535,27 +540,72 @@ function matchesPublicKeyword(row: DynamoPostcardRow, keyword: string): boolean 
   );
 }
 
+type GeoQueryPlan = {
+  layer: GeoBucketLayer;
+  buckets: string[];
+  useScanFallback: boolean;
+};
+
+async function scanRowsByBounds(bounds: GeoBounds): Promise<DynamoPostcardRow[]> {
+  const allRows = await scanAll(ddbTables.postcards);
+  return allRows
+    .map((item) => toDynamoPostcardRow(item))
+    .filter((row): row is DynamoPostcardRow => {
+      if (!row || row.deletedAt) {
+        return false;
+      }
+      if (typeof row.latitude !== 'number' || typeof row.longitude !== 'number') {
+        return false;
+      }
+      return isCoordinateInBounds(row.latitude, row.longitude, bounds);
+    });
+}
+
+function buildGeoQueryPlan(bounds: GeoBounds): GeoQueryPlan {
+  const layers = getGeoBucketLayers();
+  let widestCandidate: GeoQueryPlan = {
+    layer: layers[layers.length - 1],
+    buckets: [],
+    useScanFallback: true
+  };
+
+  for (const layer of layers) {
+    const buckets = enumerateGeoBucketsForBounds(bounds, layer.degrees);
+    if (buckets.length === 0) {
+      return {
+        layer,
+        buckets,
+        useScanFallback: false
+      };
+    }
+    if (buckets.length <= MAX_GEO_BUCKET_QUERIES) {
+      return {
+        layer,
+        buckets,
+        useScanFallback: false
+      };
+    }
+    widestCandidate = {
+      layer,
+      buckets,
+      useScanFallback: true
+    };
+  }
+
+  return widestCandidate;
+}
+
 async function findRowsByGeoBounds(bounds: GeoBounds): Promise<DynamoPostcardRow[]> {
-  const geoBuckets = enumerateGeoBucketsForBounds(bounds, getGeoBucketDegrees());
+  const plan = buildGeoQueryPlan(bounds);
+  const geoBuckets = plan.buckets;
   if (geoBuckets.length === 0) {
     return [];
   }
-  if (geoBuckets.length > MAX_GEO_BUCKET_QUERIES) {
+  if (plan.useScanFallback) {
     console.warn(
-      `Public postcard bounds expanded to ${geoBuckets.length} geo buckets (max ${MAX_GEO_BUCKET_QUERIES}). Falling back to full table scan to preserve complete map results.`
+      `Public postcard bounds expanded to ${geoBuckets.length} geo buckets (max ${MAX_GEO_BUCKET_QUERIES}) on ${plan.layer.indexName}. Falling back to full table scan to preserve complete map results.`
     );
-    const allRows = await scanAll(ddbTables.postcards);
-    return allRows
-      .map((item) => toDynamoPostcardRow(item))
-      .filter((row): row is DynamoPostcardRow => {
-        if (!row || row.deletedAt) {
-          return false;
-        }
-        if (typeof row.latitude !== 'number' || typeof row.longitude !== 'number') {
-          return false;
-        }
-        return isCoordinateInBounds(row.latitude, row.longitude, bounds);
-      });
+    return scanRowsByBounds(bounds);
   }
 
   let queryResults: Record<string, unknown>[][] = [];
@@ -564,9 +614,9 @@ async function findRowsByGeoBounds(bounds: GeoBounds): Promise<DynamoPostcardRow
       geoBuckets.map((geoBucket) =>
         queryAllByIndex({
           tableName: ddbTables.postcards,
-          indexName: 'geoBucket-createdAt-index',
+          indexName: plan.layer.indexName,
           keyExpression: '#g = :g',
-          attrNames: { '#g': 'geoBucket' },
+          attrNames: { '#g': plan.layer.fieldName },
           attrValues: { ':g': geoBucket },
           scanIndexForward: false
         })
@@ -588,6 +638,13 @@ async function findRowsByGeoBounds(bounds: GeoBounds): Promise<DynamoPostcardRow
       }
       rowsById.set(row.id, row);
     }
+  }
+
+  if (rowsById.size === 0 && plan.layer.fieldName !== 'geoBucket') {
+    console.warn(
+      `Public postcard query returned 0 rows via ${plan.layer.indexName}. Falling back to scan to avoid missing legacy rows before full geo backfill.`
+    );
+    return scanRowsByBounds(bounds);
   }
 
   return Array.from(rowsById.values());
@@ -776,7 +833,7 @@ async function create(input: CreatePostcardInput): Promise<Record<string, unknow
     reportVersion: 1,
     locationStatus: normalizeLocationStatus(input.locationStatus),
     locationModelVersion: input.locationModelVersion ?? null,
-    geoBucket: buildGeoBucketFromCoordinates(input.latitude ?? null, input.longitude ?? null),
+    ...buildGeoBucketFieldsFromCoordinates(input.latitude ?? null, input.longitude ?? null),
     deletedAt: null,
     createdAt: timestamp,
     updatedAt: timestamp
@@ -887,7 +944,13 @@ function applyPostcardUpdateData(row: DynamoPostcardRow, updateData: PostcardUpd
     }
   }
 
-  next.geoBucket = buildGeoBucketFromCoordinates(next.latitude ?? null, next.longitude ?? null);
+  const geoBuckets = buildGeoBucketFieldsFromCoordinates(
+    next.latitude ?? null,
+    next.longitude ?? null
+  );
+  next.geoBucket = geoBuckets.geoBucket;
+  next.geoBucketMedium = geoBuckets.geoBucketMedium;
+  next.geoBucketCoarse = geoBuckets.geoBucketCoarse;
   return next;
 }
 

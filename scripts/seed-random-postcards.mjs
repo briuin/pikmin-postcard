@@ -42,14 +42,41 @@ function toFixed6(value) {
   return Number.parseFloat(value.toFixed(6));
 }
 
-const DEFAULT_GEO_BUCKET_DEGREES = 2;
+const DEFAULT_GEO_BUCKET_LEVELS = [2, 8, 60];
 
-function toGeoBucketDegrees() {
-  const raw = Number.parseInt(String(process.env.POSTCARD_GEO_BUCKET_DEGREES || "").trim(), 10);
-  if (!Number.isFinite(raw) || raw <= 0 || raw > 30) {
-    return DEFAULT_GEO_BUCKET_DEGREES;
+function toInteger(value) {
+  const parsed = Number.parseInt(String(value || '').trim(), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 180) {
+    return null;
   }
-  return raw;
+  return parsed;
+}
+
+function toGeoBucketLevels() {
+  const legacySingle = toInteger(process.env.POSTCARD_GEO_BUCKET_DEGREES);
+  const raw = String(process.env.POSTCARD_GEO_BUCKET_LEVELS || '').trim();
+  if (!raw) {
+    if (legacySingle) {
+      return [legacySingle, legacySingle * 4, legacySingle * 30].map((value) =>
+        Math.min(180, Math.max(1, value))
+      );
+    }
+    return DEFAULT_GEO_BUCKET_LEVELS;
+  }
+
+  const values = Array.from(
+    new Set(
+      raw
+        .split(',')
+        .map((entry) => toInteger(entry))
+        .filter((entry) => typeof entry === 'number')
+    )
+  ).sort((left, right) => left - right);
+
+  if (values.length !== 3) {
+    return DEFAULT_GEO_BUCKET_LEVELS;
+  }
+  return values;
 }
 
 function normalizeLongitude(value) {
@@ -71,6 +98,14 @@ function geoBucketFromCoordinates(latitude, longitude, bucketDegrees) {
     Math.max(0, Math.floor((lon + 180) / bucketDegrees))
   );
   return `g${bucketDegrees}:${latIndex}:${lonIndex}`;
+}
+
+function geoBucketFieldsFromCoordinates(latitude, longitude, levels) {
+  return {
+    geoBucket: geoBucketFromCoordinates(latitude, longitude, levels[0]),
+    geoBucketMedium: geoBucketFromCoordinates(latitude, longitude, levels[1]),
+    geoBucketCoarse: geoBucketFromCoordinates(latitude, longitude, levels[2])
+  };
 }
 
 function nowIso() {
@@ -198,7 +233,7 @@ async function main() {
   const prefix = String(process.env.DDB_TABLE_PREFIX || 'pikmin-postcard-dev').trim() || 'pikmin-postcard-dev';
   const usersTableName = `${prefix}-users`;
   const postcardsTableName = `${prefix}-postcards`;
-  const geoBucketDegrees = toGeoBucketDegrees();
+  const geoBucketLevels = toGeoBucketLevels();
 
   const doc = DynamoDBDocumentClient.from(new DynamoDBClient({ region }), {
     marshallOptions: { removeUndefinedValues: true }
@@ -245,7 +280,7 @@ async function main() {
       wrongLocationReports: Math.floor(Math.random() * 4),
       locationStatus: aiGenerated ? 'AUTO' : 'MANUAL',
       locationModelVersion: aiGenerated ? 'gemini-2.5-flash' : null,
-      geoBucket: geoBucketFromCoordinates(lat, lon, geoBucketDegrees),
+      ...geoBucketFieldsFromCoordinates(lat, lon, geoBucketLevels),
       reportVersion: 1,
       deletedAt: null,
       createdAt,

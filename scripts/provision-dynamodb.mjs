@@ -59,6 +59,61 @@ async function waitForTableReady(client, tableName) {
   );
 }
 
+function isIndexConcurrencyLimitError(error) {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+  const name = String(error.name || "");
+  const message = String(error.message || "").toLowerCase();
+  return (
+    name === "LimitExceededException" &&
+    message.includes("only 1 online index can be created or deleted simultaneously")
+  );
+}
+
+async function createGsiWithRetry({
+  client,
+  tableName,
+  indexName,
+  keySchema,
+  projection,
+  attributeDefinitions,
+}) {
+  const maxAttempts = 12;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      await client.send(
+        new UpdateTableCommand({
+          TableName: tableName,
+          AttributeDefinitions: attributeDefinitions,
+          GlobalSecondaryIndexUpdates: [
+            {
+              Create: {
+                IndexName: indexName,
+                KeySchema: keySchema,
+                Projection: projection,
+              },
+            },
+          ],
+        })
+      );
+      return;
+    } catch (error) {
+      if (!isIndexConcurrencyLimitError(error) || attempt === maxAttempts) {
+        throw error;
+      }
+      const waitMs = Math.min(30_000, attempt * 3_000);
+      console.log(
+        `GSI create for ${tableName}/${indexName} is rate-limited by DynamoDB index concurrency. Waiting ${Math.round(
+          waitMs / 1000
+        )}s before retry (${attempt}/${maxAttempts}).`
+      );
+      await waitForTableReady(client, tableName);
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+    }
+  }
+}
+
 function resolveAttributeDefinitionMap(attributeDefinitions = []) {
   const map = new Map();
   for (const definition of attributeDefinitions) {
@@ -112,21 +167,14 @@ async function ensureMissingGlobalSecondaryIndexes(client, definition, existingT
     }
 
     console.log(`adding GSI ${index.IndexName} on ${definition.TableName}`);
-    await client.send(
-      new UpdateTableCommand({
-        TableName: definition.TableName,
-        AttributeDefinitions: updateAttrDefs,
-        GlobalSecondaryIndexUpdates: [
-          {
-            Create: {
-              IndexName: index.IndexName,
-              KeySchema: index.KeySchema,
-              Projection: index.Projection,
-            },
-          },
-        ],
-      })
-    );
+    await createGsiWithRetry({
+      client,
+      tableName: definition.TableName,
+      indexName: index.IndexName,
+      keySchema: index.KeySchema,
+      projection: index.Projection,
+      attributeDefinitions: updateAttrDefs,
+    });
     await waitForTableReady(client, definition.TableName);
     existingIndexNames.add(index.IndexName);
     console.log(`GSI ready: ${definition.TableName}/${index.IndexName}`);

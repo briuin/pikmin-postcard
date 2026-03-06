@@ -5,7 +5,7 @@ import {
   ScanCommand,
 } from "@aws-sdk/lib-dynamodb";
 
-const DEFAULT_GEO_BUCKET_DEGREES = 2;
+const DEFAULT_GEO_BUCKET_LEVELS = [2, 8, 60];
 
 function parseArgs(argv) {
   return {
@@ -13,15 +13,39 @@ function parseArgs(argv) {
   };
 }
 
-function toGeoBucketDegrees() {
-  const raw = Number.parseInt(
-    String(process.env.POSTCARD_GEO_BUCKET_DEGREES || "").trim(),
-    10
-  );
-  if (!Number.isFinite(raw) || raw <= 0 || raw > 30) {
-    return DEFAULT_GEO_BUCKET_DEGREES;
+function toInteger(value) {
+  const parsed = Number.parseInt(String(value || "").trim(), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 180) {
+    return null;
   }
-  return raw;
+  return parsed;
+}
+
+function toGeoBucketLevels() {
+  const legacySingle = toInteger(process.env.POSTCARD_GEO_BUCKET_DEGREES);
+  const raw = String(process.env.POSTCARD_GEO_BUCKET_LEVELS || "").trim();
+  if (!raw) {
+    if (legacySingle) {
+      return [legacySingle, legacySingle * 4, legacySingle * 30].map((value) =>
+        Math.min(180, Math.max(1, value))
+      );
+    }
+    return DEFAULT_GEO_BUCKET_LEVELS;
+  }
+
+  const values = Array.from(
+    new Set(
+      raw
+        .split(",")
+        .map((entry) => toInteger(entry))
+        .filter((entry) => typeof entry === "number")
+    )
+  ).sort((left, right) => left - right);
+
+  if (values.length !== 3) {
+    return DEFAULT_GEO_BUCKET_LEVELS;
+  }
+  return values;
 }
 
 function clamp(value, min, max) {
@@ -47,6 +71,14 @@ function geoBucketFromCoordinates(latitude, longitude, bucketDegrees) {
     Math.max(0, Math.floor((lon + 180) / bucketDegrees))
   );
   return `g${bucketDegrees}:${latIndex}:${lonIndex}`;
+}
+
+function geoBucketFieldsFromCoordinates(latitude, longitude, levels) {
+  return {
+    geoBucket: geoBucketFromCoordinates(latitude, longitude, levels[0]),
+    geoBucketMedium: geoBucketFromCoordinates(latitude, longitude, levels[1]),
+    geoBucketCoarse: geoBucketFromCoordinates(latitude, longitude, levels[2]),
+  };
 }
 
 function chunk(list, size) {
@@ -102,7 +134,7 @@ async function main() {
   const prefix =
     String(process.env.DDB_TABLE_PREFIX || "pikmin-postcard-dev").trim() ||
     "pikmin-postcard-dev";
-  const bucketDegrees = toGeoBucketDegrees();
+  const bucketLevels = toGeoBucketLevels();
   const postcardsTableName = `${prefix}-postcards`;
   const timestamp = new Date().toISOString();
 
@@ -124,21 +156,29 @@ async function main() {
       continue;
     }
 
-    const expected = geoBucketFromCoordinates(latitude, longitude, bucketDegrees);
-    const current = String(row?.geoBucket || "").trim();
-    if (current === expected) {
+    const expected = geoBucketFieldsFromCoordinates(latitude, longitude, bucketLevels);
+    const current = {
+      geoBucket: String(row?.geoBucket || "").trim(),
+      geoBucketMedium: String(row?.geoBucketMedium || "").trim(),
+      geoBucketCoarse: String(row?.geoBucketCoarse || "").trim(),
+    };
+    if (
+      current.geoBucket === expected.geoBucket &&
+      current.geoBucketMedium === expected.geoBucketMedium &&
+      current.geoBucketCoarse === expected.geoBucketCoarse
+    ) {
       continue;
     }
 
     updates.push({
       ...row,
-      geoBucket: expected,
+      ...expected,
       updatedAt: timestamp,
     });
   }
 
   console.log(
-    `Scanned ${rows.length} postcards in ${postcardsTableName}. Pending geoBucket updates: ${updates.length}.`
+    `Scanned ${rows.length} postcards in ${postcardsTableName}. Pending geo bucket updates: ${updates.length}.`
   );
 
   if (dryRun) {
