@@ -542,9 +542,20 @@ async function findRowsByGeoBounds(bounds: GeoBounds): Promise<DynamoPostcardRow
   }
   if (geoBuckets.length > MAX_GEO_BUCKET_QUERIES) {
     console.warn(
-      `Public postcard bounds expanded to ${geoBuckets.length} geo buckets (max ${MAX_GEO_BUCKET_QUERIES}). Returning empty set; client should zoom in.`
+      `Public postcard bounds expanded to ${geoBuckets.length} geo buckets (max ${MAX_GEO_BUCKET_QUERIES}). Falling back to full table scan to preserve complete map results.`
     );
-    return [];
+    const allRows = await scanAll(ddbTables.postcards);
+    return allRows
+      .map((item) => toDynamoPostcardRow(item))
+      .filter((row): row is DynamoPostcardRow => {
+        if (!row || row.deletedAt) {
+          return false;
+        }
+        if (typeof row.latitude !== 'number' || typeof row.longitude !== 'number') {
+          return false;
+        }
+        return isCoordinateInBounds(row.latitude, row.longitude, bounds);
+      });
   }
 
   let queryResults: Record<string, unknown>[][] = [];

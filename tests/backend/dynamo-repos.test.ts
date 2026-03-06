@@ -246,6 +246,68 @@ test('dynamo postcard repo findForPublicQuery uses geo bounds and keyword fallba
   assert.deepEqual(keywordOnly.rows.map((item) => item.id), ['pc_jp']);
 });
 
+test('dynamo postcard repo findForPublicQuery keeps complete area results when bounds are wide', async () => {
+  setFakeClient({
+    [ddbTables.users]: [{ id: 'usr_1', email: 'alice@example.com', displayName: 'Alice' }],
+    [ddbTables.postcards]: [
+      {
+        id: 'pc_sg_wide',
+        userId: 'usr_1',
+        title: 'Singapore Wide',
+        postcardType: 'MUSHROOM',
+        city: 'Singapore',
+        country: 'Singapore',
+        latitude: 1.2834,
+        longitude: 103.8607,
+        likeCount: 3,
+        dislikeCount: 0,
+        wrongLocationReports: 0,
+        reportVersion: 1,
+        locationStatus: 'AUTO',
+        geoBucket: buildGeoBucketFromCoordinates(1.2834, 103.8607),
+        deletedAt: null,
+        createdAt: '2026-03-01T10:00:00.000Z',
+        updatedAt: '2026-03-01T10:00:00.000Z'
+      },
+      {
+        id: 'pc_ny_wide',
+        userId: 'usr_1',
+        title: 'NY Wide',
+        postcardType: 'FLOWER',
+        city: 'New York',
+        country: 'United States',
+        latitude: 40.7128,
+        longitude: -74.006,
+        likeCount: 1,
+        dislikeCount: 0,
+        wrongLocationReports: 0,
+        reportVersion: 1,
+        locationStatus: 'AUTO',
+        geoBucket: buildGeoBucketFromCoordinates(40.7128, -74.006),
+        deletedAt: null,
+        createdAt: '2026-03-02T10:00:00.000Z',
+        updatedAt: '2026-03-02T10:00:00.000Z'
+      }
+    ]
+  });
+
+  const bounded = await dynamoPostcardRepo.findForPublicQuery({
+    sort: 'ranking',
+    limit: 50,
+    bounds: {
+      north: 85,
+      south: -85,
+      east: 179,
+      west: -179
+    }
+  });
+
+  const ids = new Set(bounded.rows.map((item) => item.id));
+  assert.equal(bounded.total, 2);
+  assert.equal(ids.has('pc_sg_wide'), true);
+  assert.equal(ids.has('pc_ny_wide'), true);
+});
+
 test('dynamo postcard repo submitFeedback handles vote toggle and report lifecycle', async () => {
   const fake = setFakeClient({
     [ddbTables.postcards]: [
