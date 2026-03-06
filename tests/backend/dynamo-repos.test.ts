@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
 import { FeedbackAction, PostcardReportStatus } from '@prisma/client';
+import { buildGeoBucketFromCoordinates } from '@/lib/postcards/geo';
 import { ddbDoc, ddbTables } from '@/lib/repos/dynamodb/shared';
 import { dynamoPostcardRepo } from '@/lib/repos/postcards/dynamo-postcard-repo';
 import { dynamoReportRepo } from '@/lib/repos/reports/dynamo-report-repo';
@@ -37,6 +38,7 @@ test('dynamo postcard repo supports list/count/saved/viewer-feedback flows', asy
         wrongLocationReports: 0,
         reportVersion: 1,
         locationStatus: 'AUTO',
+        geoBucket: buildGeoBucketFromCoordinates(1.31, 103.86),
         deletedAt: null,
         createdAt: '2026-03-01T10:00:00.000Z',
         updatedAt: '2026-03-01T10:00:00.000Z'
@@ -53,6 +55,7 @@ test('dynamo postcard repo supports list/count/saved/viewer-feedback flows', asy
         wrongLocationReports: 1,
         reportVersion: 1,
         locationStatus: 'AUTO',
+        geoBucket: buildGeoBucketFromCoordinates(35.68, 139.76),
         deletedAt: null,
         createdAt: '2026-03-02T10:00:00.000Z',
         updatedAt: '2026-03-02T10:00:00.000Z'
@@ -69,6 +72,7 @@ test('dynamo postcard repo supports list/count/saved/viewer-feedback flows', asy
         wrongLocationReports: 0,
         reportVersion: 1,
         locationStatus: 'AUTO',
+        geoBucket: buildGeoBucketFromCoordinates(48.85, 2.29),
         deletedAt: null,
         createdAt: '2026-03-03T10:00:00.000Z',
         updatedAt: '2026-03-03T10:00:00.000Z'
@@ -167,6 +171,73 @@ test('dynamo postcard repo supports list/count/saved/viewer-feedback flows', asy
   assert.equal(byAction.has(`pc_2:${FeedbackAction.DISLIKE}`), true);
   assert.equal(byAction.has(`pc_2:${FeedbackAction.REPORT_WRONG_LOCATION}`), true);
   assert.equal(byAction.has(`pc_3:${FeedbackAction.FAVORITE}`), true);
+});
+
+test('dynamo postcard repo findForPublicQuery uses geo bounds and keyword fallback', async () => {
+  setFakeClient({
+    [ddbTables.users]: [{ id: 'usr_1', email: 'alice@example.com', displayName: 'Alice' }],
+    [ddbTables.postcards]: [
+      {
+        id: 'pc_sg',
+        userId: 'usr_1',
+        title: 'Marina Bay',
+        postcardType: 'MUSHROOM',
+        city: 'Singapore',
+        country: 'Singapore',
+        latitude: 1.2834,
+        longitude: 103.8607,
+        likeCount: 3,
+        dislikeCount: 0,
+        wrongLocationReports: 0,
+        reportVersion: 1,
+        locationStatus: 'AUTO',
+        geoBucket: buildGeoBucketFromCoordinates(1.2834, 103.8607),
+        deletedAt: null,
+        createdAt: '2026-03-01T10:00:00.000Z',
+        updatedAt: '2026-03-01T10:00:00.000Z'
+      },
+      {
+        id: 'pc_jp',
+        userId: 'usr_1',
+        title: 'Tokyo Tower',
+        postcardType: 'FLOWER',
+        city: 'Tokyo',
+        country: 'Japan',
+        latitude: 35.6586,
+        longitude: 139.7454,
+        likeCount: 1,
+        dislikeCount: 0,
+        wrongLocationReports: 0,
+        reportVersion: 1,
+        locationStatus: 'AUTO',
+        geoBucket: buildGeoBucketFromCoordinates(35.6586, 139.7454),
+        deletedAt: null,
+        createdAt: '2026-03-02T10:00:00.000Z',
+        updatedAt: '2026-03-02T10:00:00.000Z'
+      }
+    ]
+  });
+
+  const bounded = await dynamoPostcardRepo.findForPublicQuery({
+    sort: 'ranking',
+    limit: 10,
+    bounds: {
+      north: 1.4,
+      south: 1.2,
+      east: 104,
+      west: 103.7
+    }
+  });
+  assert.equal(bounded.total, 1);
+  assert.deepEqual(bounded.rows.map((item) => item.id), ['pc_sg']);
+
+  const keywordOnly = await dynamoPostcardRepo.findForPublicQuery({
+    q: 'tokyo',
+    sort: 'newest',
+    limit: 10
+  });
+  assert.equal(keywordOnly.total, 1);
+  assert.deepEqual(keywordOnly.rows.map((item) => item.id), ['pc_jp']);
 });
 
 test('dynamo postcard repo submitFeedback handles vote toggle and report lifecycle', async () => {

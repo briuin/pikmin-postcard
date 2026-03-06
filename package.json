@@ -17,6 +17,7 @@
     "test:integration": "npm run build && tsx --test --test-concurrency=1 tests/integration/**/*.test.ts",
     "ddb:provision": "node scripts/provision-dynamodb.mjs",
     "ddb:clear": "node scripts/clear-dynamodb-tables.mjs",
+    "ddb:backfill:geo": "node scripts/backfill-postcard-geo-buckets.mjs",
     "seed:postcards": "node scripts/seed-random-postcards.mjs"
   },
   "dependencies": {

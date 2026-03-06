@@ -10,6 +10,7 @@ import {
   postcardListSelectWithoutOriginalImageUrl
 } from '@/lib/postcards/list';
 import type { EditablePostcard } from '@/lib/postcards/edit-history';
+import type { GeoBounds } from '@/lib/postcards/geo';
 import type { ViewerFeedback } from '@/lib/postcards/viewer-feedback';
 
 export type PostcardListRow =
@@ -40,6 +41,15 @@ export type SubmitPostcardFeedbackResult = {
   result: SubmitPostcardFeedbackResultState;
   action: SubmitPostcardFeedbackAction;
   viewerFeedback: ViewerFeedback;
+};
+
+export type PublicPostcardSort = 'ranking' | 'newest' | 'likes' | 'reports';
+
+export type FindPublicPostcardsInput = {
+  q?: string;
+  sort: PublicPostcardSort;
+  limit: number;
+  bounds?: GeoBounds;
 };
 
 export type CreatePostcardInput = {
@@ -78,6 +88,10 @@ export type PostcardCropSource = {
 
 export type PostcardRepo = {
   findForList(args: Omit<Prisma.PostcardFindManyArgs, 'select'>): Promise<PostcardListRow[]>;
+  findForPublicQuery(args: FindPublicPostcardsInput): Promise<{
+    rows: PostcardListRow[];
+    total: number;
+  }>;
   findForListWithTotal(args: Omit<Prisma.PostcardFindManyArgs, 'select'>): Promise<{
     rows: PostcardListRow[];
     total: number;

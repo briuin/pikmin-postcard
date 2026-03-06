@@ -1,10 +1,20 @@
 import { Prisma } from '@prisma/client';
-import { postcardRepo, type PostcardListRow } from '@/lib/repos/postcards';
+import {
+  postcardRepo,
+  type FindPublicPostcardsInput,
+  type PostcardListRow
+} from '@/lib/repos/postcards';
 
 export async function findPostcardsForList(
   args: Omit<Prisma.PostcardFindManyArgs, 'select'>
 ): Promise<PostcardListRow[]> {
   return postcardRepo.findForList(args);
+}
+
+export async function findPublicPostcards(
+  args: FindPublicPostcardsInput
+): Promise<{ rows: PostcardListRow[]; total: number }> {
+  return postcardRepo.findForPublicQuery(args);
 }
 
 export async function findPostcardsForListWithTotal(

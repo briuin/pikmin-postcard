@@ -16,6 +16,14 @@ import {
 } from '@prisma/client';
 import { toEditSnapshot, type EditablePostcard } from '@/lib/postcards/edit-history';
 import {
+  buildGeoBucketFromCoordinates,
+  enumerateGeoBucketsForBounds,
+  getGeoBucketDegrees,
+  isCoordinateInBounds,
+  type GeoBounds
+} from '@/lib/postcards/geo';
+import { buildPublicOrderBy, buildPublicWhere } from '@/lib/postcards/query';
+import {
   batchGetByIds,
   ddbDoc,
   ddbTables,
@@ -30,6 +38,7 @@ import { toViewerFeedback } from '@/lib/postcards/viewer-feedback';
 import type {
   CreatePostcardInput,
   CropBox,
+  FindPublicPostcardsInput,
   PostcardCropSource,
   PostcardFeedbackRow,
   PostcardListRow,
@@ -65,6 +74,7 @@ type DynamoPostcardRow = {
   reportVersion?: number;
   locationStatus?: string;
   locationModelVersion?: string | null;
+  geoBucket?: string | null;
   deletedAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
@@ -171,6 +181,7 @@ function toDynamoPostcardRow(item: UnknownRecord | null | undefined): DynamoPost
     reportVersion: Number(item.reportVersion || 1),
     locationStatus: String(item.locationStatus || LocationStatus.AUTO).toUpperCase(),
     locationModelVersion: toNullableString(item.locationModelVersion),
+    geoBucket: toNullableString(item.geoBucket),
     deletedAt: toNullableString(item.deletedAt),
     createdAt: toNullableString(item.createdAt) || nowIso(),
     updatedAt: toNullableString(item.updatedAt) || nowIso()
@@ -442,9 +453,19 @@ async function loadTagsByPostcardIds(
     return new Map();
   }
 
-  const postcardTagRows = (await scanAll(ddbTables.postcardTags)).filter((row) =>
-    postcardIdSet.has(String(row.postcardId || ''))
-  );
+  const postcardTagRows = (
+    await Promise.all(
+      Array.from(postcardIdSet).map(async (postcardId) =>
+        queryAllByIndex({
+          tableName: ddbTables.postcardTags,
+          indexName: 'postcardId-index',
+          keyExpression: '#p = :p',
+          attrNames: { '#p': 'postcardId' },
+          attrValues: { ':p': postcardId }
+        })
+      )
+    )
+  ).flat();
   if (postcardTagRows.length === 0) {
     return new Map();
   }
@@ -479,6 +500,81 @@ async function loadReportedPostcardIds(): Promise<Set<string>> {
       .map((row) => String(row.postcardId || '').trim())
       .filter((postcardId) => postcardId.length > 0)
   );
+}
+
+const MAX_GEO_BUCKET_QUERIES = 24;
+
+function isMissingGeoIndexError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+  const name = String((error as { name?: string }).name || '');
+  const message = String((error as { message?: string }).message || '').toLowerCase();
+  return (
+    name === 'ValidationException' &&
+    (message.includes('specified index') || message.includes('index not found'))
+  );
+}
+
+function matchesPublicKeyword(row: DynamoPostcardRow, keyword: string): boolean {
+  if (!keyword) {
+    return true;
+  }
+
+  return (
+    stringContainsInsensitive(row.title, keyword) ||
+    stringContainsInsensitive(row.notes, keyword) ||
+    stringContainsInsensitive(row.placeName, keyword) ||
+    stringContainsInsensitive(row.city, keyword) ||
+    stringContainsInsensitive(row.state, keyword) ||
+    stringContainsInsensitive(row.country, keyword) ||
+    stringContainsInsensitive(row.aiPlaceGuess, keyword)
+  );
+}
+
+async function findRowsByGeoBounds(bounds: GeoBounds): Promise<DynamoPostcardRow[] | null> {
+  const geoBuckets = enumerateGeoBucketsForBounds(bounds, getGeoBucketDegrees());
+  if (geoBuckets.length === 0) {
+    return [];
+  }
+  if (geoBuckets.length > MAX_GEO_BUCKET_QUERIES) {
+    return null;
+  }
+
+  let queryResults: Record<string, unknown>[][] = [];
+  try {
+    queryResults = await Promise.all(
+      geoBuckets.map((geoBucket) =>
+        queryAllByIndex({
+          tableName: ddbTables.postcards,
+          indexName: 'geoBucket-createdAt-index',
+          keyExpression: '#g = :g',
+          attrNames: { '#g': 'geoBucket' },
+          attrValues: { ':g': geoBucket },
+          scanIndexForward: false
+        })
+      )
+    );
+  } catch (error) {
+    if (isMissingGeoIndexError(error)) {
+      console.warn('Geo index unavailable for postcard list. Falling back to scan path.');
+      return null;
+    }
+    throw error;
+  }
+
+  const rowsById = new Map<string, DynamoPostcardRow>();
+  for (const queryRows of queryResults) {
+    for (const item of queryRows) {
+      const row = toDynamoPostcardRow(item);
+      if (!row) {
+        continue;
+      }
+      rowsById.set(row.id, row);
+    }
+  }
+
+  return Array.from(rowsById.values());
 }
 
 async function findRowsForList(
@@ -565,6 +661,57 @@ async function findForList(args: Omit<Prisma.PostcardFindManyArgs, 'select'>): P
   return rows.map((row) => toListRow(row, usersById.get(row.userId), tagsByPostcardId.get(row.id) ?? []));
 }
 
+async function findForPublicQuery(args: FindPublicPostcardsInput): Promise<{
+  rows: PostcardListRow[];
+  total: number;
+}> {
+  const sortOrder = buildPublicOrderBy(args.sort);
+  const keyword = String(args.q || '').trim();
+  const bounds = args.bounds;
+
+  const geoRows = bounds ? await findRowsByGeoBounds(bounds) : null;
+  if (geoRows === null) {
+    const where = buildPublicWhere({
+      q: keyword || undefined,
+      limit: args.limit,
+      sort: args.sort,
+      north: bounds?.north,
+      south: bounds?.south,
+      east: bounds?.east,
+      west: bounds?.west
+    });
+    return findForListWithTotal({
+      where,
+      orderBy: sortOrder,
+      take: args.limit
+    });
+  }
+
+  const filtered = geoRows.filter((row) => {
+    if (row.deletedAt) {
+      return false;
+    }
+    if (typeof row.latitude !== 'number' || typeof row.longitude !== 'number') {
+      return false;
+    }
+    if (bounds && !isCoordinateInBounds(row.latitude, row.longitude, bounds)) {
+      return false;
+    }
+    return matchesPublicKeyword(row, keyword);
+  });
+
+  const ordered = applyOrderBy(filtered, sortOrder);
+  const total = ordered.length;
+  const rows = ordered.slice(0, args.limit);
+  const tagsByPostcardId = await loadTagsByPostcardIds(rows.map((row) => row.id));
+  const usersById = await loadUsersByIds(Array.from(new Set(rows.map((row) => row.userId))));
+
+  return {
+    rows: rows.map((row) => toListRow(row, usersById.get(row.userId), tagsByPostcardId.get(row.id) ?? [])),
+    total
+  };
+}
+
 async function findForListWithTotal(
   args: Omit<Prisma.PostcardFindManyArgs, 'select'>
 ): Promise<{
@@ -630,6 +777,7 @@ async function create(input: CreatePostcardInput): Promise<Record<string, unknow
     reportVersion: 1,
     locationStatus: normalizeLocationStatus(input.locationStatus),
     locationModelVersion: input.locationModelVersion ?? null,
+    geoBucket: buildGeoBucketFromCoordinates(input.latitude ?? null, input.longitude ?? null),
     deletedAt: null,
     createdAt: timestamp,
     updatedAt: timestamp
@@ -740,6 +888,7 @@ function applyPostcardUpdateData(row: DynamoPostcardRow, updateData: Prisma.Post
     }
   }
 
+  next.geoBucket = buildGeoBucketFromCoordinates(next.latitude ?? null, next.longitude ?? null);
   return next;
 }
 
@@ -1309,6 +1458,7 @@ async function submitFeedback(
 
 export const dynamoPostcardRepo: PostcardRepo = {
   findForList,
+  findForPublicQuery,
   findForListWithTotal,
   findById,
   count,

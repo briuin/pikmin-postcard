@@ -46,12 +46,21 @@ export function getTableDefinitions(prefix = "pikmin-postcard-dev") {
         { AttributeName: "id", AttributeType: "S" },
         { AttributeName: "userId", AttributeType: "S" },
         { AttributeName: "createdAt", AttributeType: "S" },
+        { AttributeName: "geoBucket", AttributeType: "S" },
       ],
       GlobalSecondaryIndexes: [
         {
           IndexName: "userId-createdAt-index",
           KeySchema: [
             { AttributeName: "userId", KeyType: "HASH" },
+            { AttributeName: "createdAt", KeyType: "RANGE" },
+          ],
+          Projection: { ProjectionType: "ALL" },
+        },
+        {
+          IndexName: "geoBucket-createdAt-index",
+          KeySchema: [
+            { AttributeName: "geoBucket", KeyType: "HASH" },
             { AttributeName: "createdAt", KeyType: "RANGE" },
           ],
           Projection: { ProjectionType: "ALL" },

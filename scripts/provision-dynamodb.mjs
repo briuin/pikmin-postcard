@@ -2,6 +2,7 @@ import {
   CreateTableCommand,
   DescribeTableCommand,
   DynamoDBClient,
+  UpdateTableCommand,
   waitUntilTableExists,
 } from "@aws-sdk/client-dynamodb";
 import { getTableDefinitions } from "./dynamo-tables.mjs";
@@ -16,23 +17,117 @@ function getArg(name, fallback) {
 }
 
 async function ensureTable(client, definition) {
+  let existingDescription = null;
   try {
-    await client.send(new DescribeTableCommand({ TableName: definition.TableName }));
+    const describe = await client.send(
+      new DescribeTableCommand({ TableName: definition.TableName })
+    );
+    existingDescription = describe.Table || null;
     console.log(`exists: ${definition.TableName}`);
-    return;
   } catch (error) {
     if (error.name !== "ResourceNotFoundException") {
       throw error;
     }
+    console.log(`creating: ${definition.TableName}`);
+    await client.send(new CreateTableCommand(definition));
+    await waitUntilTableExists(
+      { client, maxWaitTime: 300 },
+      { TableName: definition.TableName }
+    );
+    const describe = await client.send(
+      new DescribeTableCommand({ TableName: definition.TableName })
+    );
+    existingDescription = describe.Table || null;
+    console.log(`ready: ${definition.TableName}`);
   }
 
-  console.log(`creating: ${definition.TableName}`);
-  await client.send(new CreateTableCommand(definition));
-  await waitUntilTableExists(
-    { client, maxWaitTime: 300 },
-    { TableName: definition.TableName }
+  await ensureMissingGlobalSecondaryIndexes(client, definition, existingDescription);
+}
+
+async function waitForTableReady(client, tableName) {
+  for (let attempts = 0; attempts < 120; attempts += 1) {
+    const describe = await client.send(
+      new DescribeTableCommand({ TableName: tableName })
+    );
+    if (describe.Table?.TableStatus === "ACTIVE") {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+  }
+  throw new Error(
+    `Timed out waiting for table ${tableName} to become ACTIVE after index update.`
   );
-  console.log(`ready: ${definition.TableName}`);
+}
+
+function resolveAttributeDefinitionMap(attributeDefinitions = []) {
+  const map = new Map();
+  for (const definition of attributeDefinitions) {
+    if (!definition?.AttributeName) {
+      continue;
+    }
+    map.set(definition.AttributeName, definition);
+  }
+  return map;
+}
+
+async function ensureMissingGlobalSecondaryIndexes(client, definition, existingTable) {
+  const desiredIndexes = definition.GlobalSecondaryIndexes || [];
+  if (desiredIndexes.length === 0) {
+    return;
+  }
+
+  const existingIndexNames = new Set(
+    (existingTable?.GlobalSecondaryIndexes || []).map((index) => index.IndexName)
+  );
+  const existingAttrDefs = resolveAttributeDefinitionMap(
+    existingTable?.AttributeDefinitions || []
+  );
+  const desiredAttrDefs = resolveAttributeDefinitionMap(
+    definition.AttributeDefinitions || []
+  );
+
+  for (const index of desiredIndexes) {
+    if (!index?.IndexName || existingIndexNames.has(index.IndexName)) {
+      continue;
+    }
+
+    const neededAttrDefs = [];
+    for (const keyPart of index.KeySchema || []) {
+      const attrName = keyPart.AttributeName;
+      if (!attrName || existingAttrDefs.has(attrName)) {
+        continue;
+      }
+      const attrDef = desiredAttrDefs.get(attrName);
+      if (!attrDef) {
+        throw new Error(
+          `Missing AttributeDefinition for ${attrName} on ${definition.TableName}.`
+        );
+      }
+      neededAttrDefs.push(attrDef);
+      existingAttrDefs.set(attrName, attrDef);
+    }
+
+    console.log(`adding GSI ${index.IndexName} on ${definition.TableName}`);
+    await client.send(
+      new UpdateTableCommand({
+        TableName: definition.TableName,
+        AttributeDefinitions:
+          neededAttrDefs.length > 0 ? neededAttrDefs : undefined,
+        GlobalSecondaryIndexUpdates: [
+          {
+            Create: {
+              IndexName: index.IndexName,
+              KeySchema: index.KeySchema,
+              Projection: index.Projection,
+            },
+          },
+        ],
+      })
+    );
+    await waitForTableReady(client, definition.TableName);
+    existingIndexNames.add(index.IndexName);
+    console.log(`GSI ready: ${definition.TableName}/${index.IndexName}`);
+  }
 }
 
 async function main() {

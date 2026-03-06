@@ -6,6 +6,8 @@ export const postcardRepo: PostcardRepo = dynamoPostcardRepo;
 export type {
   CropBox,
   CreatePostcardInput,
+  FindPublicPostcardsInput,
+  PublicPostcardSort,
   PostcardCropSource,
   PostcardFeedbackRow,
   PostcardListRow,

@@ -18,11 +18,12 @@ import {
   type FeedbackInputAction
 } from '@/lib/postcards/feedback-mutations';
 import { serializePostcards } from '@/lib/postcards/list';
-import { buildPublicOrderBy, buildPublicWhere, parsePublicQuery } from '@/lib/postcards/query';
+import type { GeoBounds } from '@/lib/postcards/geo';
+import { parsePublicQuery } from '@/lib/postcards/query';
 import {
   findPostcardById,
-  findPostcardsForList,
-  findPostcardsForListWithTotal
+  findPublicPostcards,
+  findPostcardsForList
 } from '@/lib/postcards/repository';
 import { findAdminEditableReportCaseStateByPostcardId } from '@/lib/postcards/report-workflow';
 import { reverseGeocodeCoordinates } from '@/lib/reverse-geocode';
@@ -170,13 +171,26 @@ export async function listPublicPostcardsLocal(args: {
   }
 
   const query = queryParse.data;
-  const where = buildPublicWhere(query);
-  const orderBy = buildPublicOrderBy(query.sort);
+  let bounds: GeoBounds | undefined;
+  if (
+    typeof query.north === 'number' &&
+    typeof query.south === 'number' &&
+    typeof query.east === 'number' &&
+    typeof query.west === 'number'
+  ) {
+    bounds = {
+      north: query.north,
+      south: query.south,
+      east: query.east,
+      west: query.west
+    };
+  }
 
-  const { rows: postcards, total } = await findPostcardsForListWithTotal({
-    where,
-    orderBy,
-    take: query.limit + 1
+  const { rows: postcards, total } = await findPublicPostcards({
+    q: query.q,
+    sort: query.sort,
+    limit: query.limit + 1,
+    bounds
   });
 
   const hasMore = postcards.length > query.limit;
