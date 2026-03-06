@@ -29,8 +29,13 @@ export default $config({
   async run() {
     const publicApiBaseUrl =
       process.env.NEXT_PUBLIC_SERVERLESS_API_BASE_URL?.trim() || "";
+    const serverApiBaseUrl =
+      process.env.SERVERLESS_API_BASE_URL?.trim() || publicApiBaseUrl;
     const useExternalServerlessApi =
       process.env.NEXT_PUBLIC_USE_EXTERNAL_SERVERLESS_API?.trim() || "true";
+    const appBackendMode =
+      process.env.APP_BACKEND_MODE?.trim() ||
+      (serverApiBaseUrl ? "proxy" : "local");
     const publicGoogleClientId =
       process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim() ||
       process.env.GOOGLE_CLIENT_ID?.trim() ||
@@ -63,6 +68,8 @@ export default $config({
       environment: {
         NEXT_PUBLIC_SERVERLESS_API_BASE_URL: publicApiBaseUrl,
         NEXT_PUBLIC_USE_EXTERNAL_SERVERLESS_API: useExternalServerlessApi,
+        SERVERLESS_API_BASE_URL: serverApiBaseUrl,
+        APP_BACKEND_MODE: appBackendMode,
         NEXT_PUBLIC_GOOGLE_CLIENT_ID: publicGoogleClientId,
         GOOGLE_CLIENT_ID: requiredEnv("GOOGLE_CLIENT_ID"),
         GOOGLE_CLIENT_SECRET: requiredEnv("GOOGLE_CLIENT_SECRET"),

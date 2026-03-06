@@ -77,16 +77,29 @@ function toAbsoluteUrl(value: string): string {
 }
 
 function resolveServerlessApiBase(): string {
-  return (
-    process.env.NEXT_PUBLIC_SERVERLESS_API_BASE_URL?.trim().replace(/\/$/, '') ||
-    process.env.SERVERLESS_API_BASE_URL?.trim().replace(/\/$/, '') ||
-    DEFAULT_SERVERLESS_API_BASE
-  );
+  const mode = (process.env.APP_BACKEND_MODE ?? '').trim().toLowerCase();
+  if (mode === 'local' || mode === 'internal') {
+    return '';
+  }
+
+  const explicitServerBase = process.env.SERVERLESS_API_BASE_URL?.trim() || '';
+  if (explicitServerBase) {
+    return explicitServerBase.replace(/\/$/, '');
+  }
+
+  if (mode === 'proxy' || mode === 'external' || mode === 'serverless') {
+    return DEFAULT_SERVERLESS_API_BASE;
+  }
+
+  return '';
 }
 
 async function findSharedPostcardById(id: string) {
   const base = resolveServerlessApiBase();
-  const response = await fetch(`${base}/postcards/${encodeURIComponent(id)}`, {
+  const endpoint = base
+    ? `${base}/postcards/${encodeURIComponent(id)}`
+    : new URL(`/api/postcards/${encodeURIComponent(id)}`, resolveBaseUrl()).toString();
+  const response = await fetch(endpoint, {
     cache: 'no-store'
   });
   if (!response.ok) {

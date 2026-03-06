@@ -1,13 +1,3 @@
-import { isExternalServerlessApiEnabled } from '@/lib/external-api-proxy';
-import {
-  externalAdminBackend,
-  externalDetectionBackend,
-  externalFeedbackBackend,
-  externalPostcardsBackend,
-  externalProfileBackend,
-  externalReportsBackend,
-  externalUploadBackend
-} from '@/lib/backend/external-backends';
 import {
   localAdminBackend,
   localDetectionBackend,
@@ -29,19 +19,6 @@ export const localAppBackend: AppBackend = {
   detection: localDetectionBackend
 };
 
-export const externalAppBackend: AppBackend = {
-  postcards: externalPostcardsBackend,
-  reports: externalReportsBackend,
-  admin: externalAdminBackend,
-  profile: externalProfileBackend,
-  feedback: externalFeedbackBackend,
-  upload: externalUploadBackend,
-  detection: externalDetectionBackend
-};
-
 export function getAppBackend(): AppBackend {
-  if (isExternalServerlessApiEnabled()) {
-    return externalAppBackend;
-  }
   return localAppBackend;
 }
