@@ -1,4 +1,4 @@
-import type { PostcardReportStatus } from '@prisma/client';
+import type { PostcardReportStatus } from '@/lib/domain/enums';
 import type {
   ActiveReportCaseDetail,
   AdminReportCaseRecord,

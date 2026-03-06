@@ -1,4 +1,4 @@
-import { UserApprovalStatus, UserRole } from '@prisma/client';
+import type { UserApprovalStatus, UserRole } from '@/lib/domain/enums';
 
 export type UserRepoRecord = {
   id: string;

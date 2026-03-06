@@ -1,4 +1,4 @@
-import { UserApprovalStatus, UserRole } from '@prisma/client';
+import { UserApprovalStatus, UserRole } from '@/lib/domain/enums';
 
 export type NewUserApprovalMode = 'auto' | 'pending';
 

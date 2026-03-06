@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
-import { FeedbackAction, PostcardReportStatus } from '@prisma/client';
 import { buildGeoBucketFromCoordinates } from '@/lib/postcards/geo';
+import { FeedbackAction, PostcardReportStatus } from '@/lib/domain/enums';
 import { ddbDoc, ddbTables } from '@/lib/repos/dynamodb/shared';
 import { dynamoPostcardRepo } from '@/lib/repos/postcards/dynamo-postcard-repo';
 import { dynamoReportRepo } from '@/lib/repos/reports/dynamo-report-repo';

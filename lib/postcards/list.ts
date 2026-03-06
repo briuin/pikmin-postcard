@@ -1,4 +1,3 @@
-import { Prisma } from '@prisma/client';
 import { deriveOriginalImageUrl, maskEmail } from '@/lib/postcards/shared';
 
 const postcardListSelectBase = {
@@ -41,9 +40,9 @@ const postcardListSelectBase = {
 export const postcardListSelectWithOriginalImageUrl = {
   ...postcardListSelectBase,
   originalImageUrl: true
-} satisfies Prisma.PostcardSelect;
+};
 
-export const postcardListSelectWithoutOriginalImageUrl = postcardListSelectBase satisfies Prisma.PostcardSelect;
+export const postcardListSelectWithoutOriginalImageUrl = postcardListSelectBase;
 
 type SerializablePostcard = {
   id: string;

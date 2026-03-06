@@ -3,7 +3,7 @@ import {
   PostcardType,
   PostcardReportStatus,
   UserRole
-} from '@prisma/client';
+} from '@/lib/domain/enums';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { isManagerOrAboveRole } from '@/lib/api-auth';

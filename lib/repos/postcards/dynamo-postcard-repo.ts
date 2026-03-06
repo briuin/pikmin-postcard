@@ -11,9 +11,8 @@ import {
   PostcardEditAction,
   PostcardReportReason,
   PostcardReportStatus,
-  PostcardType,
-  Prisma
-} from '@prisma/client';
+  PostcardType
+} from '@/lib/domain/enums';
 import { toEditSnapshot, type EditablePostcard } from '@/lib/postcards/edit-history';
 import {
   buildGeoBucketFromCoordinates,
@@ -39,10 +38,14 @@ import type {
   CreatePostcardInput,
   CropBox,
   FindPublicPostcardsInput,
+  PostcardFindManyInput,
   PostcardCropSource,
   PostcardFeedbackRow,
   PostcardListRow,
+  PostcardOrderByInput,
   PostcardRepo,
+  PostcardUpdateInput,
+  PostcardWhereInput,
   SubmitPostcardFeedbackInput,
   SubmitPostcardFeedbackResult
 } from '@/lib/repos/postcards/types';
@@ -402,7 +405,7 @@ function compareValue(a: unknown, b: unknown): number {
 
 function applyOrderBy(
   rows: DynamoPostcardRow[],
-  orderBy: Prisma.PostcardOrderByWithRelationInput | Prisma.PostcardOrderByWithRelationInput[] | undefined
+  orderBy: PostcardOrderByInput | PostcardOrderByInput[] | undefined
 ): DynamoPostcardRow[] {
   const orderList = Array.isArray(orderBy) ? orderBy : orderBy ? [orderBy] : [];
   if (orderList.length === 0) {
@@ -578,7 +581,7 @@ async function findRowsByGeoBounds(bounds: GeoBounds): Promise<DynamoPostcardRow
 }
 
 async function findRowsForList(
-  args: Omit<Prisma.PostcardFindManyArgs, 'select'>
+  args: PostcardFindManyInput
 ): Promise<{
   rows: DynamoPostcardRow[];
   total: number;
@@ -655,7 +658,7 @@ function toListRow(
   } as unknown as PostcardListRow;
 }
 
-async function findForList(args: Omit<Prisma.PostcardFindManyArgs, 'select'>): Promise<PostcardListRow[]> {
+async function findForList(args: PostcardFindManyInput): Promise<PostcardListRow[]> {
   const { rows, usersById } = await findRowsForList(args);
   const tagsByPostcardId = await loadTagsByPostcardIds(rows.map((row) => row.id));
   return rows.map((row) => toListRow(row, usersById.get(row.userId), tagsByPostcardId.get(row.id) ?? []));
@@ -713,7 +716,7 @@ async function findForPublicQuery(args: FindPublicPostcardsInput): Promise<{
 }
 
 async function findForListWithTotal(
-  args: Omit<Prisma.PostcardFindManyArgs, 'select'>
+  args: PostcardFindManyInput
 ): Promise<{
   rows: PostcardListRow[];
   total: number;
@@ -745,7 +748,7 @@ async function findById(postcardId: string): Promise<PostcardListRow | null> {
   return toListRow(row, usersById.get(row.userId), tagsByPostcardId.get(row.id) ?? []);
 }
 
-async function count(where: Prisma.PostcardWhereInput): Promise<number> {
+async function count(where: PostcardWhereInput): Promise<number> {
   const result = await findRowsForList({ where });
   return result.total;
 }
@@ -847,7 +850,7 @@ function extractUpdateValue(value: unknown): unknown {
   return value;
 }
 
-function applyPostcardUpdateData(row: DynamoPostcardRow, updateData: Prisma.PostcardUpdateInput): DynamoPostcardRow {
+function applyPostcardUpdateData(row: DynamoPostcardRow, updateData: PostcardUpdateInput): DynamoPostcardRow {
   const next: DynamoPostcardRow = { ...row };
   for (const [field, rawValue] of Object.entries(updateData as UnknownRecord)) {
     const value = extractUpdateValue(rawValue);
@@ -963,7 +966,7 @@ async function applyDetailsUpdateWithHistory(params: {
   postcardId: string;
   actorId: string;
   canEditAny: boolean;
-  updateData: Prisma.PostcardUpdateInput;
+  updateData: PostcardUpdateInput;
 }): Promise<EditablePostcard | null> {
   const current = await findEditableForActor({
     postcardId: params.postcardId,

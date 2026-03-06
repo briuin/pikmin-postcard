@@ -1,10 +1,10 @@
 'use client';
 
-import { UserRole } from '@prisma/client';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { signIn, useSession } from '@/lib/auth-client';
+import { UserRole } from '@/lib/domain/enums';
 import { usePersistedLocale } from '@/components/use-persisted-locale';
 import { messages, type AdminText } from '@/lib/i18n';
 import { parseJsonResponseOrThrow } from '@/lib/http-response';

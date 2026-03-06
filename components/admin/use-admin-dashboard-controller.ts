@@ -1,8 +1,8 @@
 'use client';
 
-import { UserRole } from '@prisma/client';
 import { useCallback, useEffect, useState } from 'react';
 import type { AdminText, WorkbenchText } from '@/lib/i18n';
+import { UserRole } from '@/lib/domain/enums';
 import {
   type AdminFeedbackRecord,
   type AdminPostcardEditDraft,

@@ -1,6 +1,6 @@
 import { PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
-import { DetectionJobStatus, LocationStatus, PostcardType } from '@prisma/client';
+import { DetectionJobStatus, LocationStatus, PostcardType } from '@/lib/domain/enums';
 import { detectWithGemini } from '@/lib/location-detection/gemini';
 import { reverseGeocodeCoordinates } from '@/lib/reverse-geocode';
 import {

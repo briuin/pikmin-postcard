@@ -1,4 +1,4 @@
-import { type PostcardReportStatus, type Prisma } from '@prisma/client';
+import type { PostcardReportStatus } from '@/lib/domain/enums';
 import { reportRepo } from '@/lib/repos/reports';
 import {
   serializeAdminReportCaseRecord,
@@ -42,7 +42,7 @@ export async function listAdminReportCases(params: {
 }
 
 export async function findAdminEditableReportCaseState(params: {
-  tx: Prisma.TransactionClient;
+  tx: unknown;
   postcardId: string;
 }): Promise<PostcardReportStatus | null> {
   void params.tx;

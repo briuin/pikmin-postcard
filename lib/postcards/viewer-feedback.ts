@@ -1,4 +1,4 @@
-import { FeedbackAction } from '@prisma/client';
+import { FeedbackAction, type FeedbackAction as FeedbackActionType } from '@/lib/domain/enums';
 
 export type ViewerFeedback = {
   liked: boolean;
@@ -18,7 +18,7 @@ export function emptyViewerFeedback(): ViewerFeedback {
   };
 }
 
-export function toViewerFeedback(actions: Iterable<FeedbackAction>): ViewerFeedback {
+export function toViewerFeedback(actions: Iterable<FeedbackActionType>): ViewerFeedback {
   const set = new Set(actions);
 
   return {

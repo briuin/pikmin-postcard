@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react';
-import { type UserRole } from '@prisma/client';
+import type { UserRole } from '@/lib/domain/enums';
 import type { AdminText, WorkbenchText } from '@/lib/i18n';
 import type {
   AdminFeedbackRecord,

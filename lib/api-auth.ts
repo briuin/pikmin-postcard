@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { headers } from 'next/headers';
-import { UserApprovalStatus, UserRole } from '@prisma/client';
+import { UserApprovalStatus, UserRole } from '@/lib/domain/enums';
 import { userRepo, type UserRepoRecord } from '@/lib/repos/users';
 import { isApprovedStatus } from '@/lib/user-approval';
 import { normalizeEmail, roleForEmail } from '@/lib/user-role';

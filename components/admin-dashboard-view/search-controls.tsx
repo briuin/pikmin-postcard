@@ -1,4 +1,4 @@
-import { UserRole } from '@prisma/client';
+import { UserRole } from '@/lib/domain/enums';
 import {
   fieldInputClassName,
   fieldLabelClassName

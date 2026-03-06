@@ -1,4 +1,3 @@
-import { Prisma } from '@prisma/client';
 import { deriveOriginalImageUrl } from '@/lib/postcards/image-url';
 
 export function maskEmail(email: string | null | undefined): string | null {
@@ -25,13 +24,15 @@ export function maskEmail(email: string | null | undefined): string | null {
 export { deriveOriginalImageUrl };
 
 export function hasMissingOriginalImageColumnError(error: unknown): boolean {
-  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) {
+  if (!error || typeof error !== 'object') {
     return false;
   }
-  if (error.code !== 'P2022') {
+  const errorCode = String((error as { code?: unknown }).code ?? '');
+  if (errorCode !== 'P2022') {
     return false;
   }
 
-  const column = String((error.meta as { column?: string } | undefined)?.column ?? '');
+  const meta = (error as { meta?: { column?: string } }).meta;
+  const column = String(meta?.column ?? '');
   return column.includes('originalImageUrl');
 }

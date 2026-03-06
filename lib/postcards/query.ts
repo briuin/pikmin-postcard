@@ -1,5 +1,8 @@
-import { Prisma } from '@prisma/client';
 import { z } from 'zod';
+import type {
+  PostcardOrderByInput,
+  PostcardWhereInput
+} from '@/lib/repos/postcards/types';
 
 export const publicQuerySchema = z
   .object({
@@ -75,8 +78,8 @@ export function parsePublicQuery(url: URL) {
 export function buildPostcardSearchFilter(
   searchText: string,
   options: { includeUploaderFields?: boolean } = {}
-): Prisma.PostcardWhereInput {
-  const orConditions: Prisma.PostcardWhereInput[] = [
+): PostcardWhereInput {
+  const orConditions: PostcardWhereInput[] = [
     { title: { contains: searchText, mode: 'insensitive' } },
     { notes: { contains: searchText, mode: 'insensitive' } },
     { placeName: { contains: searchText, mode: 'insensitive' } },
@@ -96,8 +99,8 @@ export function buildPostcardSearchFilter(
   return { OR: orConditions };
 }
 
-export function buildPublicWhere(query: PublicQuery): Prisma.PostcardWhereInput {
-  const whereAnd: Prisma.PostcardWhereInput[] = [{ deletedAt: null }];
+export function buildPublicWhere(query: PublicQuery): PostcardWhereInput {
+  const whereAnd: PostcardWhereInput[] = [{ deletedAt: null }];
 
   if (query.q && query.q.length > 0) {
     whereAnd.push(buildPostcardSearchFilter(query.q));
@@ -113,7 +116,7 @@ export function buildPublicWhere(query: PublicQuery): Prisma.PostcardWhereInput 
     const south = clampLatitude(query.south);
     const maxLat = Math.max(north, south);
     const minLat = Math.min(north, south);
-    const latitudeFilter: Prisma.PostcardWhereInput = {
+    const latitudeFilter: PostcardWhereInput = {
       latitude: {
         not: null,
         gte: minLat,
@@ -164,7 +167,7 @@ export function buildPublicWhere(query: PublicQuery): Prisma.PostcardWhereInput 
   return { AND: whereAnd };
 }
 
-export function buildPublicOrderBy(sort: PublicQuery['sort']): Prisma.PostcardOrderByWithRelationInput[] {
+export function buildPublicOrderBy(sort: PublicQuery['sort']): PostcardOrderByInput[] {
   if (sort === 'newest') {
     return [{ createdAt: 'desc' }];
   }

@@ -1,5 +1,6 @@
-import { LocationStatus, PostcardType, type Prisma } from '@prisma/client';
 import { z } from 'zod';
+import { LocationStatus, PostcardType } from '@/lib/domain/enums';
+import type { PostcardUpdateInput } from '@/lib/repos/postcards/types';
 import { recropPostcardAndUpload } from '@/lib/postcards/crop-service';
 import { toNullableText, type EditablePostcard } from '@/lib/postcards/edit-history';
 import { deriveOriginalImageUrl } from '@/lib/postcards/shared';
@@ -55,8 +56,8 @@ export type CropUpdateResult =
       originalImageUrl: string | null;
     };
 
-function buildPostcardUpdateData(payload: PostcardUpdatePayload): Prisma.PostcardUpdateInput {
-  const updateData: Prisma.PostcardUpdateInput = {};
+function buildPostcardUpdateData(payload: PostcardUpdatePayload): PostcardUpdateInput {
+  const updateData: PostcardUpdateInput = {};
 
   if (payload.title !== undefined) {
     updateData.title = payload.title;

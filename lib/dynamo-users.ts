@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
-import { UserApprovalStatus, UserRole } from '@prisma/client';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { UserApprovalStatus, UserRole } from '@/lib/domain/enums';
 import { defaultApprovalStatusForRole } from '@/lib/user-approval';
 import { normalizeEmail, roleForEmail } from '@/lib/user-role';
 

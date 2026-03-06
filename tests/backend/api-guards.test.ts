@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { NextResponse } from 'next/server';
-import { UserApprovalStatus, UserRole } from '@prisma/client';
 import { createApiGuards, type GuardResult } from '@/lib/api-guards';
+import { UserApprovalStatus, UserRole } from '@/lib/domain/enums';
 
 type TestActor = {
   id: string;

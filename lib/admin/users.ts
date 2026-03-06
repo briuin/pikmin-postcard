@@ -1,6 +1,6 @@
 import { GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
-import { UserApprovalStatus, UserRole } from '@prisma/client';
 import { z } from 'zod';
+import { UserApprovalStatus, UserRole } from '@/lib/domain/enums';
 import { ddbDoc, ddbTables, includesKeyword, normalizeSearchText, nowIso, queryAllByIndex, scanAll } from '@/lib/repos/dynamodb/shared';
 import { roleForEmail } from '@/lib/user-role';
 

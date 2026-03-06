@@ -1,4 +1,4 @@
-import { UserApprovalStatus, UserRole } from '@prisma/client';
+import { UserApprovalStatus, UserRole } from '@/lib/domain/enums';
 import { buildUserAccessDraft } from '@/components/admin-dashboard-types';
 import { mutedTextClassName } from '@/components/admin-dashboard-view/styles';
 import type { AdminUsersPanelProps } from '@/components/admin-dashboard-view/types';

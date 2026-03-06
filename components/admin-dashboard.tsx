@@ -1,8 +1,8 @@
 'use client';
 
-import { UserRole } from '@prisma/client';
 import { useMemo } from 'react';
 import { signIn, useSession } from '@/lib/auth-client';
+import { UserRole } from '@/lib/domain/enums';
 import { AdminFeedbackPanel } from '@/components/admin-dashboard-view/feedback-panel';
 import { AdminPostcardsPanel } from '@/components/admin-dashboard-view/postcards-panel';
 import { AdminSearchControls } from '@/components/admin-dashboard-view/search-controls';

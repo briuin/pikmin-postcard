@@ -1,23 +1,21 @@
-import { type Prisma } from '@prisma/client';
+import type { LocationStatus, PostcardType } from '@/lib/domain/enums';
 
-export const postcardEditSelect = {
-  id: true,
-  title: true,
-  postcardType: true,
-  notes: true,
-  placeName: true,
-  city: true,
-  state: true,
-  country: true,
-  imageUrl: true,
-  originalImageUrl: true,
-  latitude: true,
-  longitude: true,
-  locationStatus: true,
-  deletedAt: true
-} as const satisfies Prisma.PostcardSelect;
-
-export type EditablePostcard = Prisma.PostcardGetPayload<{ select: typeof postcardEditSelect }>;
+export type EditablePostcard = {
+  id: string;
+  title: string;
+  postcardType: PostcardType;
+  notes: string | null;
+  placeName: string | null;
+  city: string | null;
+  state: string | null;
+  country: string | null;
+  imageUrl: string | null;
+  originalImageUrl: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  locationStatus: LocationStatus;
+  deletedAt: Date | null;
+};
 
 export function toNullableText(value: string | null | undefined): string | null | undefined {
   if (value === undefined || value === null) {
@@ -28,7 +26,7 @@ export function toNullableText(value: string | null | undefined): string | null 
   return trimmed.length > 0 ? trimmed : null;
 }
 
-export function toEditSnapshot(postcard: EditablePostcard): Prisma.JsonObject {
+export function toEditSnapshot(postcard: EditablePostcard): Record<string, unknown> {
   return {
     title: postcard.title,
     postcardType: postcard.postcardType,

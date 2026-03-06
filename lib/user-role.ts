@@ -1,4 +1,4 @@
-import { UserRole } from '@prisma/client';
+import { UserRole } from '@/lib/domain/enums';
 
 const DEFAULT_ADMIN_EMAILS = ['dreamingdexiaoxiaohao@gmail.com'];
 

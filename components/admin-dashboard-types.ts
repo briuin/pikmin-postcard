@@ -1,4 +1,4 @@
-import { UserApprovalStatus, UserRole } from '@prisma/client';
+import { UserApprovalStatus, UserRole } from '@/lib/domain/enums';
 import { buildPostcardDraftValues } from '@/components/workbench/postcard-draft';
 import type {
   PostcardRecord,

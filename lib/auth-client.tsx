@@ -1,6 +1,5 @@
 'use client';
 
-import { UserApprovalStatus, UserRole } from '@prisma/client';
 import {
   createContext,
   useCallback,
@@ -11,6 +10,7 @@ import {
   type ReactNode
 } from 'react';
 import { apiFetch, clearClientAuthToken, getClientAuthToken, setClientAuthToken } from '@/lib/client-api';
+import { UserApprovalStatus, UserRole } from '@/lib/domain/enums';
 
 type SessionUser = {
   id: string;

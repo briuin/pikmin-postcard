@@ -1,5 +1,5 @@
-import { PostcardReportStatus } from '@prisma/client';
 import { NextResponse } from 'next/server';
+import type { PostcardReportStatus } from '@/lib/domain/enums';
 import {
   serializeReportCaseStatusUpdate,
   updateReportCaseStatus

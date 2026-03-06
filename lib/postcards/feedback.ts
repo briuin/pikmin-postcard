@@ -1,4 +1,4 @@
-import { FeedbackAction } from '@prisma/client';
+import { type FeedbackAction } from '@/lib/domain/enums';
 import { postcardRepo } from '@/lib/repos/postcards';
 import {
   emptyViewerFeedback,

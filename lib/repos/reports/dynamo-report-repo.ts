@@ -1,5 +1,5 @@
 import { DeleteCommand, GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import { PostcardReportStatus } from '@prisma/client';
+import { PostcardReportStatus } from '@/lib/domain/enums';
 import {
   batchGetByIds,
   ddbDoc,

@@ -1,4 +1,4 @@
-import { PostcardReportReason } from '@prisma/client';
+import { PostcardReportReason } from '@/lib/domain/enums';
 import {
   postcardRepo,
   type SubmitPostcardFeedbackAction,
