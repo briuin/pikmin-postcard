@@ -1,40 +1,15 @@
 import { FeedbackAction } from '@prisma/client';
-import { prisma } from '@/lib/prisma';
-
-export type ViewerFeedback = {
-  liked: boolean;
-  disliked: boolean;
-  reportedWrongLocation: boolean;
-  favorited: boolean;
-  collected: boolean;
-};
+import { postcardRepo } from '@/lib/repos/postcards';
+import {
+  emptyViewerFeedback,
+  toViewerFeedback,
+  type ViewerFeedback
+} from '@/lib/postcards/viewer-feedback';
 
 type FeedbackRow = {
   postcardId: string;
   action: FeedbackAction;
 };
-
-function emptyViewerFeedback(): ViewerFeedback {
-  return {
-    liked: false,
-    disliked: false,
-    reportedWrongLocation: false,
-    favorited: false,
-    collected: false
-  };
-}
-
-export function toViewerFeedback(actions: Iterable<FeedbackAction>): ViewerFeedback {
-  const set = new Set(actions);
-
-  return {
-    liked: set.has(FeedbackAction.LIKE),
-    disliked: set.has(FeedbackAction.DISLIKE),
-    reportedWrongLocation: set.has(FeedbackAction.REPORT_WRONG_LOCATION),
-    favorited: set.has(FeedbackAction.FAVORITE),
-    collected: set.has(FeedbackAction.COLLECTED)
-  };
-}
 
 export async function findViewerFeedbackRowsForPostcards(
   userId: string | null | undefined,
@@ -44,60 +19,10 @@ export async function findViewerFeedbackRowsForPostcards(
     return [];
   }
 
-  const ids = Array.from(new Set(postcardIds.map((id) => String(id))));
-  const [voteRows, postcards, reportRows] = await Promise.all([
-    prisma.postcardFeedback.findMany({
-      where: {
-        userId,
-        action: {
-          in: [FeedbackAction.LIKE, FeedbackAction.DISLIKE, FeedbackAction.FAVORITE, FeedbackAction.COLLECTED]
-        },
-        postcardId: {
-          in: ids
-        }
-      },
-      select: {
-        postcardId: true,
-        action: true
-      }
-    }),
-    prisma.postcard.findMany({
-      where: {
-        id: {
-          in: ids
-        }
-      },
-      select: {
-        id: true,
-        reportVersion: true
-      }
-    }),
-    prisma.postcardReport.findMany({
-      where: {
-        reporterUserId: userId,
-        postcardId: {
-          in: ids
-        }
-      },
-      select: {
-        postcardId: true,
-        version: true
-      }
-    })
-  ]);
-
-  const versionByPostcardId = new Map(
-    postcards.map((postcard) => [postcard.id, postcard.reportVersion])
-  );
-
-  const reportFeedbackRows: FeedbackRow[] = reportRows
-    .filter((reportRow) => versionByPostcardId.get(reportRow.postcardId) === reportRow.version)
-    .map((reportRow) => ({
-      postcardId: reportRow.postcardId,
-      action: FeedbackAction.REPORT_WRONG_LOCATION
-    }));
-
-  return [...voteRows, ...reportFeedbackRows];
+  return postcardRepo.findViewerFeedbackRowsForPostcards({
+    userId,
+    postcardIds: postcardIds.map((id) => String(id))
+  });
 }
 
 export function attachViewerFeedback<T extends { id: string | number }>(

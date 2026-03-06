@@ -1,5 +1,4 @@
 import {
-  FeedbackAction,
   LocationStatus,
   PostcardType,
   PostcardReportStatus,
@@ -13,6 +12,7 @@ import {
   attachViewerFeedback,
   findViewerFeedbackRowsForPostcards
 } from '@/lib/postcards/feedback';
+import { postcardRepo } from '@/lib/repos/postcards';
 import {
   type FeedbackReportReasonInput,
   submitPostcardFeedback,
@@ -20,7 +20,7 @@ import {
 } from '@/lib/postcards/feedback-mutations';
 import { serializePostcards } from '@/lib/postcards/list';
 import { buildPublicOrderBy, buildPublicWhere, parsePublicQuery } from '@/lib/postcards/query';
-import { findPostcardsForList } from '@/lib/postcards/repository';
+import { countPostcards, findPostcardsForList } from '@/lib/postcards/repository';
 import { findAdminEditableReportCaseStateByPostcardId } from '@/lib/postcards/report-workflow';
 import { hasMissingOriginalImageColumnError } from '@/lib/postcards/shared';
 import { reverseGeocodeCoordinates } from '@/lib/reverse-geocode';
@@ -114,26 +114,11 @@ export async function listSavedPostcardsLocal(args: {
     action: 'SAVED_POSTCARD_LIST'
   });
 
-  const savedRows = await prisma.postcardFeedback.findMany({
-    where: {
-      userId,
-      action: {
-        in: [FeedbackAction.FAVORITE, FeedbackAction.COLLECTED]
-      },
-      postcard: {
-        deletedAt: null
-      }
-    },
-    select: {
-      postcardId: true
-    },
-    orderBy: {
-      createdAt: 'desc'
-    },
+  const orderedPostcardIds = await postcardRepo.findSavedPostcardIdsByUser({
+    userId,
     take: 400
   });
 
-  const orderedPostcardIds = Array.from(new Set(savedRows.map((row) => row.postcardId)));
   if (orderedPostcardIds.length === 0) {
     return NextResponse.json([], { status: 200 });
   }
@@ -192,7 +177,7 @@ export async function listPublicPostcardsLocal(args: {
       orderBy,
       take: query.limit + 1
     }),
-    prisma.postcard.count({ where })
+    countPostcards(where)
   ]);
 
   const hasMore = postcards.length > query.limit;

@@ -1,7 +1,5 @@
-import { PostcardReportStatus } from '@prisma/client';
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { listDashboardReportsByReporter } from '@/lib/postcards/report-workflow';
+import { reportRepo } from '@/lib/repos/reports';
 import { recordUserAction } from '@/lib/user-action-log';
 
 export async function listDashboardReportsLocal(args: {
@@ -16,7 +14,7 @@ export async function listDashboardReportsLocal(args: {
     action: 'MY_POSTCARD_REPORTS_LIST'
   });
 
-  const rows = await listDashboardReportsByReporter(userId);
+  const rows = await reportRepo.listDashboardReportsByReporter(userId);
   return NextResponse.json(
     rows.map((row) => ({
       ...row,
@@ -36,79 +34,7 @@ export async function cancelDashboardReportLocal(args: {
   const { request, userId, reportId } = args;
 
   try {
-    const result = await prisma.$transaction(async (tx) => {
-      const report = await tx.postcardReport.findFirst({
-        where: {
-          id: reportId,
-          reporterUserId: userId
-        },
-        include: {
-          reportCase: {
-            select: {
-              id: true,
-              status: true
-            }
-          },
-          postcard: {
-            select: {
-              id: true,
-              reportVersion: true,
-              wrongLocationReports: true
-            }
-          }
-        }
-      });
-
-      if (!report) {
-        return { kind: 'not_found' as const };
-      }
-
-      if (
-        report.reportCase.status === PostcardReportStatus.VERIFIED ||
-        report.reportCase.status === PostcardReportStatus.REMOVED
-      ) {
-        return { kind: 'resolved' as const };
-      }
-
-      await tx.postcardReport.delete({
-        where: {
-          id: report.id
-        }
-      });
-
-      if (
-        report.version === report.postcard.reportVersion &&
-        report.postcard.wrongLocationReports > 0
-      ) {
-        await tx.postcard.update({
-          where: { id: report.postcard.id },
-          data: {
-            wrongLocationReports: {
-              decrement: 1
-            }
-          }
-        });
-      }
-
-      const remainingCount = await tx.postcardReport.count({
-        where: {
-          caseId: report.caseId
-        }
-      });
-
-      if (remainingCount === 0) {
-        await tx.postcardReportCase.delete({
-          where: {
-            id: report.caseId
-          }
-        });
-      }
-
-      return {
-        kind: 'deleted' as const,
-        postcardId: report.postcard.id
-      };
-    });
+    const result = await reportRepo.cancelDashboardReport({ userId, reportId });
 
     if (result.kind === 'not_found') {
       return NextResponse.json({ error: 'Report not found.' }, { status: 404 });
