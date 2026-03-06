@@ -31,7 +31,6 @@ env:
   OPENNEXT_DOMAIN_NAME: pikmin.askans.app
   OPENNEXT_ROUTE53_ZONE_ID: Z07732472U0GRGAK1E05W
   NEW_USER_APPROVAL_MODE: auto
-  POSTCARD_EXPLORE_REQUIRE_LEGACY_FALLBACK: "false"
   GEMINI_MODEL: gemini-2.5-flash
 
 jobs:
@@ -107,6 +106,7 @@ jobs:
         env:
           CI: "true"
           OPENNEXT_ENABLE_DOMAIN: ${{ env.ENABLE_DOMAIN_CUTOVER }}
+          POSTCARD_EXPLORE_REQUIRE_LEGACY_FALLBACK: "false"
         run: |
           npx sst deploy --stage "${{ env.DEPLOY_STAGE }}" --yes
 

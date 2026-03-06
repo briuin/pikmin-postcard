@@ -178,48 +178,50 @@ test('dynamo postcard repo supports list/count/saved/viewer-feedback flows', asy
 });
 
 test('dynamo postcard repo findForPublicQuery uses geo bounds and keyword fallback', async () => {
+  const projectionRows = [
+    {
+      id: 'pc_sg',
+      userId: 'usr_1',
+      title: 'Marina Bay',
+      postcardType: 'MUSHROOM',
+      city: 'Singapore',
+      country: 'Singapore',
+      latitude: 1.2834,
+      longitude: 103.8607,
+      likeCount: 3,
+      dislikeCount: 0,
+      wrongLocationReports: 0,
+      reportVersion: 1,
+      locationStatus: 'AUTO',
+      ...geoBucketFields(1.2834, 103.8607),
+      deletedAt: null,
+      createdAt: '2026-03-01T10:00:00.000Z',
+      updatedAt: '2026-03-01T10:00:00.000Z'
+    },
+    {
+      id: 'pc_jp',
+      userId: 'usr_1',
+      title: 'Tokyo Tower',
+      postcardType: 'FLOWER',
+      city: 'Tokyo',
+      country: 'Japan',
+      latitude: 35.6586,
+      longitude: 139.7454,
+      likeCount: 1,
+      dislikeCount: 0,
+      wrongLocationReports: 0,
+      reportVersion: 1,
+      locationStatus: 'AUTO',
+      ...geoBucketFields(35.6586, 139.7454),
+      deletedAt: null,
+      createdAt: '2026-03-02T10:00:00.000Z',
+      updatedAt: '2026-03-02T10:00:00.000Z'
+    }
+  ];
   setFakeClient({
     [ddbTables.users]: [{ id: 'usr_1', email: 'alice@example.com', displayName: 'Alice' }],
-    [ddbTables.postcards]: [
-      {
-        id: 'pc_sg',
-        userId: 'usr_1',
-        title: 'Marina Bay',
-        postcardType: 'MUSHROOM',
-        city: 'Singapore',
-        country: 'Singapore',
-        latitude: 1.2834,
-        longitude: 103.8607,
-        likeCount: 3,
-        dislikeCount: 0,
-        wrongLocationReports: 0,
-        reportVersion: 1,
-        locationStatus: 'AUTO',
-        ...geoBucketFields(1.2834, 103.8607),
-        deletedAt: null,
-        createdAt: '2026-03-01T10:00:00.000Z',
-        updatedAt: '2026-03-01T10:00:00.000Z'
-      },
-      {
-        id: 'pc_jp',
-        userId: 'usr_1',
-        title: 'Tokyo Tower',
-        postcardType: 'FLOWER',
-        city: 'Tokyo',
-        country: 'Japan',
-        latitude: 35.6586,
-        longitude: 139.7454,
-        likeCount: 1,
-        dislikeCount: 0,
-        wrongLocationReports: 0,
-        reportVersion: 1,
-        locationStatus: 'AUTO',
-        ...geoBucketFields(35.6586, 139.7454),
-        deletedAt: null,
-        createdAt: '2026-03-02T10:00:00.000Z',
-        updatedAt: '2026-03-02T10:00:00.000Z'
-      }
-    ]
+    [ddbTables.postcards]: projectionRows,
+    [ddbTables.postcardsExplore]: projectionRows
   });
 
   const bounded = await dynamoPostcardRepo.findForPublicQuery({
@@ -293,48 +295,50 @@ test('dynamo postcard repo findForPublicQuery reads from explore projection tabl
 });
 
 test('dynamo postcard repo findForPublicQuery keeps complete area results when bounds are wide', async () => {
+  const projectionRows = [
+    {
+      id: 'pc_sg_wide',
+      userId: 'usr_1',
+      title: 'Singapore Wide',
+      postcardType: 'MUSHROOM',
+      city: 'Singapore',
+      country: 'Singapore',
+      latitude: 1.2834,
+      longitude: 103.8607,
+      likeCount: 3,
+      dislikeCount: 0,
+      wrongLocationReports: 0,
+      reportVersion: 1,
+      locationStatus: 'AUTO',
+      ...geoBucketFields(1.2834, 103.8607),
+      deletedAt: null,
+      createdAt: '2026-03-01T10:00:00.000Z',
+      updatedAt: '2026-03-01T10:00:00.000Z'
+    },
+    {
+      id: 'pc_ny_wide',
+      userId: 'usr_1',
+      title: 'NY Wide',
+      postcardType: 'FLOWER',
+      city: 'New York',
+      country: 'United States',
+      latitude: 40.7128,
+      longitude: -74.006,
+      likeCount: 1,
+      dislikeCount: 0,
+      wrongLocationReports: 0,
+      reportVersion: 1,
+      locationStatus: 'AUTO',
+      ...geoBucketFields(40.7128, -74.006),
+      deletedAt: null,
+      createdAt: '2026-03-02T10:00:00.000Z',
+      updatedAt: '2026-03-02T10:00:00.000Z'
+    }
+  ];
   setFakeClient({
     [ddbTables.users]: [{ id: 'usr_1', email: 'alice@example.com', displayName: 'Alice' }],
-    [ddbTables.postcards]: [
-      {
-        id: 'pc_sg_wide',
-        userId: 'usr_1',
-        title: 'Singapore Wide',
-        postcardType: 'MUSHROOM',
-        city: 'Singapore',
-        country: 'Singapore',
-        latitude: 1.2834,
-        longitude: 103.8607,
-        likeCount: 3,
-        dislikeCount: 0,
-        wrongLocationReports: 0,
-        reportVersion: 1,
-        locationStatus: 'AUTO',
-        ...geoBucketFields(1.2834, 103.8607),
-        deletedAt: null,
-        createdAt: '2026-03-01T10:00:00.000Z',
-        updatedAt: '2026-03-01T10:00:00.000Z'
-      },
-      {
-        id: 'pc_ny_wide',
-        userId: 'usr_1',
-        title: 'NY Wide',
-        postcardType: 'FLOWER',
-        city: 'New York',
-        country: 'United States',
-        latitude: 40.7128,
-        longitude: -74.006,
-        likeCount: 1,
-        dislikeCount: 0,
-        wrongLocationReports: 0,
-        reportVersion: 1,
-        locationStatus: 'AUTO',
-        ...geoBucketFields(40.7128, -74.006),
-        deletedAt: null,
-        createdAt: '2026-03-02T10:00:00.000Z',
-        updatedAt: '2026-03-02T10:00:00.000Z'
-      }
-    ]
+    [ddbTables.postcards]: projectionRows,
+    [ddbTables.postcardsExplore]: projectionRows
   });
 
   const bounded = await dynamoPostcardRepo.findForPublicQuery({
@@ -355,65 +359,75 @@ test('dynamo postcard repo findForPublicQuery keeps complete area results when b
 });
 
 test('dynamo postcard repo findForPublicQuery falls back when coarse buckets are not backfilled yet', async () => {
-  setFakeClient({
-    [ddbTables.users]: [{ id: 'usr_1', email: 'alice@example.com', displayName: 'Alice' }],
-    [ddbTables.postcards]: [
-      {
-        id: 'pc_legacy_1',
-        userId: 'usr_1',
-        title: 'Legacy One',
-        postcardType: 'MUSHROOM',
-        city: 'Singapore',
-        country: 'Singapore',
-        latitude: 1.2834,
-        longitude: 103.8607,
-        likeCount: 3,
-        dislikeCount: 0,
-        wrongLocationReports: 0,
-        reportVersion: 1,
-        locationStatus: 'AUTO',
-        geoBucket: geoBucketFields(1.2834, 103.8607).geoBucket,
-        deletedAt: null,
-        createdAt: '2026-03-01T10:00:00.000Z',
-        updatedAt: '2026-03-01T10:00:00.000Z'
-      },
-      {
-        id: 'pc_legacy_2',
-        userId: 'usr_1',
-        title: 'Legacy Two',
-        postcardType: 'FLOWER',
-        city: 'New York',
-        country: 'United States',
-        latitude: 40.7128,
-        longitude: -74.006,
-        likeCount: 1,
-        dislikeCount: 0,
-        wrongLocationReports: 0,
-        reportVersion: 1,
-        locationStatus: 'AUTO',
-        geoBucket: geoBucketFields(40.7128, -74.006).geoBucket,
-        deletedAt: null,
-        createdAt: '2026-03-02T10:00:00.000Z',
-        updatedAt: '2026-03-02T10:00:00.000Z'
+  const originalFallbackFlag = process.env.POSTCARD_EXPLORE_REQUIRE_LEGACY_FALLBACK;
+  process.env.POSTCARD_EXPLORE_REQUIRE_LEGACY_FALLBACK = 'true';
+  try {
+    setFakeClient({
+      [ddbTables.users]: [{ id: 'usr_1', email: 'alice@example.com', displayName: 'Alice' }],
+      [ddbTables.postcards]: [
+        {
+          id: 'pc_legacy_1',
+          userId: 'usr_1',
+          title: 'Legacy One',
+          postcardType: 'MUSHROOM',
+          city: 'Singapore',
+          country: 'Singapore',
+          latitude: 1.2834,
+          longitude: 103.8607,
+          likeCount: 3,
+          dislikeCount: 0,
+          wrongLocationReports: 0,
+          reportVersion: 1,
+          locationStatus: 'AUTO',
+          geoBucket: geoBucketFields(1.2834, 103.8607).geoBucket,
+          deletedAt: null,
+          createdAt: '2026-03-01T10:00:00.000Z',
+          updatedAt: '2026-03-01T10:00:00.000Z'
+        },
+        {
+          id: 'pc_legacy_2',
+          userId: 'usr_1',
+          title: 'Legacy Two',
+          postcardType: 'FLOWER',
+          city: 'New York',
+          country: 'United States',
+          latitude: 40.7128,
+          longitude: -74.006,
+          likeCount: 1,
+          dislikeCount: 0,
+          wrongLocationReports: 0,
+          reportVersion: 1,
+          locationStatus: 'AUTO',
+          geoBucket: geoBucketFields(40.7128, -74.006).geoBucket,
+          deletedAt: null,
+          createdAt: '2026-03-02T10:00:00.000Z',
+          updatedAt: '2026-03-02T10:00:00.000Z'
+        }
+      ]
+    });
+
+    const bounded = await dynamoPostcardRepo.findForPublicQuery({
+      sort: 'ranking',
+      limit: 50,
+      bounds: {
+        north: 85,
+        south: -85,
+        east: 179,
+        west: -179
       }
-    ]
-  });
+    });
 
-  const bounded = await dynamoPostcardRepo.findForPublicQuery({
-    sort: 'ranking',
-    limit: 50,
-    bounds: {
-      north: 85,
-      south: -85,
-      east: 179,
-      west: -179
+    const ids = new Set(bounded.rows.map((item) => item.id));
+    assert.equal(bounded.total, 2);
+    assert.equal(ids.has('pc_legacy_1'), true);
+    assert.equal(ids.has('pc_legacy_2'), true);
+  } finally {
+    if (originalFallbackFlag === undefined) {
+      delete process.env.POSTCARD_EXPLORE_REQUIRE_LEGACY_FALLBACK;
+    } else {
+      process.env.POSTCARD_EXPLORE_REQUIRE_LEGACY_FALLBACK = originalFallbackFlag;
     }
-  });
-
-  const ids = new Set(bounded.rows.map((item) => item.id));
-  assert.equal(bounded.total, 2);
-  assert.equal(ids.has('pc_legacy_1'), true);
-  assert.equal(ids.has('pc_legacy_2'), true);
+  }
 });
 
 test('dynamo postcard repo submitFeedback handles vote toggle and report lifecycle', async () => {
