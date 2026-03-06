@@ -1,12 +1,11 @@
 # OpenNext Frontend Deployment
 
-This project now supports deploying the Next.js frontend to AWS Lambda + CloudFront using SST's `Nextjs` component (OpenNext under the hood).
+This project deploys the Next.js frontend to AWS Lambda + CloudFront using SST's `Nextjs` component (OpenNext under the hood).
 
 ## Files
 
 - `sst.config.ts`: OpenNext infrastructure definition
-- `.github/workflows/deploy-opennext.yml`: GitHub Actions deploy workflow (manual trigger)
-- `.github/workflows/deploy.yml`: legacy ECS deploy workflow (manual only)
+- `.github/workflows/deploy-opennext.yml`: GitHub Actions deploy workflow (push to `main` + manual trigger)
 
 ## Workflow usage
 
@@ -23,6 +22,11 @@ The workflow loads sensitive values from SSM:
 - `/pikmin-postcard/NEXTAUTH_SECRET`
 - `/pikmin-postcard/APP_JWT_SECRET`
 - `/pikmin-postcard/GOOGLE_GENERATIVE_AI_API_KEY`
+
+The deployment config also uses:
+
+- `APP_BACKEND_MODE` (recommended: `proxy`)
+- `SERVERLESS_API_BASE_URL` (HTTP API base URL)
 
 ## Domain cutover
 

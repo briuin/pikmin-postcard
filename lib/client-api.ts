@@ -1,5 +1,3 @@
-import { mapInternalApiPathToServerless } from '@/lib/backend/api-path-map';
-
 export type ApiFetchContext = {
   userId?: string | null;
   userEmail?: string | null;
@@ -39,43 +37,11 @@ export function clearClientAuthToken(): void {
   setClientAuthToken(null);
 }
 
-export function getServerlessApiBaseUrl(): string {
-  return (process.env.NEXT_PUBLIC_SERVERLESS_API_BASE_URL ?? '').trim().replace(/\/$/, '');
-}
-
-function shouldUseExternalServerlessApi(context: ApiFetchContext = {}): boolean {
-  if (context.forceInternal) {
-    return false;
-  }
-
-  const mode = (process.env.NEXT_PUBLIC_USE_EXTERNAL_SERVERLESS_API ?? '').trim().toLowerCase();
-  if (mode === 'false') {
-    return false;
-  }
-
-  return Boolean(getServerlessApiBaseUrl());
-}
-
 export function buildApiUrl(path: string, context: ApiFetchContext = {}): string {
-  if (!shouldUseExternalServerlessApi(context)) {
+  if (context.forceInternal) {
     return path;
   }
-  const base = getServerlessApiBaseUrl();
-
-  const mappedPath = mapInternalApiPathToServerless(path);
-  if (!mappedPath) {
-    return path;
-  }
-
-  return `${base}${mappedPath}`;
-}
-
-export function isServerlessApiUrl(url: string): boolean {
-  if ((process.env.NEXT_PUBLIC_USE_EXTERNAL_SERVERLESS_API ?? '').trim().toLowerCase() === 'false') {
-    return false;
-  }
-  const base = getServerlessApiBaseUrl();
-  return Boolean(base) && url.startsWith(base);
+  return path;
 }
 
 export async function apiFetch(
@@ -89,17 +55,6 @@ export async function apiFetch(
 
   if (bearerToken) {
     headers.set('Authorization', `Bearer ${bearerToken}`);
-  }
-
-  if (isServerlessApiUrl(url)) {
-    if (!bearerToken) {
-      if (context.userId) {
-        headers.set('x-user-id', context.userId);
-      }
-      if (context.userEmail) {
-        headers.set('x-user-email', context.userEmail);
-      }
-    }
   }
 
   return fetch(url, {

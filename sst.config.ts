@@ -27,12 +27,8 @@ export default $config({
     };
   },
   async run() {
-    const publicApiBaseUrl =
-      process.env.NEXT_PUBLIC_SERVERLESS_API_BASE_URL?.trim() || "";
     const serverApiBaseUrl =
-      process.env.SERVERLESS_API_BASE_URL?.trim() || publicApiBaseUrl;
-    const useExternalServerlessApi =
-      process.env.NEXT_PUBLIC_USE_EXTERNAL_SERVERLESS_API?.trim() || "true";
+      process.env.SERVERLESS_API_BASE_URL?.trim() || "";
     const appBackendMode =
       process.env.APP_BACKEND_MODE?.trim() ||
       (serverApiBaseUrl ? "proxy" : "local");
@@ -60,14 +56,12 @@ export default $config({
             name: domainName,
             dns: sst.aws.dns({
               zone: zoneId,
-              // Allow replacing the current record while migrating from ECS.
+              // Allow replacing the current record during managed cutover.
               override: true,
             }),
           }
         : undefined,
       environment: {
-        NEXT_PUBLIC_SERVERLESS_API_BASE_URL: publicApiBaseUrl,
-        NEXT_PUBLIC_USE_EXTERNAL_SERVERLESS_API: useExternalServerlessApi,
         SERVERLESS_API_BASE_URL: serverApiBaseUrl,
         APP_BACKEND_MODE: appBackendMode,
         NEXT_PUBLIC_GOOGLE_CLIENT_ID: publicGoogleClientId,
