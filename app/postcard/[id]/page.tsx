@@ -3,6 +3,10 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { PostcardCoordinateCopy } from '@/components/postcard-coordinate-copy';
+import {
+  resolveServerlessApiBaseUrl,
+  shouldProxyToServerless
+} from '@/lib/backend/backend-mode';
 import { getPostcardTypeLabel } from '@/lib/postcard-type-label';
 import { buildLocationLabel } from '@/lib/postcards/location-label';
 
@@ -13,7 +17,6 @@ type PageProps = {
 export const dynamic = 'force-dynamic';
 
 const DEFAULT_SITE_URL = 'https://pikmin.askans.app';
-const DEFAULT_SERVERLESS_API_BASE = 'https://q5wrip39qe.execute-api.us-east-1.amazonaws.com';
 
 type SharedPostcardRecord = {
   id: string;
@@ -77,21 +80,10 @@ function toAbsoluteUrl(value: string): string {
 }
 
 function resolveServerlessApiBase(): string {
-  const mode = (process.env.APP_BACKEND_MODE ?? '').trim().toLowerCase();
-  if (mode === 'local' || mode === 'internal') {
+  if (!shouldProxyToServerless()) {
     return '';
   }
-
-  const explicitServerBase = process.env.SERVERLESS_API_BASE_URL?.trim() || '';
-  if (explicitServerBase) {
-    return explicitServerBase.replace(/\/$/, '');
-  }
-
-  if (mode === 'proxy' || mode === 'external' || mode === 'serverless') {
-    return DEFAULT_SERVERLESS_API_BASE;
-  }
-
-  return '';
+  return resolveServerlessApiBaseUrl();
 }
 
 async function findSharedPostcardById(id: string) {

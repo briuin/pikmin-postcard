@@ -1,19 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { mapInternalApiPathToServerless } from '@/lib/backend/api-path-map';
+import {
+  resolveServerlessApiBaseUrl,
+  shouldProxyToServerless
+} from '@/lib/backend/backend-mode';
 
-const APP_BACKEND_MODE = (process.env.APP_BACKEND_MODE ?? '')
-  .trim()
-  .toLowerCase();
-const SERVERLESS_API_BASE_URL = (
-  process.env.SERVERLESS_API_BASE_URL ?? ''
-)
-  .trim()
-  .replace(/\/$/, '');
-const SHOULD_PROXY_TO_SERVERLESS =
-  APP_BACKEND_MODE === 'proxy' ||
-  APP_BACKEND_MODE === 'external' ||
-  APP_BACKEND_MODE === 'serverless' ||
-  (!APP_BACKEND_MODE && Boolean(SERVERLESS_API_BASE_URL));
+const SERVERLESS_API_BASE_URL = resolveServerlessApiBaseUrl();
+const SHOULD_PROXY_TO_SERVERLESS = shouldProxyToServerless();
 
 export function middleware(request: NextRequest) {
   if (!SHOULD_PROXY_TO_SERVERLESS || !SERVERLESS_API_BASE_URL) {
