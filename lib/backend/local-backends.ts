@@ -21,10 +21,6 @@ import {
 } from '@/lib/admin/local-admin-route-service';
 import { createFeedbackLocal } from '@/lib/feedback/local-feedback-route-service';
 import {
-  listDetectionJobsLocal,
-  submitDetectionJobLocal
-} from '@/lib/location-detection/local-detection-route-service';
-import {
   type ApprovedPostcardActor,
   createPostcardLocal,
   getPostcardByIdLocal,
@@ -221,6 +217,9 @@ export const localUploadBackend: UploadBackend = {
 
 export const localDetectionBackend: DetectionBackend = {
   async list(request) {
+    const { listDetectionJobsLocal } = await import(
+      '@/lib/location-detection/local-detection-route-service'
+    );
     return withGuardedValue(
       requireAuthenticatedUserId({ createIfMissing: true }),
       async (userId) => listDetectionJobsLocal({ request, userId })
@@ -228,6 +227,9 @@ export const localDetectionBackend: DetectionBackend = {
   },
 
   async create(request) {
+    const { submitDetectionJobLocal } = await import(
+      '@/lib/location-detection/local-detection-route-service'
+    );
     return withGuardedValue(requireApprovedDetectionSubmitter(), async (actor) =>
       submitDetectionJobLocal({ request, actorId: actor.id })
     );
