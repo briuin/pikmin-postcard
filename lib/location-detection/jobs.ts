@@ -1,4 +1,5 @@
 import { PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { DetectionJobStatus, LocationStatus, PostcardType } from '@prisma/client';
 import { detectWithGemini } from '@/lib/location-detection/gemini';
 import { reverseGeocodeCoordinates } from '@/lib/reverse-geocode';
@@ -14,6 +15,7 @@ import {
   assertSupportedImage,
   buildObjectKey,
   buildVariantObjectKey,
+  getStorageConfig,
   uploadBytesToStorage
 } from '@/lib/storage';
 
@@ -21,8 +23,8 @@ export type ProcessDetectionJobParams = {
   jobId: string;
   userId: string;
   mimeType: string;
-  fileBytes: Buffer;
   originalImageUrl: string;
+  originalObjectKey: string;
   postcardObjectKey: string;
 };
 
@@ -84,6 +86,55 @@ function toJobRow(input: Record<string, unknown>): DetectionJobRow {
     createdAt: String(input.createdAt || nowIso()),
     updatedAt: String(input.updatedAt || nowIso())
   };
+}
+
+async function toBufferFromS3Body(body: unknown): Promise<Buffer> {
+  if (!body) {
+    return Buffer.alloc(0);
+  }
+
+  const bodyWithTransform = body as {
+    transformToByteArray?: () => Promise<Uint8Array>;
+  };
+  if (typeof bodyWithTransform.transformToByteArray === 'function') {
+    return Buffer.from(await bodyWithTransform.transformToByteArray());
+  }
+
+  const chunks: Buffer[] = [];
+  for await (const chunk of body as AsyncIterable<Uint8Array | Buffer | string>) {
+    if (typeof chunk === 'string') {
+      chunks.push(Buffer.from(chunk));
+      continue;
+    }
+    chunks.push(Buffer.from(chunk));
+  }
+
+  return Buffer.concat(chunks);
+}
+
+async function loadOriginalImageFromStorage(
+  objectKey: string
+): Promise<{ bytes: Buffer; contentType: string | null }> {
+  const storage = getStorageConfig();
+  const s3 = new S3Client({ region: storage.region });
+  const result = await s3.send(
+    new GetObjectCommand({
+      Bucket: storage.bucket,
+      Key: objectKey
+    })
+  );
+
+  const bytes = await toBufferFromS3Body(result.Body);
+  if (bytes.length === 0) {
+    throw new Error(`Original image is empty or missing in storage: ${objectKey}`);
+  }
+
+  const contentType =
+    typeof result.ContentType === 'string' && result.ContentType.trim().length > 0
+      ? result.ContentType.trim()
+      : null;
+
+  return { bytes, contentType };
 }
 
 async function createAutoPostcard(params: {
@@ -162,6 +213,10 @@ export async function queueDetectionJob({
         id: jobId,
         userId,
         imageUrl: originalImageUrl,
+        originalImageUrl,
+        originalObjectKey,
+        postcardObjectKey,
+        mimeType: file.type,
         status: DetectionJobStatus.QUEUED,
         latitude: null,
         longitude: null,
@@ -184,8 +239,8 @@ export async function queueDetectionJob({
       jobId,
       userId,
       mimeType: file.type,
-      fileBytes,
       originalImageUrl,
+      originalObjectKey,
       postcardObjectKey
     }
   };
@@ -208,14 +263,18 @@ export async function processDetectionJob(params: ProcessDetectionJobParams): Pr
       })
     );
 
-    const detection = await detectWithGemini(params.mimeType, params.fileBytes);
+    const { bytes: fileBytes, contentType } = await loadOriginalImageFromStorage(
+      params.originalObjectKey
+    );
+    const mimeType = params.mimeType || contentType || 'image/jpeg';
+    const detection = await detectWithGemini(mimeType, fileBytes);
     let postcardImageUrl = params.originalImageUrl;
 
     try {
       const { buildCroppedPostcardImage } = await import('@/lib/location-detection/crop');
       const cropped = await buildCroppedPostcardImage({
-        mimeType: params.mimeType,
-        fileBytes: params.fileBytes
+        mimeType,
+        fileBytes
       });
 
       postcardImageUrl = await uploadBytesToStorage({

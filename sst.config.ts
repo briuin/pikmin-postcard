@@ -27,12 +27,22 @@ export default $config({
     };
   },
   async run() {
-    const ddbTablePrefix = process.env.DDB_TABLE_PREFIX?.trim() || "pikmin-postcard";
+    const ddbTablePrefix =
+      process.env.DDB_TABLE_PREFIX?.trim() || "pikmin-postcard-dev";
     const s3BucketName = requiredEnv("S3_BUCKET_NAME");
+    const s3Region = process.env.S3_REGION?.trim() || "us-east-1";
+    const s3PublicBaseUrl = process.env.S3_PUBLIC_BASE_URL?.trim() || "";
+    const googleClientId = requiredEnv("GOOGLE_CLIENT_ID");
+    const googleClientSecret = requiredEnv("GOOGLE_CLIENT_SECRET");
+    const nextAuthSecret = requiredEnv("NEXTAUTH_SECRET");
+    const appJwtSecret = requiredEnv("APP_JWT_SECRET");
+    const geminiApiKey = requiredEnv("GOOGLE_GENERATIVE_AI_API_KEY");
+    const geminiModel = process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash";
+    const newUserApprovalMode =
+      process.env.NEW_USER_APPROVAL_MODE?.trim() || "auto";
     const publicGoogleClientId =
       process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim() ||
-      process.env.GOOGLE_CLIENT_ID?.trim() ||
-      "";
+      googleClientId;
 
     if (!publicGoogleClientId) {
       throw new Error(
@@ -46,31 +56,71 @@ export default $config({
     const zoneId =
       process.env.OPENNEXT_ROUTE53_ZONE_ID?.trim() || DEFAULT_ROUTE53_ZONE_ID;
 
+    const ddbPermission = {
+      actions: [
+        "dynamodb:GetItem",
+        "dynamodb:BatchGetItem",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:Query",
+        "dynamodb:Scan",
+        "dynamodb:BatchWriteItem",
+      ],
+      resources: [
+        `arn:aws:dynamodb:*:*:table/${ddbTablePrefix}-*`,
+        `arn:aws:dynamodb:*:*:table/${ddbTablePrefix}-*/index/*`,
+      ],
+    };
+
+    const s3Permission = {
+      actions: ["s3:GetObject", "s3:PutObject", "s3:ListBucket"],
+      resources: [
+        `arn:aws:s3:::${s3BucketName}`,
+        `arn:aws:s3:::${s3BucketName}/*`,
+      ],
+    };
+
+    const detectionDlq = new sst.aws.Queue("DetectionDlq");
+    const detectionQueue = new sst.aws.Queue("DetectionQueue", {
+      visibilityTimeout: "5 minutes",
+      dlq: {
+        queue: detectionDlq.arn,
+        retry: 3,
+      },
+    });
+
+    detectionQueue.subscribe(
+      {
+        handler: "lib/location-detection/queue-worker.handler",
+        timeout: "5 minutes",
+        memory: "1024 MB",
+        environment: {
+          GOOGLE_GENERATIVE_AI_API_KEY: geminiApiKey,
+          GEMINI_MODEL: geminiModel,
+          S3_BUCKET_NAME: s3BucketName,
+          S3_REGION: s3Region,
+          S3_PUBLIC_BASE_URL: s3PublicBaseUrl,
+          DDB_TABLE_PREFIX: ddbTablePrefix,
+        },
+        permissions: [ddbPermission, s3Permission],
+      },
+      {
+        batch: {
+          size: 1,
+          partialResponses: true,
+        },
+      }
+    );
+
     const site = new sst.aws.Nextjs("Web", {
       path: ".",
       permissions: [
+        ddbPermission,
+        s3Permission,
         {
-          actions: [
-            "dynamodb:GetItem",
-            "dynamodb:BatchGetItem",
-            "dynamodb:PutItem",
-            "dynamodb:UpdateItem",
-            "dynamodb:DeleteItem",
-            "dynamodb:Query",
-            "dynamodb:Scan",
-            "dynamodb:BatchWriteItem",
-          ],
-          resources: [
-            `arn:aws:dynamodb:*:*:table/${ddbTablePrefix}-*`,
-            `arn:aws:dynamodb:*:*:table/${ddbTablePrefix}-*/index/*`,
-          ],
-        },
-        {
-          actions: ["s3:GetObject", "s3:PutObject", "s3:ListBucket"],
-          resources: [
-            `arn:aws:s3:::${s3BucketName}`,
-            `arn:aws:s3:::${s3BucketName}/*`,
-          ],
+          actions: ["sqs:SendMessage", "sqs:GetQueueAttributes", "sqs:GetQueueUrl"],
+          resources: [detectionQueue.arn],
         },
       ],
       domain: enableDomainCutover
@@ -85,25 +135,27 @@ export default $config({
         : undefined,
       environment: {
         NEXT_PUBLIC_GOOGLE_CLIENT_ID: publicGoogleClientId,
-        GOOGLE_CLIENT_ID: requiredEnv("GOOGLE_CLIENT_ID"),
-        GOOGLE_CLIENT_SECRET: requiredEnv("GOOGLE_CLIENT_SECRET"),
+        GOOGLE_CLIENT_ID: googleClientId,
+        GOOGLE_CLIENT_SECRET: googleClientSecret,
         NEXTAUTH_URL: process.env.NEXTAUTH_URL?.trim() || `https://${domainName}`,
         AUTH_URL: process.env.AUTH_URL?.trim() || `https://${domainName}`,
-        NEXTAUTH_SECRET: requiredEnv("NEXTAUTH_SECRET"),
-        APP_JWT_SECRET: requiredEnv("APP_JWT_SECRET"),
-        GOOGLE_GENERATIVE_AI_API_KEY: requiredEnv("GOOGLE_GENERATIVE_AI_API_KEY"),
-        GEMINI_MODEL: process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash",
+        NEXTAUTH_SECRET: nextAuthSecret,
+        APP_JWT_SECRET: appJwtSecret,
+        GOOGLE_GENERATIVE_AI_API_KEY: geminiApiKey,
+        GEMINI_MODEL: geminiModel,
         S3_BUCKET_NAME: s3BucketName,
-        S3_REGION: process.env.S3_REGION?.trim() || "us-east-1",
-        S3_PUBLIC_BASE_URL: process.env.S3_PUBLIC_BASE_URL?.trim() || "",
+        S3_REGION: s3Region,
+        S3_PUBLIC_BASE_URL: s3PublicBaseUrl,
         DDB_TABLE_PREFIX: ddbTablePrefix,
-        NEW_USER_APPROVAL_MODE:
-          process.env.NEW_USER_APPROVAL_MODE?.trim() || "auto",
+        NEW_USER_APPROVAL_MODE: newUserApprovalMode,
+        DETECTION_QUEUE_URL: detectionQueue.url,
       },
     });
 
     return {
       webUrl: site.url,
+      detectionQueueUrl: detectionQueue.url,
+      detectionDlqUrl: detectionDlq.url,
       domainConfigured: enableDomainCutover ? "true" : "false",
       domainName: enableDomainCutover ? domainName : "not-configured",
     };

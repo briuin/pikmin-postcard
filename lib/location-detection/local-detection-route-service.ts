@@ -5,6 +5,7 @@ import {
   processDetectionJob,
   queueDetectionJob
 } from '@/lib/location-detection/jobs';
+import { enqueueDetectionJobMessage } from '@/lib/location-detection/queue';
 import { requireImageFileWithUploadAction } from '@/lib/request-image';
 import { recordUserAction } from '@/lib/user-action-log';
 
@@ -44,7 +45,11 @@ export async function submitDetectionJobLocal(args: {
       file
     });
 
-    void processDetectionJob(queued.processParams);
+    const queuedInSqs = await enqueueDetectionJobMessage(queued.processParams);
+    if (!queuedInSqs) {
+      // Local fallback when DETECTION_QUEUE_URL is not configured.
+      void processDetectionJob(queued.processParams);
+    }
 
     return NextResponse.json(
       {
