@@ -91,19 +91,23 @@ async function ensureMissingGlobalSecondaryIndexes(client, definition, existingT
       continue;
     }
 
-    const neededAttrDefs = [];
+    const updateAttrDefs = [];
+    const seenUpdateAttrNames = new Set();
     for (const keyPart of index.KeySchema || []) {
       const attrName = keyPart.AttributeName;
-      if (!attrName || existingAttrDefs.has(attrName)) {
+      if (!attrName) {
         continue;
       }
-      const attrDef = desiredAttrDefs.get(attrName);
+      const attrDef = desiredAttrDefs.get(attrName) || existingAttrDefs.get(attrName);
       if (!attrDef) {
         throw new Error(
           `Missing AttributeDefinition for ${attrName} on ${definition.TableName}.`
         );
       }
-      neededAttrDefs.push(attrDef);
+      if (!seenUpdateAttrNames.has(attrName)) {
+        updateAttrDefs.push(attrDef);
+        seenUpdateAttrNames.add(attrName);
+      }
       existingAttrDefs.set(attrName, attrDef);
     }
 
@@ -111,8 +115,7 @@ async function ensureMissingGlobalSecondaryIndexes(client, definition, existingT
     await client.send(
       new UpdateTableCommand({
         TableName: definition.TableName,
-        AttributeDefinitions:
-          neededAttrDefs.length > 0 ? neededAttrDefs : undefined,
+        AttributeDefinitions: updateAttrDefs,
         GlobalSecondaryIndexUpdates: [
           {
             Create: {
