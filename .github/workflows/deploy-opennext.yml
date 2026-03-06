@@ -69,6 +69,10 @@ jobs:
         run: |
           npm run ddb:provision -- --region "${{ env.AWS_REGION }}" --prefix "${{ env.DDB_TABLE_PREFIX }}"
 
+      - name: Backfill postcard geo buckets
+        run: |
+          npm run ddb:backfill:geo
+
       - name: Load auth and AI secrets from GitHub Secrets
         env:
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
