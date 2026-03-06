@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { apiError } from '@/lib/backend/contracts';
 import { proxyExternalApiRequest } from '@/lib/external-api-proxy';
 
 type ProxyArgs = {
@@ -13,8 +13,5 @@ export async function proxyOrServerError(args: ProxyArgs): Promise<Response> {
     return proxied;
   }
 
-  return NextResponse.json(
-    { error: 'External serverless backend is not configured.' },
-    { status: 500 }
-  );
+  return apiError(500, 'External serverless backend is not configured.');
 }

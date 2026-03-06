@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { apiError, getUnknownErrorDetails } from '@/lib/backend/contracts';
 import {
   listDetectionJobsForUser,
   processDetectionJob,
@@ -55,12 +56,6 @@ export async function submitDetectionJobLocal(args: {
       { status: 202 }
     );
   } catch (error) {
-    return NextResponse.json(
-      {
-        error: 'Failed to queue location detection.',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    );
+    return apiError(500, 'Failed to queue location detection.', getUnknownErrorDetails(error));
   }
 }

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { apiError, getUnknownErrorDetails } from '@/lib/backend/contracts';
 import { requireImageFileWithUploadAction } from '@/lib/request-image';
 import { assertSupportedImage, buildObjectKey, uploadBytesToStorage } from '@/lib/storage';
 
@@ -36,12 +37,6 @@ export async function uploadImageLocal(args: {
       { status: 201 }
     );
   } catch (error) {
-    return NextResponse.json(
-      {
-        error: 'Failed to upload image.',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    );
+    return apiError(500, 'Failed to upload image.', getUnknownErrorDetails(error));
   }
 }

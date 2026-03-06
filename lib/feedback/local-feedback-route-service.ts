@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { apiError, getUnknownErrorDetails } from '@/lib/backend/contracts';
 import { prisma } from '@/lib/prisma';
 import { recordUserAction } from '@/lib/user-action-log';
 
@@ -40,12 +41,6 @@ export async function createFeedbackLocal(args: {
     });
     return NextResponse.json(created, { status: 201 });
   } catch (error) {
-    return NextResponse.json(
-      {
-        error: 'Invalid feedback payload.',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 400 }
-    );
+    return apiError(400, 'Invalid feedback payload.', getUnknownErrorDetails(error));
   }
 }

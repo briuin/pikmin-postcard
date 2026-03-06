@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getAuthenticatedIdentity, getAuthenticatedUserId } from '@/lib/api-auth';
+import { apiError, getUnknownErrorDetails } from '@/lib/backend/contracts';
 import { userRepo } from '@/lib/repos/users';
 import { recordUserAction } from '@/lib/user-action-log';
 
@@ -13,7 +14,7 @@ export async function getProfileLocal(args: { request: Request }): Promise<NextR
   const userId = await getAuthenticatedUserId({ createIfMissing: true });
   const identity = await getAuthenticatedIdentity();
   if (!userId || !identity?.email) {
-    return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+    return apiError(401, 'Unauthorized.');
   }
 
   await recordUserAction({
@@ -37,7 +38,7 @@ export async function updateProfileLocal(args: { request: Request }): Promise<Ne
   const { request } = args;
   const userId = await getAuthenticatedUserId({ createIfMissing: true });
   if (!userId) {
-    return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+    return apiError(401, 'Unauthorized.');
   }
 
   try {
@@ -53,7 +54,7 @@ export async function updateProfileLocal(args: { request: Request }): Promise<Ne
 
     const user = await userRepo.updateDisplayNameById(userId, payload.displayName);
     if (!user) {
-      return NextResponse.json({ error: 'User not found.' }, { status: 404 });
+      return apiError(404, 'User not found.');
     }
 
     return NextResponse.json(
@@ -64,12 +65,6 @@ export async function updateProfileLocal(args: { request: Request }): Promise<Ne
       { status: 200 }
     );
   } catch (error) {
-    return NextResponse.json(
-      {
-        error: 'Failed to update profile.',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 400 }
-    );
+    return apiError(400, 'Failed to update profile.', getUnknownErrorDetails(error));
   }
 }
