@@ -27,6 +27,8 @@ export default $config({
     };
   },
   async run() {
+    const ddbTablePrefix = process.env.DDB_TABLE_PREFIX?.trim() || "pikmin-postcard";
+    const s3BucketName = requiredEnv("S3_BUCKET_NAME");
     const publicGoogleClientId =
       process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim() ||
       process.env.GOOGLE_CLIENT_ID?.trim() ||
@@ -46,6 +48,31 @@ export default $config({
 
     const site = new sst.aws.Nextjs("Web", {
       path: ".",
+      permissions: [
+        {
+          actions: [
+            "dynamodb:GetItem",
+            "dynamodb:BatchGetItem",
+            "dynamodb:PutItem",
+            "dynamodb:UpdateItem",
+            "dynamodb:DeleteItem",
+            "dynamodb:Query",
+            "dynamodb:Scan",
+            "dynamodb:BatchWriteItem",
+          ],
+          resources: [
+            `arn:aws:dynamodb:*:*:table/${ddbTablePrefix}-*`,
+            `arn:aws:dynamodb:*:*:table/${ddbTablePrefix}-*/index/*`,
+          ],
+        },
+        {
+          actions: ["s3:GetObject", "s3:PutObject", "s3:ListBucket"],
+          resources: [
+            `arn:aws:s3:::${s3BucketName}`,
+            `arn:aws:s3:::${s3BucketName}/*`,
+          ],
+        },
+      ],
       domain: enableDomainCutover
         ? {
             name: domainName,
@@ -66,10 +93,10 @@ export default $config({
         APP_JWT_SECRET: requiredEnv("APP_JWT_SECRET"),
         GOOGLE_GENERATIVE_AI_API_KEY: requiredEnv("GOOGLE_GENERATIVE_AI_API_KEY"),
         GEMINI_MODEL: process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash",
-        S3_BUCKET_NAME: requiredEnv("S3_BUCKET_NAME"),
+        S3_BUCKET_NAME: s3BucketName,
         S3_REGION: process.env.S3_REGION?.trim() || "us-east-1",
         S3_PUBLIC_BASE_URL: process.env.S3_PUBLIC_BASE_URL?.trim() || "",
-        DDB_TABLE_PREFIX: process.env.DDB_TABLE_PREFIX?.trim() || "pikmin-postcard",
+        DDB_TABLE_PREFIX: ddbTablePrefix,
         NEW_USER_APPROVAL_MODE:
           process.env.NEW_USER_APPROVAL_MODE?.trim() || "auto",
       },
