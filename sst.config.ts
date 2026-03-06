@@ -39,6 +39,8 @@ export default $config({
     const geminiModel = process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash";
     const newUserApprovalMode =
       process.env.NEW_USER_APPROVAL_MODE?.trim() || "auto";
+    const postcardExploreRequireLegacyFallback =
+      process.env.POSTCARD_EXPLORE_REQUIRE_LEGACY_FALLBACK?.trim() || "true";
     const publicGoogleClientId =
       process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim() ||
       googleClientId;
@@ -144,6 +146,8 @@ export default $config({
         S3_PUBLIC_BASE_URL: s3PublicBaseUrl,
         DDB_TABLE_PREFIX: ddbTablePrefix,
         NEW_USER_APPROVAL_MODE: newUserApprovalMode,
+        POSTCARD_EXPLORE_REQUIRE_LEGACY_FALLBACK:
+          postcardExploreRequireLegacyFallback,
         DETECTION_QUEUE_URL: detectionQueue.url,
       },
     });

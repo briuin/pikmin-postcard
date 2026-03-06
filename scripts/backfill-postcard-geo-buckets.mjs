@@ -8,8 +8,19 @@ import {
 const DEFAULT_GEO_BUCKET_LEVELS = [2, 8, 60];
 
 function parseArgs(argv) {
+  const getArgValue = (name) => {
+    const flag = `--${name}`;
+    const index = argv.indexOf(flag);
+    if (index !== -1 && argv[index + 1]) {
+      return String(argv[index + 1]).trim();
+    }
+    return "";
+  };
+
   return {
     dryRun: argv.includes("--dry-run"),
+    region: getArgValue("region"),
+    prefix: getArgValue("prefix"),
   };
 }
 
@@ -129,9 +140,13 @@ async function writeRows(doc, tableName, rows) {
 }
 
 async function main() {
-  const { dryRun } = parseArgs(process.argv.slice(2));
-  const region = process.env.AWS_REGION || process.env.S3_REGION || "us-east-1";
+  const { dryRun, region: regionArg, prefix: prefixArg } = parseArgs(
+    process.argv.slice(2)
+  );
+  const region =
+    regionArg || process.env.AWS_REGION || process.env.S3_REGION || "us-east-1";
   const prefix =
+    prefixArg ||
     String(process.env.DDB_TABLE_PREFIX || "pikmin-postcard-dev").trim() ||
     "pikmin-postcard-dev";
   const bucketLevels = toGeoBucketLevels();
