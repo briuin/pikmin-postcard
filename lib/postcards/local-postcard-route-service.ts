@@ -19,7 +19,7 @@ import {
 } from '@/lib/postcards/feedback-mutations';
 import { serializePostcards } from '@/lib/postcards/list';
 import type { GeoBounds } from '@/lib/postcards/geo';
-import { parsePublicQuery } from '@/lib/postcards/query';
+import { parsePublicQuery, type PublicQuery } from '@/lib/postcards/query';
 import {
   findPostcardById,
   findPublicPostcards,
@@ -70,6 +70,94 @@ export type ApprovedPostcardActor = {
   id: string;
   role: UserRole;
 };
+
+type PublicPostcardsCacheEntry = {
+  expiresAt: number;
+  payload: {
+    items: Array<Record<string, unknown>>;
+    total: number;
+    hasMore: boolean;
+    limit: number;
+    sort: PublicQuery['sort'];
+  };
+};
+
+const PUBLIC_POSTCARDS_CACHE = new Map<string, PublicPostcardsCacheEntry>();
+const PUBLIC_POSTCARDS_CACHE_TTL_MS = Math.max(
+  0,
+  Number(process.env.POSTCARD_PUBLIC_CACHE_TTL_SECONDS || 15) * 1000
+);
+const PUBLIC_POSTCARDS_CACHE_MAX_ENTRIES = Math.max(
+  40,
+  Number(process.env.POSTCARD_PUBLIC_CACHE_MAX_ENTRIES || 200)
+);
+
+function normalizeCacheNumber(value: number): string {
+  return Number(value.toFixed(6)).toFixed(6);
+}
+
+function buildPublicPostcardsCacheKey(query: PublicQuery): string {
+  return [
+    `q=${query.q || ''}`,
+    `sort=${query.sort}`,
+    `limit=${query.limit}`,
+    `north=${normalizeCacheNumber(query.north)}`,
+    `south=${normalizeCacheNumber(query.south)}`,
+    `east=${normalizeCacheNumber(query.east)}`,
+    `west=${normalizeCacheNumber(query.west)}`
+  ].join('&');
+}
+
+function getPublicPostcardsCache(
+  key: string
+): PublicPostcardsCacheEntry['payload'] | null {
+  if (PUBLIC_POSTCARDS_CACHE_TTL_MS <= 0) {
+    return null;
+  }
+  const now = Date.now();
+  const cached = PUBLIC_POSTCARDS_CACHE.get(key);
+  if (!cached) {
+    return null;
+  }
+  if (cached.expiresAt <= now) {
+    PUBLIC_POSTCARDS_CACHE.delete(key);
+    return null;
+  }
+  return cached.payload;
+}
+
+function setPublicPostcardsCache(
+  key: string,
+  payload: PublicPostcardsCacheEntry['payload']
+): void {
+  if (PUBLIC_POSTCARDS_CACHE_TTL_MS <= 0) {
+    return;
+  }
+  const now = Date.now();
+  PUBLIC_POSTCARDS_CACHE.set(key, {
+    expiresAt: now + PUBLIC_POSTCARDS_CACHE_TTL_MS,
+    payload
+  });
+
+  if (PUBLIC_POSTCARDS_CACHE.size <= PUBLIC_POSTCARDS_CACHE_MAX_ENTRIES) {
+    return;
+  }
+
+  const entries = Array.from(PUBLIC_POSTCARDS_CACHE.entries()).sort(
+    (left, right) => left[1].expiresAt - right[1].expiresAt
+  );
+  for (
+    let index = 0;
+    index < entries.length - PUBLIC_POSTCARDS_CACHE_MAX_ENTRIES;
+    index += 1
+  ) {
+    PUBLIC_POSTCARDS_CACHE.delete(entries[index][0]);
+  }
+}
+
+function clearPublicPostcardsCache(): void {
+  PUBLIC_POSTCARDS_CACHE.clear();
+}
 
 export async function listMinePostcardsLocal(args: {
   request: Request;
@@ -171,6 +259,20 @@ export async function listPublicPostcardsLocal(args: {
   }
 
   const query = queryParse.data;
+  const isPublicViewer = !viewerUserId;
+  const cacheKey = isPublicViewer ? buildPublicPostcardsCacheKey(query) : null;
+  if (cacheKey) {
+    const cached = getPublicPostcardsCache(cacheKey);
+    if (cached) {
+      return NextResponse.json(cached, {
+        status: 200,
+        headers: {
+          'X-Postcards-Cache': 'HIT'
+        }
+      });
+    }
+  }
+
   const bounds: GeoBounds = {
     north: query.north,
     south: query.south,
@@ -213,17 +315,23 @@ export async function listPublicPostcardsLocal(args: {
     viewerUserId,
     serialized.map((item) => item.id)
   );
+  const payload = {
+    items: attachViewerFeedback(serialized, feedbackRows),
+    total,
+    hasMore,
+    limit: query.limit,
+    sort: query.sort
+  };
+  if (cacheKey) {
+    setPublicPostcardsCache(cacheKey, payload);
+  }
 
-  return NextResponse.json(
-    {
-      items: attachViewerFeedback(serialized, feedbackRows),
-      total,
-      hasMore,
-      limit: query.limit,
-      sort: query.sort
-    },
-    { status: 200 }
-  );
+  return NextResponse.json(payload, {
+    status: 200,
+    headers: {
+      'X-Postcards-Cache': cacheKey ? 'MISS' : 'BYPASS'
+    }
+  });
 }
 
 export async function createPostcardLocal(args: {
@@ -270,6 +378,7 @@ export async function createPostcardLocal(args: {
     };
 
     const postcard = await postcardRepo.create(createData);
+    clearPublicPostcardsCache();
 
     return NextResponse.json(postcard, { status: 201 });
   } catch (error) {
@@ -347,6 +456,7 @@ export async function updatePostcardLocal(args: {
           { status: 400 }
         );
       }
+      clearPublicPostcardsCache();
 
       return NextResponse.json(
         {
@@ -369,6 +479,7 @@ export async function updatePostcardLocal(args: {
     if (!updated) {
       return NextResponse.json({ error: 'Postcard not found.' }, { status: 404 });
     }
+    clearPublicPostcardsCache();
 
     return NextResponse.json(updated, { status: 200 });
   } catch (error) {
@@ -408,6 +519,7 @@ export async function softDeletePostcardLocal(args: {
   if (!deleted) {
     return NextResponse.json({ error: 'Postcard not found.' }, { status: 404 });
   }
+  clearPublicPostcardsCache();
 
   return NextResponse.json({ ok: true }, { status: 200 });
 }
@@ -447,6 +559,7 @@ export async function submitPostcardFeedbackLocal(args: {
     if (!postcard) {
       return NextResponse.json({ error: 'Postcard not found.' }, { status: 404 });
     }
+    clearPublicPostcardsCache();
 
     return NextResponse.json(postcard, { status: 200 });
   } catch (error) {

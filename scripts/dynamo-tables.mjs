@@ -2,6 +2,7 @@ export function getTableNames(prefix = "pikmin-postcard-dev") {
   return {
     users: `${prefix}-users`,
     postcards: `${prefix}-postcards`,
+    postcardsExplore: `${prefix}-postcards-explore`,
     tags: `${prefix}-tags`,
     postcardTags: `${prefix}-postcard-tags`,
     detectionJobs: `${prefix}-detection-jobs`,
@@ -59,6 +60,41 @@ export function getTableDefinitions(prefix = "pikmin-postcard-dev") {
           ],
           Projection: { ProjectionType: "ALL" },
         },
+        {
+          IndexName: "geoBucket-createdAt-index",
+          KeySchema: [
+            { AttributeName: "geoBucket", KeyType: "HASH" },
+            { AttributeName: "createdAt", KeyType: "RANGE" },
+          ],
+          Projection: { ProjectionType: "ALL" },
+        },
+        {
+          IndexName: "geoBucketMedium-createdAt-index",
+          KeySchema: [
+            { AttributeName: "geoBucketMedium", KeyType: "HASH" },
+            { AttributeName: "createdAt", KeyType: "RANGE" },
+          ],
+          Projection: { ProjectionType: "ALL" },
+        },
+        {
+          IndexName: "geoBucketCoarse-createdAt-index",
+          KeySchema: [
+            { AttributeName: "geoBucketCoarse", KeyType: "HASH" },
+            { AttributeName: "createdAt", KeyType: "RANGE" },
+          ],
+          Projection: { ProjectionType: "ALL" },
+        },
+      ],
+    }),
+    simpleTable(names.postcardsExplore, "id", {
+      AttributeDefinitions: [
+        { AttributeName: "id", AttributeType: "S" },
+        { AttributeName: "createdAt", AttributeType: "S" },
+        { AttributeName: "geoBucket", AttributeType: "S" },
+        { AttributeName: "geoBucketMedium", AttributeType: "S" },
+        { AttributeName: "geoBucketCoarse", AttributeType: "S" },
+      ],
+      GlobalSecondaryIndexes: [
         {
           IndexName: "geoBucket-createdAt-index",
           KeySchema: [

@@ -20,6 +20,7 @@ import {
   type DashboardReportListItem,
   type ReportCaseStatusUpdateResult
 } from '@/lib/postcards/report-types';
+import { syncPostcardExploreProjectionById } from '@/lib/repos/postcards/explore-projection-sync';
 import type { CancelDashboardReportResult, ReportRepo } from '@/lib/repos/reports/types';
 
 type UnknownRecord = Record<string, unknown>;
@@ -380,6 +381,7 @@ async function cancelDashboardReport(params: {
         }
       })
     );
+    await syncPostcardExploreProjectionById(postcard.id);
   }
 
   const remaining = await queryAllByIndex({
@@ -589,6 +591,7 @@ async function updateReportCaseStatus(params: {
         }
       })
     );
+    await syncPostcardExploreProjectionById(updatedPostcard.id);
   } else if (params.nextStatus === PostcardReportStatus.REMOVED) {
     updatedPostcard = {
       ...updatedPostcard,
@@ -604,6 +607,7 @@ async function updateReportCaseStatus(params: {
         }
       })
     );
+    await syncPostcardExploreProjectionById(updatedPostcard.id);
   }
 
   return {

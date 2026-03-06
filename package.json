@@ -18,6 +18,7 @@
     "ddb:provision": "node scripts/provision-dynamodb.mjs",
     "ddb:clear": "node scripts/clear-dynamodb-tables.mjs",
     "ddb:backfill:geo": "node scripts/backfill-postcard-geo-buckets.mjs",
+    "ddb:backfill:explore": "node scripts/backfill-postcard-explore-projection.mjs",
     "seed:postcards": "node scripts/seed-random-postcards.mjs"
   },
   "dependencies": {

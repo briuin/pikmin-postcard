@@ -14,6 +14,7 @@ const tablePrefix =
 export const ddbTables = {
   users: `${tablePrefix}-users`,
   postcards: `${tablePrefix}-postcards`,
+  postcardsExplore: `${tablePrefix}-postcards-explore`,
   tags: `${tablePrefix}-tags`,
   postcardTags: `${tablePrefix}-postcard-tags`,
   detectionJobs: `${tablePrefix}-detection-jobs`,

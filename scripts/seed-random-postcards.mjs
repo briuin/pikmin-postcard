@@ -226,6 +226,40 @@ async function batchWritePostcards(doc, postcardsTableName, rows) {
   }
 }
 
+function toExploreProjectionRow(row) {
+  return {
+    id: row.id,
+    userId: row.userId,
+    title: row.title,
+    postcardType: row.postcardType,
+    notes: row.notes ?? null,
+    imageUrl: row.imageUrl ?? null,
+    capturedAt: row.capturedAt ?? null,
+    city: row.city ?? null,
+    state: row.state ?? null,
+    country: row.country ?? null,
+    placeName: row.placeName ?? null,
+    latitude: row.latitude ?? null,
+    longitude: row.longitude ?? null,
+    aiLatitude: row.aiLatitude ?? null,
+    aiLongitude: row.aiLongitude ?? null,
+    aiConfidence: row.aiConfidence ?? null,
+    aiPlaceGuess: row.aiPlaceGuess ?? null,
+    likeCount: Number(row.likeCount || 0),
+    dislikeCount: Number(row.dislikeCount || 0),
+    wrongLocationReports: Number(row.wrongLocationReports || 0),
+    reportVersion: Number(row.reportVersion || 1),
+    locationStatus: row.locationStatus ?? 'AUTO',
+    locationModelVersion: row.locationModelVersion ?? null,
+    geoBucket: row.geoBucket ?? null,
+    geoBucketMedium: row.geoBucketMedium ?? null,
+    geoBucketCoarse: row.geoBucketCoarse ?? null,
+    deletedAt: row.deletedAt ?? null,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt
+  };
+}
+
 async function main() {
   const { count, email } = parseArgs(process.argv.slice(2));
 
@@ -233,6 +267,7 @@ async function main() {
   const prefix = String(process.env.DDB_TABLE_PREFIX || 'pikmin-postcard-dev').trim() || 'pikmin-postcard-dev';
   const usersTableName = `${prefix}-users`;
   const postcardsTableName = `${prefix}-postcards`;
+  const postcardsExploreTableName = `${prefix}-postcards-explore`;
   const geoBucketLevels = toGeoBucketLevels();
 
   const doc = DynamoDBDocumentClient.from(new DynamoDBClient({ region }), {
@@ -289,6 +324,11 @@ async function main() {
   });
 
   await batchWritePostcards(doc, postcardsTableName, rows);
+  await batchWritePostcards(
+    doc,
+    postcardsExploreTableName,
+    rows.map((row) => toExploreProjectionRow(row))
+  );
   console.log(`Seeded ${rows.length} postcards for ${email} in ${postcardsTableName}`);
 }
 

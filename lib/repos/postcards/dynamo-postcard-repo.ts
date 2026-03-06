@@ -34,6 +34,10 @@ import {
   scanAll,
   toDateOrNull
 } from '@/lib/repos/dynamodb/shared';
+import {
+  syncPostcardExploreProjectionById,
+  upsertPostcardExploreProjectionFromSource
+} from '@/lib/repos/postcards/explore-projection-sync';
 import { toViewerFeedback } from '@/lib/postcards/viewer-feedback';
 import type {
   CreatePostcardInput,
@@ -512,6 +516,15 @@ async function loadReportedPostcardIds(): Promise<Set<string>> {
 
 const MAX_GEO_BUCKET_QUERIES = 24;
 
+function shouldFallbackToLegacyOnEmptyProjection(): boolean {
+  const raw = String(
+    process.env.POSTCARD_EXPLORE_REQUIRE_LEGACY_FALLBACK || 'true'
+  )
+    .trim()
+    .toLowerCase();
+  return raw !== 'false' && raw !== '0' && raw !== 'no';
+}
+
 function isMissingGeoIndexError(error: unknown): boolean {
   if (!error || typeof error !== 'object') {
     return false;
@@ -522,6 +535,13 @@ function isMissingGeoIndexError(error: unknown): boolean {
     name === 'ValidationException' &&
     (message.includes('specified index') || message.includes('index not found'))
   );
+}
+
+function isMissingTableError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+  return String((error as { name?: string }).name || '') === 'ResourceNotFoundException';
 }
 
 function matchesPublicKeyword(row: DynamoPostcardRow, keyword: string): boolean {
@@ -650,6 +670,53 @@ async function findRowsByGeoBounds(bounds: GeoBounds): Promise<DynamoPostcardRow
   return Array.from(rowsById.values());
 }
 
+async function findRowsByGeoBoundsFromExploreProjection(
+  bounds: GeoBounds
+): Promise<DynamoPostcardRow[] | null> {
+  const plan = buildGeoQueryPlan(bounds);
+  const geoBuckets = plan.buckets;
+  if (geoBuckets.length === 0) {
+    return [];
+  }
+  if (plan.useScanFallback) {
+    return null;
+  }
+
+  let queryResults: Record<string, unknown>[][] = [];
+  try {
+    queryResults = await Promise.all(
+      geoBuckets.map((geoBucket) =>
+        queryAllByIndex({
+          tableName: ddbTables.postcardsExplore,
+          indexName: plan.layer.indexName,
+          keyExpression: '#g = :g',
+          attrNames: { '#g': plan.layer.fieldName },
+          attrValues: { ':g': geoBucket },
+          scanIndexForward: false
+        })
+      )
+    );
+  } catch (error) {
+    if (isMissingGeoIndexError(error) || isMissingTableError(error)) {
+      return null;
+    }
+    throw error;
+  }
+
+  const rowsById = new Map<string, DynamoPostcardRow>();
+  for (const queryRows of queryResults) {
+    for (const item of queryRows) {
+      const row = toDynamoPostcardRow(item);
+      if (!row) {
+        continue;
+      }
+      rowsById.set(row.id, row);
+    }
+  }
+
+  return Array.from(rowsById.values());
+}
+
 async function findRowsForList(
   args: PostcardFindManyInput
 ): Promise<{
@@ -741,9 +808,19 @@ async function findForPublicQuery(args: FindPublicPostcardsInput): Promise<{
   const sortOrder = buildPublicOrderBy(args.sort);
   const keyword = String(args.q || '').trim();
   const bounds = args.bounds;
-  const geoRows = await findRowsByGeoBounds(bounds);
+  const fromProjection = await findRowsByGeoBoundsFromExploreProjection(bounds);
+  const geoRows = (() => {
+    if (!fromProjection) {
+      return findRowsByGeoBounds(bounds);
+    }
+    if (fromProjection.length === 0 && shouldFallbackToLegacyOnEmptyProjection()) {
+      return findRowsByGeoBounds(bounds);
+    }
+    return Promise.resolve(fromProjection);
+  })();
+  const resolvedGeoRows = await geoRows;
 
-  const filtered = geoRows.filter((row) => {
+  const filtered = resolvedGeoRows.filter((row) => {
     if (row.deletedAt) {
       return false;
     }
@@ -759,11 +836,10 @@ async function findForPublicQuery(args: FindPublicPostcardsInput): Promise<{
   const ordered = applyOrderBy(filtered, sortOrder);
   const total = ordered.length;
   const rows = ordered.slice(0, args.limit);
-  const tagsByPostcardId = await loadTagsByPostcardIds(rows.map((row) => row.id));
   const usersById = await loadUsersByIds(Array.from(new Set(rows.map((row) => row.userId))));
 
   return {
-    rows: rows.map((row) => toListRow(row, usersById.get(row.userId), tagsByPostcardId.get(row.id) ?? [])),
+    rows: rows.map((row) => toListRow(row, usersById.get(row.userId), [])),
     total
   };
 }
@@ -845,6 +921,7 @@ async function create(input: CreatePostcardInput): Promise<Record<string, unknow
       Item: item
     })
   );
+  await upsertPostcardExploreProjectionFromSource(item);
 
   return item;
 }
@@ -995,6 +1072,7 @@ async function applyCropUpdateWithHistory(params: {
       Item: updatedRow
     })
   );
+  await upsertPostcardExploreProjectionFromSource(updatedRow);
 
   const afterEditable = toEditablePostcard(toDynamoPostcardRow(updatedRow)!);
   await ddbDoc.send(
@@ -1058,6 +1136,7 @@ async function applyDetailsUpdateWithHistory(params: {
       Item: updatedItem
     })
   );
+  await upsertPostcardExploreProjectionFromSource(updatedItem);
 
   const afterEditable = toEditablePostcard(toDynamoPostcardRow(updatedItem)!);
   await ddbDoc.send(
@@ -1107,6 +1186,7 @@ async function softDeleteWithHistory(params: {
       Item: updatedItem
     })
   );
+  await upsertPostcardExploreProjectionFromSource(updatedItem);
 
   const afterEditable = toEditablePostcard(toDynamoPostcardRow(updatedItem)!);
   await ddbDoc.send(
@@ -1269,6 +1349,7 @@ async function addPostcardCounter(postcardId: string, field: string, delta: numb
       }
     })
   );
+  await syncPostcardExploreProjectionById(postcardId);
 }
 
 async function createOrGetReportCase(postcardId: string, version: number): Promise<UnknownRecord> {

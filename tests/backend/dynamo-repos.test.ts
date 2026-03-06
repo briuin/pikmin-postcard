@@ -250,6 +250,48 @@ test('dynamo postcard repo findForPublicQuery uses geo bounds and keyword fallba
   assert.deepEqual(keywordOnly.rows.map((item) => item.id), ['pc_jp']);
 });
 
+test('dynamo postcard repo findForPublicQuery reads from explore projection table', async () => {
+  setFakeClient({
+    [ddbTables.users]: [{ id: 'usr_1', email: 'alice@example.com', displayName: 'Alice' }],
+    [ddbTables.postcards]: [],
+    [ddbTables.postcardsExplore]: [
+      {
+        id: 'pc_projection_1',
+        userId: 'usr_1',
+        title: 'Projection card',
+        postcardType: 'MUSHROOM',
+        city: 'Singapore',
+        country: 'Singapore',
+        latitude: 1.2834,
+        longitude: 103.8607,
+        likeCount: 7,
+        dislikeCount: 1,
+        wrongLocationReports: 0,
+        reportVersion: 1,
+        locationStatus: 'AUTO',
+        ...geoBucketFields(1.2834, 103.8607),
+        deletedAt: null,
+        createdAt: '2026-03-01T10:00:00.000Z',
+        updatedAt: '2026-03-01T10:00:00.000Z'
+      }
+    ]
+  });
+
+  const bounded = await dynamoPostcardRepo.findForPublicQuery({
+    sort: 'ranking',
+    limit: 10,
+    bounds: {
+      north: 1.4,
+      south: 1.2,
+      east: 104,
+      west: 103.7
+    }
+  });
+
+  assert.equal(bounded.total, 1);
+  assert.deepEqual(bounded.rows.map((item) => item.id), ['pc_projection_1']);
+});
+
 test('dynamo postcard repo findForPublicQuery keeps complete area results when bounds are wide', async () => {
   setFakeClient({
     [ddbTables.users]: [{ id: 'usr_1', email: 'alice@example.com', displayName: 'Alice' }],
