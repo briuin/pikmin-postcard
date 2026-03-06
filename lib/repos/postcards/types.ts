@@ -181,7 +181,7 @@ export type FindPublicPostcardsInput = {
   q?: string;
   sort: PublicPostcardSort;
   limit: number;
-  bounds?: GeoBounds;
+  bounds: GeoBounds;
 };
 
 export type CreatePostcardInput = {

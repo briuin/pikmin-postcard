@@ -21,7 +21,7 @@ import {
   isCoordinateInBounds,
   type GeoBounds
 } from '@/lib/postcards/geo';
-import { buildPublicOrderBy, buildPublicWhere } from '@/lib/postcards/query';
+import { buildPublicOrderBy } from '@/lib/postcards/query';
 import {
   batchGetByIds,
   ddbDoc,
@@ -535,13 +535,16 @@ function matchesPublicKeyword(row: DynamoPostcardRow, keyword: string): boolean 
   );
 }
 
-async function findRowsByGeoBounds(bounds: GeoBounds): Promise<DynamoPostcardRow[] | null> {
+async function findRowsByGeoBounds(bounds: GeoBounds): Promise<DynamoPostcardRow[]> {
   const geoBuckets = enumerateGeoBucketsForBounds(bounds, getGeoBucketDegrees());
   if (geoBuckets.length === 0) {
     return [];
   }
   if (geoBuckets.length > MAX_GEO_BUCKET_QUERIES) {
-    return null;
+    console.warn(
+      `Public postcard bounds expanded to ${geoBuckets.length} geo buckets (max ${MAX_GEO_BUCKET_QUERIES}). Returning empty set; client should zoom in.`
+    );
+    return [];
   }
 
   let queryResults: Record<string, unknown>[][] = [];
@@ -560,8 +563,7 @@ async function findRowsByGeoBounds(bounds: GeoBounds): Promise<DynamoPostcardRow
     );
   } catch (error) {
     if (isMissingGeoIndexError(error)) {
-      console.warn('Geo index unavailable for postcard list. Falling back to scan path.');
-      return null;
+      throw new Error('Geo index unavailable for postcard list query.');
     }
     throw error;
   }
@@ -671,24 +673,7 @@ async function findForPublicQuery(args: FindPublicPostcardsInput): Promise<{
   const sortOrder = buildPublicOrderBy(args.sort);
   const keyword = String(args.q || '').trim();
   const bounds = args.bounds;
-
-  const geoRows = bounds ? await findRowsByGeoBounds(bounds) : null;
-  if (geoRows === null) {
-    const where = buildPublicWhere({
-      q: keyword || undefined,
-      limit: args.limit,
-      sort: args.sort,
-      north: bounds?.north,
-      south: bounds?.south,
-      east: bounds?.east,
-      west: bounds?.west
-    });
-    return findForListWithTotal({
-      where,
-      orderBy: sortOrder,
-      take: args.limit
-    });
-  }
+  const geoRows = await findRowsByGeoBounds(bounds);
 
   const filtered = geoRows.filter((row) => {
     if (row.deletedAt) {

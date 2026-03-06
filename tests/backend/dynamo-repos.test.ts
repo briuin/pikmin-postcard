@@ -234,7 +234,13 @@ test('dynamo postcard repo findForPublicQuery uses geo bounds and keyword fallba
   const keywordOnly = await dynamoPostcardRepo.findForPublicQuery({
     q: 'tokyo',
     sort: 'newest',
-    limit: 10
+    limit: 10,
+    bounds: {
+      north: 36,
+      south: 35.4,
+      east: 140.2,
+      west: 139.4
+    }
   });
   assert.equal(keywordOnly.total, 1);
   assert.deepEqual(keywordOnly.rows.map((item) => item.id), ['pc_jp']);

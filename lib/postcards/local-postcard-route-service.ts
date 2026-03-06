@@ -171,20 +171,12 @@ export async function listPublicPostcardsLocal(args: {
   }
 
   const query = queryParse.data;
-  let bounds: GeoBounds | undefined;
-  if (
-    typeof query.north === 'number' &&
-    typeof query.south === 'number' &&
-    typeof query.east === 'number' &&
-    typeof query.west === 'number'
-  ) {
-    bounds = {
-      north: query.north,
-      south: query.south,
-      east: query.east,
-      west: query.west
-    };
-  }
+  const bounds: GeoBounds = {
+    north: query.north,
+    south: query.south,
+    east: query.east,
+    west: query.west
+  };
 
   const { rows: postcards, total } = await findPublicPostcards({
     q: query.q,
