@@ -178,12 +178,33 @@ export async function listPublicPostcardsLocal(args: {
     west: query.west
   };
 
-  const { rows: postcards, total } = await findPublicPostcards({
-    q: query.q,
-    sort: query.sort,
-    limit: query.limit + 1,
-    bounds
-  });
+  let postcards: Awaited<ReturnType<typeof findPublicPostcards>>['rows'] = [];
+  let total = 0;
+  try {
+    const result = await findPublicPostcards({
+      q: query.q,
+      sort: query.sort,
+      limit: query.limit + 1,
+      bounds
+    });
+    postcards = result.rows;
+    total = result.total;
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message.includes('Geo index unavailable for postcard list query.')
+    ) {
+      const prefix = String(process.env.DDB_TABLE_PREFIX || 'pikmin-postcard-dev');
+      return NextResponse.json(
+        {
+          error: 'Geo index is not ready for postcard map query.',
+          details: `Run: npm run ddb:provision -- --region us-east-1 --prefix ${prefix}`
+        },
+        { status: 503 }
+      );
+    }
+    throw error;
+  }
 
   const hasMore = postcards.length > query.limit;
   const items = hasMore ? postcards.slice(0, query.limit) : postcards;
