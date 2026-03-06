@@ -30,6 +30,8 @@ test('dynamo postcard repo supports list/count/saved/viewer-feedback flows', asy
         userId: 'usr_1',
         title: 'First',
         postcardType: 'MUSHROOM',
+        latitude: 1.31,
+        longitude: 103.86,
         likeCount: 1,
         dislikeCount: 0,
         wrongLocationReports: 0,
@@ -44,6 +46,8 @@ test('dynamo postcard repo supports list/count/saved/viewer-feedback flows', asy
         userId: 'usr_1',
         title: 'Second',
         postcardType: 'FLOWER',
+        latitude: 35.68,
+        longitude: 139.76,
         likeCount: 0,
         dislikeCount: 2,
         wrongLocationReports: 1,
@@ -58,6 +62,8 @@ test('dynamo postcard repo supports list/count/saved/viewer-feedback flows', asy
         userId: 'usr_2',
         title: 'Third',
         postcardType: 'UNKNOWN',
+        latitude: 48.85,
+        longitude: 2.29,
         likeCount: 0,
         dislikeCount: 0,
         wrongLocationReports: 0,
@@ -133,6 +139,17 @@ test('dynamo postcard repo supports list/count/saved/viewer-feedback flows', asy
     AND: [{ userId: 'usr_1' }, { deletedAt: null }]
   });
   assert.equal(mineCount, 2);
+
+  const boundedCount = await dynamoPostcardRepo.count({
+    AND: [
+      { deletedAt: null },
+      {
+        latitude: { not: null, gte: 1.2, lte: 1.4 },
+        longitude: { not: null, gte: 103.7, lte: 104.0 }
+      }
+    ]
+  });
+  assert.equal(boundedCount, 1);
 
   const savedIds = await dynamoPostcardRepo.findSavedPostcardIdsByUser({
     userId: 'usr_1',

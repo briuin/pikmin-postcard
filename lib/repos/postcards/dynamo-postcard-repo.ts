@@ -240,37 +240,42 @@ function matchesScalarCondition(value: unknown, condition: unknown): boolean {
   }
 
   const filter = condition as Record<string, unknown>;
+  let pass = true;
+
   if (filter.equals !== undefined) {
-    return String(value ?? '') === String(filter.equals ?? '');
+    pass = pass && String(value ?? '') === String(filter.equals ?? '');
   }
   if (Array.isArray(filter.in)) {
-    return filter.in.some((candidate) => String(candidate ?? '') === String(value ?? ''));
+    pass =
+      pass &&
+      filter.in.some((candidate) => String(candidate ?? '') === String(value ?? ''));
   }
   if (filter.not !== undefined) {
     if (filter.not === null) {
-      return value !== null && value !== undefined;
+      pass = pass && value !== null && value !== undefined;
+    } else {
+      pass = pass && String(value ?? '') !== String(filter.not ?? '');
     }
-    return String(value ?? '') !== String(filter.not ?? '');
   }
   if (typeof filter.contains === 'string') {
-    return stringContainsInsensitive(value, filter.contains);
+    pass = pass && stringContainsInsensitive(value, filter.contains);
   }
 
   const numericValue = toNumberOrNull(value);
   if (filter.gte !== undefined) {
     const expected = toNumberOrNull(filter.gte);
     if (numericValue === null || expected === null || numericValue < expected) {
-      return false;
+      pass = false;
     }
   }
   if (filter.lte !== undefined) {
     const expected = toNumberOrNull(filter.lte);
     if (numericValue === null || expected === null || numericValue > expected) {
-      return false;
+      pass = false;
     }
   }
 
-  return true;
+  return pass;
 }
 
 function getPostcardFieldValue(postcard: DynamoPostcardRow, field: string): unknown {
