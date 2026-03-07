@@ -41,6 +41,10 @@ export default $config({
       process.env.NEW_USER_APPROVAL_MODE?.trim() || "auto";
     const postcardExploreRequireLegacyFallback =
       process.env.POSTCARD_EXPLORE_REQUIRE_LEGACY_FALLBACK?.trim() || "true";
+    const apkDownloadMetadataUrl =
+      process.env.APK_DOWNLOAD_METADATA_URL?.trim() || "";
+    const apkDownloadFallbackUrl =
+      process.env.APK_DOWNLOAD_FALLBACK_URL?.trim() || "";
     const publicGoogleClientId =
       process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim() ||
       googleClientId;
@@ -146,6 +150,8 @@ export default $config({
         S3_PUBLIC_BASE_URL: s3PublicBaseUrl,
         DDB_TABLE_PREFIX: ddbTablePrefix,
         NEW_USER_APPROVAL_MODE: newUserApprovalMode,
+        APK_DOWNLOAD_METADATA_URL: apkDownloadMetadataUrl,
+        APK_DOWNLOAD_FALLBACK_URL: apkDownloadFallbackUrl,
         POSTCARD_EXPLORE_REQUIRE_LEGACY_FALLBACK:
           postcardExploreRequireLegacyFallback,
         DETECTION_QUEUE_URL: detectionQueue.url,

@@ -27,6 +27,8 @@ env:
   S3_BUCKET_NAME: pikmin-postcard-images-041913718278-20260226
   S3_REGION: us-east-1
   S3_PUBLIC_BASE_URL: https://pikmin-postcard-images-041913718278-20260226.s3.us-east-1.amazonaws.com
+  APK_DOWNLOAD_METADATA_URL: ${{ vars.APK_DOWNLOAD_METADATA_URL || '' }}
+  APK_DOWNLOAD_FALLBACK_URL: ${{ vars.APK_DOWNLOAD_FALLBACK_URL || '' }}
   DDB_TABLE_PREFIX: pikmin-postcard
   OPENNEXT_DOMAIN_NAME: pikmin.askans.app
   OPENNEXT_ROUTE53_ZONE_ID: Z07732472U0GRGAK1E05W
