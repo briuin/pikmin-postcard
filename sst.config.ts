@@ -45,6 +45,8 @@ export default $config({
       process.env.APK_DOWNLOAD_METADATA_URL?.trim() || "";
     const apkDownloadFallbackUrl =
       process.env.APK_DOWNLOAD_FALLBACK_URL?.trim() || "";
+    const apkDownloadHistoryUrl =
+      process.env.APK_DOWNLOAD_HISTORY_URL?.trim() || "";
     const publicGoogleClientId =
       process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim() ||
       googleClientId;
@@ -152,6 +154,7 @@ export default $config({
         NEW_USER_APPROVAL_MODE: newUserApprovalMode,
         APK_DOWNLOAD_METADATA_URL: apkDownloadMetadataUrl,
         APK_DOWNLOAD_FALLBACK_URL: apkDownloadFallbackUrl,
+        APK_DOWNLOAD_HISTORY_URL: apkDownloadHistoryUrl,
         POSTCARD_EXPLORE_REQUIRE_LEGACY_FALLBACK:
           postcardExploreRequireLegacyFallback,
         DETECTION_QUEUE_URL: detectionQueue.url,
