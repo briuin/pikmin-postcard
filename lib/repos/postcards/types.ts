@@ -175,7 +175,7 @@ export type SubmitPostcardFeedbackResult = {
   viewerFeedback: ViewerFeedback;
 };
 
-export type PublicPostcardSort = 'ranking' | 'newest' | 'likes' | 'reports';
+export type PublicPostcardSort = 'ranking' | 'newest' | 'likes' | 'reports' | 'random';
 
 export type FindPublicPostcardsInput = {
   q?: string;

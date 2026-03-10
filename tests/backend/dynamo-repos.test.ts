@@ -358,6 +358,99 @@ test('dynamo postcard repo findForPublicQuery keeps complete area results when b
   assert.equal(ids.has('pc_ny_wide'), true);
 });
 
+test('dynamo postcard repo findForPublicQuery supports random sort', async () => {
+  const originalRandom = Math.random;
+  Math.random = (() => {
+    const values = [0, 0];
+    let index = 0;
+    return () => values[index++] ?? 0;
+  })();
+
+  try {
+    const projectionRows = [
+      {
+        id: 'pc_random_1',
+        userId: 'usr_1',
+        title: 'Random One',
+        postcardType: 'MUSHROOM',
+        city: 'Singapore',
+        country: 'Singapore',
+        latitude: 1.2834,
+        longitude: 103.8607,
+        likeCount: 9,
+        dislikeCount: 0,
+        wrongLocationReports: 0,
+        reportVersion: 1,
+        locationStatus: 'AUTO',
+        ...geoBucketFields(1.2834, 103.8607),
+        deletedAt: null,
+        createdAt: '2026-03-01T10:00:00.000Z',
+        updatedAt: '2026-03-01T10:00:00.000Z'
+      },
+      {
+        id: 'pc_random_2',
+        userId: 'usr_1',
+        title: 'Random Two',
+        postcardType: 'FLOWER',
+        city: 'Singapore',
+        country: 'Singapore',
+        latitude: 1.2844,
+        longitude: 103.8617,
+        likeCount: 5,
+        dislikeCount: 0,
+        wrongLocationReports: 0,
+        reportVersion: 1,
+        locationStatus: 'AUTO',
+        ...geoBucketFields(1.2844, 103.8617),
+        deletedAt: null,
+        createdAt: '2026-03-02T10:00:00.000Z',
+        updatedAt: '2026-03-02T10:00:00.000Z'
+      },
+      {
+        id: 'pc_random_3',
+        userId: 'usr_1',
+        title: 'Random Three',
+        postcardType: 'ROAD',
+        city: 'Singapore',
+        country: 'Singapore',
+        latitude: 1.2854,
+        longitude: 103.8627,
+        likeCount: 1,
+        dislikeCount: 0,
+        wrongLocationReports: 0,
+        reportVersion: 1,
+        locationStatus: 'AUTO',
+        ...geoBucketFields(1.2854, 103.8627),
+        deletedAt: null,
+        createdAt: '2026-03-03T10:00:00.000Z',
+        updatedAt: '2026-03-03T10:00:00.000Z'
+      }
+    ];
+
+    setFakeClient({
+      [ddbTables.users]: [{ id: 'usr_1', email: 'alice@example.com', displayName: 'Alice' }],
+      [ddbTables.postcards]: projectionRows,
+      [ddbTables.postcardsExplore]: projectionRows
+    });
+
+    const bounded = await dynamoPostcardRepo.findForPublicQuery({
+      sort: 'random',
+      limit: 2,
+      bounds: {
+        north: 1.4,
+        south: 1.2,
+        east: 104,
+        west: 103.7
+      }
+    });
+
+    assert.equal(bounded.total, 3);
+    assert.deepEqual(bounded.rows.map((item) => item.id), ['pc_random_2', 'pc_random_1']);
+  } finally {
+    Math.random = originalRandom;
+  }
+});
+
 test('dynamo postcard repo findForPublicQuery falls back when coarse buckets are not backfilled yet', async () => {
   const originalFallbackFlag = process.env.POSTCARD_EXPLORE_REQUIRE_LEGACY_FALLBACK;
   process.env.POSTCARD_EXPLORE_REQUIRE_LEGACY_FALLBACK = 'true';

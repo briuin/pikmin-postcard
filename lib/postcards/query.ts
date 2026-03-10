@@ -8,7 +8,7 @@ export const publicQuerySchema = z
   .object({
     q: z.string().trim().max(80).optional(),
     limit: z.coerce.number().int().min(1).max(300).default(120),
-    sort: z.enum(['ranking', 'newest', 'likes', 'reports']).default('ranking'),
+    sort: z.enum(['ranking', 'newest', 'likes', 'reports', 'random']).default('ranking'),
     north: z.coerce.number(),
     south: z.coerce.number(),
     east: z.coerce.number(),
@@ -62,6 +62,10 @@ export function buildPostcardSearchFilter(
 }
 
 export function buildPublicOrderBy(sort: PublicQuery['sort']): PostcardOrderByInput[] {
+  if (sort === 'random') {
+    return [];
+  }
+
   if (sort === 'newest') {
     return [{ createdAt: 'desc' }];
   }
@@ -80,4 +84,8 @@ export function buildPublicOrderBy(sort: PublicQuery['sort']): PostcardOrderByIn
     { wrongLocationReports: 'asc' },
     { createdAt: 'desc' }
   ];
+}
+
+export function isRandomPublicSort(sort: PublicQuery['sort']): sort is 'random' {
+  return sort === 'random';
 }

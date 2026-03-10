@@ -19,7 +19,11 @@ import {
 } from '@/lib/postcards/feedback-mutations';
 import { serializePostcards } from '@/lib/postcards/list';
 import type { GeoBounds } from '@/lib/postcards/geo';
-import { parsePublicQuery, type PublicQuery } from '@/lib/postcards/query';
+import {
+  isRandomPublicSort,
+  parsePublicQuery,
+  type PublicQuery
+} from '@/lib/postcards/query';
 import {
   findPostcardById,
   findPublicPostcards,
@@ -260,7 +264,10 @@ export async function listPublicPostcardsLocal(args: {
 
   const query = queryParse.data;
   const isPublicViewer = !viewerUserId;
-  const cacheKey = isPublicViewer ? buildPublicPostcardsCacheKey(query) : null;
+  const cacheKey =
+    isPublicViewer && !isRandomPublicSort(query.sort)
+      ? buildPublicPostcardsCacheKey(query)
+      : null;
   if (cacheKey) {
     const cached = getPublicPostcardsCache(cacheKey);
     if (cached) {

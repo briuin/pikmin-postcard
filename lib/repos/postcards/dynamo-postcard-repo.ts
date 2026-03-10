@@ -22,7 +22,7 @@ import {
   type GeoBucketLayer,
   type GeoBounds
 } from '@/lib/postcards/geo';
-import { buildPublicOrderBy } from '@/lib/postcards/query';
+import { buildPublicOrderBy, isRandomPublicSort } from '@/lib/postcards/query';
 import {
   batchGetByIds,
   ddbDoc,
@@ -440,6 +440,15 @@ function applyOrderBy(
   });
 }
 
+function shuffleRows<T>(rows: T[]): T[] {
+  const shuffled = [...rows];
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+  }
+  return shuffled;
+}
+
 async function loadUsersByIds(userIds: string[]): Promise<Map<string, DynamoUserRow>> {
   const rows = await batchGetByIds(ddbTables.users, userIds);
   const map = new Map<string, DynamoUserRow>();
@@ -833,7 +842,7 @@ async function findForPublicQuery(args: FindPublicPostcardsInput): Promise<{
     return matchesPublicKeyword(row, keyword);
   });
 
-  const ordered = applyOrderBy(filtered, sortOrder);
+  const ordered = isRandomPublicSort(args.sort) ? shuffleRows(filtered) : applyOrderBy(filtered, sortOrder);
   const total = ordered.length;
   const rows = ordered.slice(0, args.limit);
   const usersById = await loadUsersByIds(Array.from(new Set(rows.map((row) => row.userId))));
