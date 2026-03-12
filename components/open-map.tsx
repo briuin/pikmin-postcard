@@ -52,6 +52,7 @@ export function OpenMap({
   draftPoint,
   viewerPoint,
   markers = [],
+  clusterMarkers = true,
   polylines = [],
   focusedMarkerId,
   viewerFocusSignal,
@@ -62,7 +63,18 @@ export function OpenMap({
   className,
   simpleMarkerPopup = false
 }: OpenMapProps) {
-  const clusters = useMemo(() => clusterByDistance(markers), [markers]);
+  const clusters = useMemo(
+    () =>
+      clusterMarkers
+        ? clusterByDistance(markers)
+        : markers.map((marker) => ({
+            id: marker.id,
+            latitude: marker.latitude,
+            longitude: marker.longitude,
+            points: [marker]
+          })),
+    [clusterMarkers, markers]
+  );
   const focusedMarker = useMemo(
     () => (focusedMarkerId ? markers.find((marker) => marker.id === focusedMarkerId) : undefined),
     [focusedMarkerId, markers]

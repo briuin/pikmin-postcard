@@ -41,6 +41,7 @@ export type OpenMapProps = {
   draftPoint?: DraftPoint;
   viewerPoint?: ViewerPoint;
   markers?: SavedMapMarker[];
+  clusterMarkers?: boolean;
   polylines?: Array<{
     id: string;
     points: Array<{ latitude: number; longitude: number }>;
