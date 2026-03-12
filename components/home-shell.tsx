@@ -5,12 +5,13 @@ import { signIn, signOut, useSession } from '@/lib/auth-client';
 import { AdminDashboard } from '@/components/admin-dashboard';
 import { AdminReportDetailPage } from '@/components/admin-report-detail-page';
 import { FeedbackSection } from '@/components/feedback-section';
+import { PlantPathPage } from '@/components/plant-path-page';
 import { usePersistedLocale } from '@/components/use-persisted-locale';
 import { messages, supportedLocales, type Locale } from '@/lib/i18n';
 import { PostcardWorkbench } from '@/components/postcard-workbench';
 
 type HomeShellProps = {
-  page: 'explore' | 'create' | 'dashboard' | 'feedback' | 'admin' | 'admin-report';
+  page: 'explore' | 'create' | 'dashboard' | 'paths' | 'feedback' | 'admin' | 'admin-report';
   reportCaseId?: string;
 };
 
@@ -51,9 +52,10 @@ export function HomeShell({ page, reportCaseId }: HomeShellProps) {
     locale
   );
 
+  const usesSplitLayout = page === 'explore' || page === 'paths';
   const rootClassName = [
     'grid gap-3',
-    page === 'explore'
+    usesSplitLayout
       ? 'grid-rows-[auto_minmax(0,1fr)] h-full min-h-0 overflow-hidden max-[1080px]:h-auto max-[1080px]:overflow-visible'
       : ''
   ]
@@ -91,7 +93,7 @@ export function HomeShell({ page, reportCaseId }: HomeShellProps) {
             </div>
           </div>
           <nav
-            className={`inline-flex w-auto justify-self-start gap-1 rounded-full border border-[#d7e8d7] bg-[rgba(246,255,245,0.92)] p-1 max-[780px]:order-3 max-[780px]:col-span-2 max-[780px]:grid max-[780px]:w-full ${canAccessAdmin ? 'max-[780px]:grid-cols-5' : 'max-[780px]:grid-cols-4'} max-[780px]:rounded-xl`}
+            className={`inline-flex w-auto justify-self-start gap-1 rounded-full border border-[#d7e8d7] bg-[rgba(246,255,245,0.92)] p-1 max-[780px]:order-3 max-[780px]:col-span-2 max-[780px]:grid max-[780px]:w-full ${canAccessAdmin ? 'max-[780px]:grid-cols-6' : 'max-[780px]:grid-cols-5'} max-[780px]:rounded-xl`}
             aria-label="Primary"
           >
             <Link href="/" className={page === 'explore' ? `${navTabClassName} ${navTabActiveClassName}` : navTabClassName}>
@@ -102,6 +104,9 @@ export function HomeShell({ page, reportCaseId }: HomeShellProps) {
             </Link>
             <Link href="/dashboard" className={page === 'dashboard' ? `${navTabClassName} ${navTabActiveClassName}` : navTabClassName}>
               {homeText.navDashboard}
+            </Link>
+            <Link href="/plant-paths" className={page === 'paths' ? `${navTabClassName} ${navTabActiveClassName}` : navTabClassName}>
+              {homeText.navPaths}
             </Link>
             <Link href="/feedback" className={page === 'feedback' ? `${navTabClassName} ${navTabActiveClassName}` : navTabClassName}>
               {homeText.navFeedback}
@@ -144,9 +149,11 @@ export function HomeShell({ page, reportCaseId }: HomeShellProps) {
                         ? '/create'
                         : page === 'dashboard'
                           ? '/dashboard'
+                          : page === 'paths'
+                            ? '/plant-paths'
                           : page === 'feedback'
                             ? '/feedback'
-                          : page === 'admin'
+                            : page === 'admin'
                             ? '/admin'
                             : page === 'admin-report'
                               ? '/admin'
@@ -170,6 +177,8 @@ export function HomeShell({ page, reportCaseId }: HomeShellProps) {
         <AdminReportDetailPage caseId={reportCaseId} />
       ) : page === 'feedback' ? (
         <FeedbackSection locale={locale} />
+      ) : page === 'paths' ? (
+        <PlantPathPage locale={locale} />
       ) : page === 'explore' || page === 'create' || page === 'dashboard' ? (
         <PostcardWorkbench mode={page} locale={locale} />
       ) : (

@@ -41,6 +41,11 @@ export type OpenMapProps = {
   draftPoint?: DraftPoint;
   viewerPoint?: ViewerPoint;
   markers?: SavedMapMarker[];
+  polylines?: Array<{
+    id: string;
+    points: Array<{ latitude: number; longitude: number }>;
+    color?: string;
+  }>;
   focusedMarkerId?: string | null;
   viewerFocusSignal?: number;
   onLocateRequest?: () => Promise<boolean> | boolean;
@@ -48,4 +53,5 @@ export type OpenMapProps = {
   onViewportChange?: (bounds: MapViewportBounds, zoom: number) => void;
   onPick?: (lat: number, lng: number) => void;
   className?: string;
+  simpleMarkerPopup?: boolean;
 };

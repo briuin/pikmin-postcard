@@ -8,6 +8,7 @@ import {
   CircleMarker,
   MapContainer,
   Marker,
+  Polyline,
   Popup,
   TileLayer,
   ZoomControl
@@ -51,13 +52,15 @@ export function OpenMap({
   draftPoint,
   viewerPoint,
   markers = [],
+  polylines = [],
   focusedMarkerId,
   viewerFocusSignal,
   onLocateRequest,
   isLocating,
   onViewportChange,
   onPick,
-  className
+  className,
+  simpleMarkerPopup = false
 }: OpenMapProps) {
   const clusters = useMemo(() => clusterByDistance(markers), [markers]);
   const focusedMarker = useMemo(
@@ -93,6 +96,20 @@ export function OpenMap({
           viewerFocusSignal={viewerFocusSignal}
         />
 
+        {polylines.map((polyline) =>
+          polyline.points.length >= 2 ? (
+            <Polyline
+              key={polyline.id}
+              positions={polyline.points.map((point) => [point.latitude, point.longitude] as [number, number])}
+              pathOptions={{
+                color: polyline.color ?? '#2f8d55',
+                weight: 4,
+                opacity: 0.8
+              }}
+            />
+          ) : null
+        )}
+
         {clusters.map((cluster) => {
           if (cluster.points.length === 1) {
             const point = cluster.points[0];
@@ -101,49 +118,53 @@ export function OpenMap({
                 <Popup>
                   <strong>{point.title}</strong>
                   <br />
-                  {point.placeName || 'Unknown place'}
-                  <br />
-                  {getLocationMethodText(point)}
-                  <br />
-                  by {point.uploaderName ?? 'unknown uploader'}
-                  {point.aiPlaceGuess ? (
-                    <>
-                      <br />
-                      AI guess: {point.aiPlaceGuess}
-                    </>
-                  ) : null}
-                  {point.locationModelVersion ? (
-                    <>
-                      <br />
-                      model: {point.locationModelVersion}
-                    </>
-                  ) : null}
-                  <br />
                   {point.latitude.toFixed(6)}, {point.longitude.toFixed(6)}
-                  {point.createdAt ? (
+                  {!simpleMarkerPopup ? (
                     <>
                       <br />
-                      uploaded: {new Date(point.createdAt).toLocaleString()}
-                    </>
-                  ) : null}
-                  {point.notes ? (
-                    <>
+                      {point.placeName || 'Unknown place'}
                       <br />
-                      {point.notes}
-                    </>
-                  ) : null}
-                  <br />
-                  👍 {point.likeCount ?? 0} · 👎 {point.dislikeCount ?? 0} · ⚠️ {point.wrongLocationReports ?? 0}
-                  {point.imageUrl ? (
-                    <>
+                      {getLocationMethodText(point)}
                       <br />
-                      <Image
-                        alt={point.title}
-                        src={point.imageUrl}
-                        width={160}
-                        height={116}
-                        style={{ marginTop: '0.45rem', borderRadius: '6px', objectFit: 'cover' }}
-                      />
+                      by {point.uploaderName ?? 'unknown uploader'}
+                      {point.aiPlaceGuess ? (
+                        <>
+                          <br />
+                          AI guess: {point.aiPlaceGuess}
+                        </>
+                      ) : null}
+                      {point.locationModelVersion ? (
+                        <>
+                          <br />
+                          model: {point.locationModelVersion}
+                        </>
+                      ) : null}
+                      {point.createdAt ? (
+                        <>
+                          <br />
+                          uploaded: {new Date(point.createdAt).toLocaleString()}
+                        </>
+                      ) : null}
+                      {point.notes ? (
+                        <>
+                          <br />
+                          {point.notes}
+                        </>
+                      ) : null}
+                      <br />
+                      👍 {point.likeCount ?? 0} · 👎 {point.dislikeCount ?? 0} · ⚠️ {point.wrongLocationReports ?? 0}
+                      {point.imageUrl ? (
+                        <>
+                          <br />
+                          <Image
+                            alt={point.title}
+                            src={point.imageUrl}
+                            width={160}
+                            height={116}
+                            style={{ marginTop: '0.45rem', borderRadius: '6px', objectFit: 'cover' }}
+                          />
+                        </>
+                      ) : null}
                     </>
                   ) : null}
                 </Popup>

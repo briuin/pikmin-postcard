@@ -13,6 +13,8 @@ const tablePrefix =
 
 export const ddbTables = {
   users: `${tablePrefix}-users`,
+  plantPaths: `${tablePrefix}-plant-paths`,
+  plantPathSaves: `${tablePrefix}-plant-path-saves`,
   postcards: `${tablePrefix}-postcards`,
   postcardsExplore: `${tablePrefix}-postcards-explore`,
   tags: `${tablePrefix}-tags`,

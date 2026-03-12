@@ -33,3 +33,4 @@ export type SessionText = typeof messages.en.session;
 export type FeedbackText = typeof messages.en.feedback;
 export type WorkbenchText = typeof messages.en.workbench;
 export type AdminText = typeof messages.en.admin;
+export type PlantPathsText = typeof messages.en.plantPaths;
