@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import ReactCrop from 'react-image-crop';
 import type { WorkbenchText } from '@/lib/i18n';
+import { DashboardLoadMoreFooter } from '@/components/workbench/dashboard-view/load-more-footer';
 import { PostcardTypeOptions } from '@/components/workbench/postcard-type-options';
 import type { PostcardEditDraft, PostcardRecord } from '@/components/workbench/types';
 import type { CropDraft } from '@/components/workbench/utils';
@@ -65,9 +66,21 @@ export function DashboardPostcardsList({
   onPreviewImage
 }: DashboardPostcardsListProps) {
   const [confirmDeletePostcardId, setConfirmDeletePostcardId] = useState<string | null>(null);
+  const [visibleCount, setVisibleCount] = useState(20);
   const pendingDeletePostcard = confirmDeletePostcardId
     ? myPostcards.find((item) => item.id === confirmDeletePostcardId) ?? null
     : null;
+
+  useEffect(() => {
+    setVisibleCount((current) => {
+      if (myPostcards.length === 0) {
+        return 20;
+      }
+      return Math.min(Math.max(current, 20), myPostcards.length);
+    });
+  }, [myPostcards.length]);
+
+  const visiblePostcards = myPostcards.slice(0, visibleCount);
 
   return (
     <>
@@ -75,7 +88,7 @@ export function DashboardPostcardsList({
       {isLoadingMine ? <small className={smallMutedClassName}>{text.myPostcardsLoading}</small> : null}
       {!isLoadingMine && myPostcards.length === 0 ? <small className={smallMutedClassName}>{text.myPostcardsEmpty}</small> : null}
       <div className={dashboardListClassName}>
-        {myPostcards.slice(0, 20).map((postcard) => (
+        {visiblePostcards.map((postcard) => (
           <article key={postcard.id} className={postcardItemClassName}>
             <div className={postcardItemHeadClassName}>
               <strong>{postcard.title}</strong>
@@ -238,6 +251,14 @@ export function DashboardPostcardsList({
           </article>
         ))}
       </div>
+      {!isLoadingMine ? (
+        <DashboardLoadMoreFooter
+          text={text}
+          visibleCount={visibleCount}
+          totalCount={myPostcards.length}
+          onLoadMore={() => setVisibleCount((current) => current + 20)}
+        />
+      ) : null}
 
       {pendingDeletePostcard ? (
         <div className="fixed inset-0 z-[1300] grid place-items-center bg-[rgba(16,28,22,0.58)] px-3">

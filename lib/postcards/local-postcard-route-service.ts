@@ -181,8 +181,7 @@ export async function listMinePostcardsLocal(args: {
       userId,
       deletedAt: null
     },
-    orderBy: { createdAt: 'desc' },
-    take: 200
+    orderBy: { createdAt: 'desc' }
   });
 
   const serialized = serializePostcards(postcards, { includeOriginalImageUrl: true });
@@ -210,8 +209,7 @@ export async function listSavedPostcardsLocal(args: {
   });
 
   const orderedPostcardIds = await postcardRepo.findSavedPostcardIdsByUser({
-    userId,
-    take: 400
+    userId
   });
 
   if (orderedPostcardIds.length === 0) {
@@ -227,8 +225,7 @@ export async function listSavedPostcardsLocal(args: {
     },
     orderBy: {
       updatedAt: 'desc'
-    },
-    take: 400
+    }
   });
 
   const postcardById = new Map(postcards.map((postcard) => [postcard.id, postcard]));

@@ -1,9 +1,11 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import type { WorkbenchText } from '@/lib/i18n';
 import { buildLocationLabel } from '@/lib/postcards/location-label';
 import type { PostcardRecord } from '@/components/workbench/types';
+import { DashboardLoadMoreFooter } from '@/components/workbench/dashboard-view/load-more-footer';
 import type { PreviewImage } from '@/components/workbench/dashboard-view/types';
 import {
   postcardItemClassName,
@@ -26,6 +28,19 @@ export function DashboardSavedList({
   dashboardListClassName,
   onPreviewImage
 }: DashboardSavedListProps) {
+  const [visibleCount, setVisibleCount] = useState(24);
+
+  useEffect(() => {
+    setVisibleCount((current) => {
+      if (savedPostcards.length === 0) {
+        return 24;
+      }
+      return Math.min(Math.max(current, 24), savedPostcards.length);
+    });
+  }, [savedPostcards.length]);
+
+  const visiblePostcards = savedPostcards.slice(0, visibleCount);
+
   return (
     <>
       <h3 className="mt-1">{text.dashboardSavedTitle}</h3>
@@ -34,7 +49,7 @@ export function DashboardSavedList({
         <small className={smallMutedClassName}>{text.dashboardSavedEmpty}</small>
       ) : null}
       <div className={dashboardListClassName}>
-        {savedPostcards.slice(0, 60).map((postcard) => {
+        {visiblePostcards.map((postcard) => {
           const locationLabel = buildLocationLabel(postcard, text.exploreUnknownPlace);
           return (
             <article key={postcard.id} className={postcardItemClassName}>
@@ -76,6 +91,14 @@ export function DashboardSavedList({
           );
         })}
       </div>
+      {!isLoadingSaved ? (
+        <DashboardLoadMoreFooter
+          text={text}
+          visibleCount={visibleCount}
+          totalCount={savedPostcards.length}
+          onLoadMore={() => setVisibleCount((current) => current + 24)}
+        />
+      ) : null}
     </>
   );
 }

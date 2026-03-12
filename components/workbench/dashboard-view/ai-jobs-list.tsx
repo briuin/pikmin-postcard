@@ -1,8 +1,10 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import type { WorkbenchText } from '@/lib/i18n';
 import type { DetectionJobRecord } from '@/components/workbench/types';
+import { DashboardLoadMoreFooter } from '@/components/workbench/dashboard-view/load-more-footer';
 import {
   postcardItemClassName,
   postcardItemHeadClassName,
@@ -32,13 +34,26 @@ export function DashboardAiJobsList({
   onSaveDetectedJob,
   onPreviewImage
 }: DashboardAiJobsListProps) {
+  const [visibleCount, setVisibleCount] = useState(20);
+
+  useEffect(() => {
+    setVisibleCount((current) => {
+      if (jobs.length === 0) {
+        return 20;
+      }
+      return Math.min(Math.max(current, 20), jobs.length);
+    });
+  }, [jobs.length]);
+
+  const visibleJobs = jobs.slice(0, visibleCount);
+
   return (
     <>
       <h3 className="mt-1">{text.aiJobsTitle}</h3>
       {isLoadingJobs ? <small className={smallMutedClassName}>{text.aiJobsLoading}</small> : null}
       {!isLoadingJobs && jobs.length === 0 ? <small className={smallMutedClassName}>{text.aiJobsEmpty}</small> : null}
       <div className={dashboardListClassName}>
-        {jobs.slice(0, 20).map((job) => (
+        {visibleJobs.map((job) => (
           <article key={job.id} className={postcardItemClassName}>
             <div className={postcardItemHeadClassName}>
               <strong>{job.status}</strong>
@@ -88,6 +103,14 @@ export function DashboardAiJobsList({
           </article>
         ))}
       </div>
+      {!isLoadingJobs ? (
+        <DashboardLoadMoreFooter
+          text={text}
+          visibleCount={visibleCount}
+          totalCount={jobs.length}
+          onLoadMore={() => setVisibleCount((current) => current + 20)}
+        />
+      ) : null}
     </>
   );
 }

@@ -1218,8 +1218,9 @@ async function softDeleteWithHistory(params: {
 
 async function findSavedPostcardIdsByUser(params: {
   userId: string;
-  take: number;
+  take?: number;
 }): Promise<string[]> {
+  const take = typeof params.take === 'number' && params.take > 0 ? params.take : undefined;
   const rows = await queryAllByIndex({
     tableName: ddbTables.postcardFeedback,
     indexName: 'userId-createdAt-index',
@@ -1227,7 +1228,7 @@ async function findSavedPostcardIdsByUser(params: {
     attrNames: { '#u': 'userId' },
     attrValues: { ':u': params.userId },
     scanIndexForward: false,
-    limit: Math.max(params.take * 5, params.take)
+    limit: take ? Math.max(take * 5, take) : undefined
   });
 
   const ordered: string[] = [];
@@ -1243,7 +1244,7 @@ async function findSavedPostcardIdsByUser(params: {
     }
     seen.add(postcardId);
     ordered.push(postcardId);
-    if (ordered.length >= params.take) {
+    if (take && ordered.length >= take) {
       break;
     }
   }

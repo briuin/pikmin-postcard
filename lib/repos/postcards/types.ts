@@ -256,7 +256,7 @@ export type PostcardRepo = {
     actorId: string;
     deletedAt: Date;
   }): Promise<boolean>;
-  findSavedPostcardIdsByUser(params: { userId: string; take: number }): Promise<string[]>;
+  findSavedPostcardIdsByUser(params: { userId: string; take?: number }): Promise<string[]>;
   findViewerFeedbackRowsForPostcards(params: {
     userId: string;
     postcardIds: string[];
