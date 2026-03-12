@@ -3,6 +3,8 @@ import type { WorkbenchText } from '@/lib/i18n';
 import { parseJsonResponseOrThrow } from '@/lib/http-response';
 import { apiFetch } from '@/lib/client-api';
 
+type ProfilePasswordStatusTone = 'neutral' | 'success' | 'error' | 'loading';
+
 type UseDashboardProfileActionsArgs = {
   text: WorkbenchText;
   ensureAuthenticated: () => boolean;
@@ -29,6 +31,39 @@ export function useDashboardProfileActions({
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [profilePassword, setProfilePassword] = useState('');
   const [profilePasswordConfirm, setProfilePasswordConfirm] = useState('');
+  const [profilePasswordStatus, setProfilePasswordStatus] = useState('');
+  const [profilePasswordStatusTone, setProfilePasswordStatusTone] =
+    useState<ProfilePasswordStatusTone>('neutral');
+
+  const clearProfilePasswordStatus = useCallback(() => {
+    setProfilePasswordStatus('');
+    setProfilePasswordStatusTone('neutral');
+  }, []);
+
+  const updateProfilePassword = useCallback(
+    (value: string) => {
+      clearProfilePasswordStatus();
+      setProfilePassword(value);
+    },
+    [clearProfilePasswordStatus]
+  );
+
+  const updateProfilePasswordConfirm = useCallback(
+    (value: string) => {
+      clearProfilePasswordStatus();
+      setProfilePasswordConfirm(value);
+    },
+    [clearProfilePasswordStatus]
+  );
+
+  const publishProfilePasswordStatus = useCallback(
+    (message: string, tone: ProfilePasswordStatusTone) => {
+      setProfilePasswordStatus(message);
+      setProfilePasswordStatusTone(tone);
+      setDashboardStatus(message);
+    },
+    [setDashboardStatus]
+  );
 
   const saveProfileDisplayName = useCallback(async () => {
     if (!ensureAuthenticated()) {
@@ -91,22 +126,22 @@ export function useDashboardProfileActions({
     }
 
     if (!profilePassword) {
-      setDashboardStatus(text.profilePasswordRequired);
+      publishProfilePasswordStatus(text.profilePasswordRequired, 'error');
       return;
     }
 
     if (profilePassword.length < 8) {
-      setDashboardStatus(text.profilePasswordTooShort);
+      publishProfilePasswordStatus(text.profilePasswordTooShort, 'error');
       return;
     }
 
     if (profilePassword !== profilePasswordConfirm) {
-      setDashboardStatus(text.profilePasswordMismatch);
+      publishProfilePasswordStatus(text.profilePasswordMismatch, 'error');
       return;
     }
 
     setIsSavingProfile(true);
-    setDashboardStatus(text.profilePasswordSaving);
+    publishProfilePasswordStatus(text.profilePasswordSaving, 'loading');
     try {
       const response = await apiFetch(
         '/api/auth/password',
@@ -126,9 +161,9 @@ export function useDashboardProfileActions({
       setProfileHasPassword(true);
       setProfilePassword('');
       setProfilePasswordConfirm('');
-      setDashboardStatus(text.profilePasswordSaved);
+      publishProfilePasswordStatus(text.profilePasswordSaved, 'success');
     } catch (error) {
-      setDashboardStatus(error instanceof Error ? error.message : text.profileUnknownError);
+      publishProfilePasswordStatus(error instanceof Error ? error.message : text.profileUnknownError, 'error');
     } finally {
       setIsSavingProfile(false);
     }
@@ -136,9 +171,9 @@ export function useDashboardProfileActions({
     currentUserEmail,
     currentUserId,
     ensureAuthenticated,
+    publishProfilePasswordStatus,
     profilePassword,
     profilePasswordConfirm,
-    setDashboardStatus,
     setProfileHasPassword,
     text.profilePasswordMismatch,
     text.profilePasswordRequired,
@@ -153,8 +188,10 @@ export function useDashboardProfileActions({
     isSavingProfile,
     profilePassword,
     profilePasswordConfirm,
-    setProfilePassword,
-    setProfilePasswordConfirm,
+    profilePasswordStatus,
+    profilePasswordStatusTone,
+    setProfilePassword: updateProfilePassword,
+    setProfilePasswordConfirm: updateProfilePasswordConfirm,
     saveProfileDisplayName,
     saveProfilePassword
   };

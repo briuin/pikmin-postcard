@@ -11,12 +11,15 @@ import {
 
 type DashboardProfilePanelProps = {
   text: WorkbenchText;
+  showHeader?: boolean;
   profileEmail: string;
   profileDisplayName: string;
   profileAccountId: string;
   profileHasPassword: boolean;
   profilePassword: string;
   profilePasswordConfirm: string;
+  profilePasswordStatus: string;
+  profilePasswordStatusTone: 'neutral' | 'success' | 'error' | 'loading';
   isLoadingProfile: boolean;
   isSavingProfile: boolean;
   onProfileDisplayNameChange: (value: string) => void;
@@ -28,12 +31,15 @@ type DashboardProfilePanelProps = {
 
 export function DashboardProfilePanel({
   text,
+  showHeader = true,
   profileEmail,
   profileDisplayName,
   profileAccountId,
   profileHasPassword,
   profilePassword,
   profilePasswordConfirm,
+  profilePasswordStatus,
+  profilePasswordStatusTone,
   isLoadingProfile,
   isSavingProfile,
   onProfileDisplayNameChange,
@@ -42,10 +48,19 @@ export function DashboardProfilePanel({
   onSaveProfileDisplayName,
   onSaveProfilePassword
 }: DashboardProfilePanelProps) {
+  const passwordStatusClassName =
+    profilePasswordStatusTone === 'error'
+      ? 'rounded-[12px] border border-[#efc5bd] bg-[#fff3ef] px-3 py-2 text-[0.83rem] font-semibold text-[#b05338]'
+      : profilePasswordStatusTone === 'success'
+        ? 'rounded-[12px] border border-[#cfe5cd] bg-[#f1fff0] px-3 py-2 text-[0.83rem] font-semibold text-[#2f7a44]'
+        : profilePasswordStatusTone === 'loading'
+          ? 'rounded-[12px] border border-[#d9e6cf] bg-[#f6fbf0] px-3 py-2 text-[0.83rem] font-semibold text-[#56715d]'
+          : 'rounded-[12px] border border-[#d9e6cf] bg-[#f6fbf0] px-3 py-2 text-[0.83rem] font-semibold text-[#56715d]';
+
   return (
     <div className="grid gap-2 rounded-[14px] border border-[#deead9] bg-[linear-gradient(140deg,rgba(244,255,245,0.95),rgba(247,254,255,0.92))] px-2.5 py-2">
-      <strong>{text.profileTitle}</strong>
-      <small className={smallMutedClassName}>{text.profileSubtitle}</small>
+      {showHeader ? <strong>{text.profileTitle}</strong> : null}
+      {showHeader ? <small className={smallMutedClassName}>{text.profileSubtitle}</small> : null}
       <label className={inlineFieldClassName}>
         {text.profileDisplayNameLabel}
         <input
@@ -75,6 +90,8 @@ export function DashboardProfilePanel({
           placeholder={text.profilePasswordPlaceholder}
           disabled={isLoadingProfile || isSavingProfile}
           type="password"
+          minLength={8}
+          autoComplete="new-password"
         />
       </label>
       <label className={inlineFieldClassName}>
@@ -86,8 +103,20 @@ export function DashboardProfilePanel({
           placeholder={text.profilePasswordConfirmPlaceholder}
           disabled={isLoadingProfile || isSavingProfile}
           type="password"
+          minLength={8}
+          autoComplete="new-password"
         />
       </label>
+      <small className={smallMutedClassName}>{text.profilePasswordPlaceholder}</small>
+      {profilePasswordStatus ? (
+        <div
+          aria-live="polite"
+          role={profilePasswordStatusTone === 'error' ? 'alert' : 'status'}
+          className={passwordStatusClassName}
+        >
+          {profilePasswordStatus}
+        </div>
+      ) : null}
       <div className={chipRowClassName}>
         <button
           type="button"

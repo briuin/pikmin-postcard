@@ -7,13 +7,6 @@ import { usePersistedLocale } from '@/components/use-persisted-locale';
 import { useAuth, useSession } from '@/lib/auth-client';
 import { messages, supportedLocales } from '@/lib/i18n';
 
-export function resolveNextPath(value: string | null | undefined): string {
-  if (!value || !value.startsWith('/')) {
-    return '/dashboard';
-  }
-  return value;
-}
-
 type LoginPageProps = {
   nextPath: string;
 };
@@ -166,8 +159,8 @@ export function LoginPage({ nextPath }: LoginPageProps) {
               <strong>{text.helpTitle}</strong>
               <p className="m-0">{text.helpBody}</p>
               <p className="m-0">
-                <Link href="/dashboard" className="font-semibold text-[#2c8b4f]">
-                  {text.dashboardLink}
+                <Link href="/profile" className="font-semibold text-[#2c8b4f]">
+                  {text.profileLink}
                 </Link>
               </p>
             </div>

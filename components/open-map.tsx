@@ -32,6 +32,40 @@ const markerIcon = new L.Icon({
   iconAnchor: [12, 41]
 });
 
+function orderedMarkerIcon(label: string, accentColor = '#2f9e58') {
+  return L.divIcon({
+    html: `<div style="display:flex;flex-direction:column;align-items:center;transform:translateY(-3px);">
+      <div style="
+        min-width:30px;
+        height:30px;
+        padding:0 8px;
+        border-radius:999px;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        color:#fff;
+        font-size:13px;
+        font-weight:800;
+        background:${accentColor};
+        border:2px solid #fff;
+        box-shadow:0 4px 12px rgba(0,0,0,0.2);
+      ">${label}</div>
+      <div style="
+        width:0;
+        height:0;
+        margin-top:-2px;
+        border-left:8px solid transparent;
+        border-right:8px solid transparent;
+        border-top:11px solid ${accentColor};
+        filter:drop-shadow(0 2px 2px rgba(0,0,0,0.16));
+      "></div>
+    </div>`,
+    className: 'cluster-icon',
+    iconSize: [38, 44],
+    iconAnchor: [19, 41]
+  });
+}
+
 function getLocationMethodText(marker: SavedMapMarker): string {
   if (marker.locationStatus === 'MANUAL') {
     return 'Location: manual input';
@@ -126,7 +160,15 @@ export function OpenMap({
           if (cluster.points.length === 1) {
             const point = cluster.points[0];
             return (
-              <Marker key={point.id} icon={markerIcon} position={[point.latitude, point.longitude]}>
+              <Marker
+                key={point.id}
+                icon={
+                  point.markerBadgeLabel
+                    ? orderedMarkerIcon(point.markerBadgeLabel, point.markerAccentColor)
+                    : markerIcon
+                }
+                position={[point.latitude, point.longitude]}
+              >
                 <Popup>
                   <strong>{point.title}</strong>
                   <br />

@@ -7,6 +7,7 @@ export const en = {
     navExplore: 'Explore',
     navCreate: 'Create',
     navDashboard: 'Dashboard',
+    navProfile: 'Profile',
     navPaths: 'Plant Paths',
     navFeedback: 'Feedback',
     navAdmin: 'Admin',
@@ -39,8 +40,8 @@ export const en = {
     googleSubmitFailed: 'Failed to sign in with Google.',
     helpTitle: 'Set or reset your app password',
     helpBody:
-      'After Google sign-in, open your dashboard profile to set or reset the password used by the Flypik Android app.',
-    dashboardLink: 'Open dashboard after sign-in'
+      'After Google sign-in, open your profile to set or reset the password used by the Flypik Android app.',
+    profileLink: 'Open profile after sign-in'
   },
   feedback: {
     title: 'Contact & Feedback',
@@ -190,6 +191,7 @@ export const en = {
     loginRequiredTitle: 'Login Required',
     loginRequiredCreateBody: 'Sign in to submit AI jobs and create postcards.',
     loginRequiredDashboardBody: 'Sign in to view your private dashboard.',
+    loginRequiredProfileBody: 'Sign in to manage your profile and app password.',
     buttonSignInGoogle: 'Sign in',
     optionAiTitle: 'AI Detect (Async)',
     optionAiBody: 'Upload image and submit. You can leave this page and check result later in Dashboard.',
@@ -225,6 +227,14 @@ export const en = {
     dashboardSubtitle: 'Your AI detection jobs and your own postcards.',
     profileTitle: 'Profile',
     profileSubtitle: 'Manage your public profile, account ID, and the password used by the Flypik app.',
+    profilePageTitle: 'Profile',
+    profilePageSubtitle: 'A dedicated place for your account details and Flypik app password.',
+    profilePageLoading: 'Loading your account information...',
+    profileOverviewTitle: 'Account overview',
+    profileOverviewBody: 'Manage the name shown on your postcards and the password used in the Flypik Android app.',
+    profileOverviewAccountId: (accountId: string) => `Account ID: ${accountId}`,
+    profileGoDashboard: 'Open Dashboard',
+    profileGoPaths: 'Open Plant Paths',
     profileDisplayNameLabel: 'Display name',
     profileDisplayNamePlaceholder: 'Enter your display name',
     profileSaveButton: 'Save Display Name',

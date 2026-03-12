@@ -39,16 +39,51 @@ export function useDashboardDataLoader({
   const [profileAccountId, setProfileAccountId] = useState('');
   const [profileHasPassword, setProfileHasPassword] = useState(false);
 
+  const loadProfileData = useCallback(async () => {
+    setDashboardStatus('');
+    setIsLoadingProfile(true);
+
+    try {
+      const profileResponse = await apiFetch(
+        '/api/profile',
+        { cache: 'no-store' },
+        {
+          userId: currentUserId,
+          userEmail: currentUserEmail
+        }
+      );
+
+      if (!profileResponse.ok) {
+        throw new Error(text.dashboardUnknownError);
+      }
+
+      const profileData = (await profileResponse.json()) as {
+        email?: string;
+        displayName?: string | null;
+        accountId?: string | null;
+        hasPassword?: boolean;
+      };
+
+      setProfileEmail(profileData.email ?? '');
+      setProfileDisplayName(profileData.displayName ?? '');
+      setProfileAccountId(profileData.accountId ?? '');
+      setProfileHasPassword(Boolean(profileData.hasPassword));
+    } catch (error) {
+      setDashboardStatus(error instanceof Error ? error.message : text.dashboardUnknownError);
+    } finally {
+      setIsLoadingProfile(false);
+    }
+  }, [currentUserEmail, currentUserId, setDashboardStatus, text.dashboardUnknownError]);
+
   const loadDashboardData = useCallback(async () => {
     setDashboardStatus('');
     setIsLoadingJobs(true);
     setIsLoadingMine(true);
     setIsLoadingSaved(true);
     setIsLoadingReports(true);
-    setIsLoadingProfile(true);
 
     try {
-      const [jobsResponse, mineResponse, savedResponse, reportsResponse, profileResponse] = await Promise.all([
+      const [jobsResponse, mineResponse, savedResponse, reportsResponse] = await Promise.all([
         apiFetch('/api/location-from-image', { cache: 'no-store' }, {
           userId: currentUserId,
           userEmail: currentUserEmail
@@ -62,10 +97,6 @@ export function useDashboardDataLoader({
           userEmail: currentUserEmail
         }),
         apiFetch('/api/reports', { cache: 'no-store' }, {
-          userId: currentUserId,
-          userEmail: currentUserEmail
-        }),
-        apiFetch('/api/profile', { cache: 'no-store' }, {
           userId: currentUserId,
           userEmail: currentUserEmail
         })
@@ -87,29 +118,15 @@ export function useDashboardDataLoader({
         throw new Error(text.dashboardUnknownError);
       }
 
-      if (!profileResponse.ok) {
-        throw new Error(text.dashboardUnknownError);
-      }
-
       const jobsData = (await jobsResponse.json()) as DetectionJobRecord[];
       const mineData = (await mineResponse.json()) as PostcardRecord[];
       const savedData = (await savedResponse.json()) as PostcardRecord[];
       const reportsData = (await reportsResponse.json()) as DashboardReportRecord[];
-      const profileData = (await profileResponse.json()) as {
-        email?: string;
-        displayName?: string | null;
-        accountId?: string | null;
-        hasPassword?: boolean;
-      };
 
       setJobs(jobsData);
       setMyPostcards(mineData);
       setSavedPostcards(savedData);
       setMyReports(reportsData);
-      setProfileEmail(profileData.email ?? '');
-      setProfileDisplayName(profileData.displayName ?? '');
-      setProfileAccountId(profileData.accountId ?? '');
-      setProfileHasPassword(Boolean(profileData.hasPassword));
       setPostcardDrafts((current) => {
         const next: Record<string, PostcardEditDraft> = { ...current };
         for (const postcard of mineData) {
@@ -124,7 +141,6 @@ export function useDashboardDataLoader({
       setIsLoadingMine(false);
       setIsLoadingSaved(false);
       setIsLoadingReports(false);
-      setIsLoadingProfile(false);
     }
   }, [
     currentUserEmail,
@@ -153,6 +169,7 @@ export function useDashboardDataLoader({
     profileHasPassword,
     setProfileDisplayName,
     setProfileHasPassword,
+    loadProfileData,
     loadDashboardData
   };
 }

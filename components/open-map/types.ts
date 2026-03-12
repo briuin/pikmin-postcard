@@ -3,6 +3,8 @@ export type SavedMapMarker = {
   title: string;
   latitude: number;
   longitude: number;
+  markerBadgeLabel?: string;
+  markerAccentColor?: string;
   placeName?: string | null;
   imageUrl?: string | null;
   notes?: string | null;

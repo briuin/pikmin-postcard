@@ -8,7 +8,6 @@ import { DashboardImagePreviewModal } from '@/components/workbench/dashboard-vie
 import { DashboardPostcardsList } from '@/components/workbench/dashboard-view/postcards-list';
 import { DashboardReportsList } from '@/components/workbench/dashboard-view/reports-list';
 import { DashboardSavedList } from '@/components/workbench/dashboard-view/saved-list';
-import { DashboardProfilePanel } from '@/components/workbench/dashboard-view/profile-panel';
 import {
   getDashboardListClassName,
   panelClassName,
@@ -43,22 +42,9 @@ export function DashboardSection({
   isLoadingMine,
   isLoadingSaved,
   isLoadingReports,
-  isLoadingProfile,
-  isSavingProfile,
-  profileEmail,
-  profileDisplayName,
-  profileAccountId,
-  profileHasPassword,
-  profilePassword,
-  profilePasswordConfirm,
   dashboardStatus,
   dashboardViewMode,
   onSignIn,
-  onProfileDisplayNameChange,
-  onProfilePasswordChange,
-  onProfilePasswordConfirmChange,
-  onSaveProfileDisplayName,
-  onSaveProfilePassword,
   onSetDashboardViewMode,
   onRefresh,
   onUpdatePostcardDraft,
@@ -91,23 +77,6 @@ export function DashboardSection({
         <DashboardAuthCallout text={text} onSignIn={onSignIn} />
       ) : (
         <>
-          <DashboardProfilePanel
-            text={text}
-            profileEmail={profileEmail}
-            profileDisplayName={profileDisplayName}
-            profileAccountId={profileAccountId}
-            profileHasPassword={profileHasPassword}
-            profilePassword={profilePassword}
-            profilePasswordConfirm={profilePasswordConfirm}
-            isLoadingProfile={isLoadingProfile}
-            isSavingProfile={isSavingProfile}
-            onProfileDisplayNameChange={onProfileDisplayNameChange}
-            onProfilePasswordChange={onProfilePasswordChange}
-            onProfilePasswordConfirmChange={onProfilePasswordConfirmChange}
-            onSaveProfileDisplayName={onSaveProfileDisplayName}
-            onSaveProfilePassword={onSaveProfilePassword}
-          />
-
           <DashboardToolbar
             text={text}
             jobsCount={jobs.length}

@@ -5,14 +5,15 @@ import { authCalloutClassName, primaryButtonClassName, smallMutedClassName } fro
 
 type DashboardAuthCalloutProps = {
   text: WorkbenchText;
+  body?: string;
   onSignIn: () => void;
 };
 
-export function DashboardAuthCallout({ text, onSignIn }: DashboardAuthCalloutProps) {
+export function DashboardAuthCallout({ text, body, onSignIn }: DashboardAuthCalloutProps) {
   return (
     <div className={authCalloutClassName}>
       <strong>{text.loginRequiredTitle}</strong>
-      <small className={smallMutedClassName}>{text.loginRequiredDashboardBody}</small>
+      <small className={smallMutedClassName}>{body ?? text.loginRequiredDashboardBody}</small>
       <button type="button" className={primaryButtonClassName} onClick={onSignIn}>
         {text.buttonSignInGoogle}
       </button>

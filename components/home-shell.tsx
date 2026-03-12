@@ -6,12 +6,13 @@ import { AdminDashboard } from '@/components/admin-dashboard';
 import { AdminReportDetailPage } from '@/components/admin-report-detail-page';
 import { FeedbackSection } from '@/components/feedback-section';
 import { PlantPathPage } from '@/components/plant-path-page';
+import { ProfilePage } from '@/components/profile-page';
 import { usePersistedLocale } from '@/components/use-persisted-locale';
 import { messages, supportedLocales, type Locale } from '@/lib/i18n';
 import { PostcardWorkbench } from '@/components/postcard-workbench';
 
 type HomeShellProps = {
-  page: 'explore' | 'create' | 'dashboard' | 'paths' | 'feedback' | 'admin' | 'admin-report';
+  page: 'explore' | 'create' | 'dashboard' | 'profile' | 'paths' | 'feedback' | 'admin' | 'admin-report';
   reportCaseId?: string;
 };
 
@@ -74,6 +75,9 @@ export function HomeShell({ page, reportCaseId }: HomeShellProps) {
     'rounded-full bg-[linear-gradient(135deg,#56b36a,#2f9e58)] px-[0.68rem] py-[0.36rem] text-[0.8rem] leading-none text-white shadow-[0_4px_10px_rgba(47,158,88,0.16)] disabled:opacity-60';
   const localeButtonClassName =
     'min-w-[2.1rem] rounded-full px-2 py-1 text-[0.72rem] font-extrabold text-[#2f6542] shadow-none hover:bg-[rgba(89,178,109,0.14)]';
+  const sessionBadgeClassName =
+    'm-0 max-w-[180px] truncate rounded-full border border-[#d5e7d5] bg-[rgba(255,255,255,0.88)] px-[0.58rem] py-[0.3rem] text-[0.79rem] text-[#355044] max-[780px]:max-w-[120px]';
+  const sessionBadgeLinkClassName = `${sessionBadgeClassName} no-underline transition hover:cursor-pointer hover:border-[#58ac74] hover:bg-white hover:text-[#25563a]`;
 
   return (
     <div className={rootClassName}>
@@ -93,7 +97,7 @@ export function HomeShell({ page, reportCaseId }: HomeShellProps) {
             </div>
           </div>
           <nav
-            className={`inline-flex w-auto justify-self-start gap-1 rounded-full border border-[#d7e8d7] bg-[rgba(246,255,245,0.92)] p-1 max-[780px]:order-3 max-[780px]:col-span-2 max-[780px]:grid max-[780px]:w-full ${canAccessAdmin ? 'max-[780px]:grid-cols-6' : 'max-[780px]:grid-cols-5'} max-[780px]:rounded-xl`}
+            className="inline-flex w-auto justify-self-start gap-1 rounded-full border border-[#d7e8d7] bg-[rgba(246,255,245,0.92)] p-1 max-[780px]:order-3 max-[780px]:col-span-2 max-[780px]:grid max-[780px]:w-full max-[780px]:grid-cols-3 max-[780px]:rounded-xl"
             aria-label="Primary"
           >
             <Link href="/" className={page === 'explore' ? `${navTabClassName} ${navTabActiveClassName}` : navTabClassName}>
@@ -125,7 +129,13 @@ export function HomeShell({ page, reportCaseId }: HomeShellProps) {
             ) : null}
           </nav>
           <div className="flex min-w-0 items-center justify-self-end gap-2 max-[780px]:gap-1.5">
-            <small className="m-0 max-w-[200px] truncate rounded-full border border-[#d5e7d5] bg-[rgba(255,255,255,0.88)] px-[0.58rem] py-[0.3rem] text-[0.79rem] max-[780px]:hidden">{sessionText}</small>
+            {isAuthenticated ? (
+              <Link href="/profile" className={sessionBadgeLinkClassName} title={messages[locale].workbench.profilePageTitle}>
+                {sessionText}
+              </Link>
+            ) : (
+              <small className={sessionBadgeClassName}>{sessionText}</small>
+            )}
             <div className="inline-flex items-center gap-0.5 rounded-full border border-[#d7e8d7] bg-[rgba(246,255,245,0.92)] p-0.5" role="group" aria-label={homeText.localeSwitchAriaLabel}>
               {supportedLocales.map((value) => (
                 <button
@@ -149,6 +159,8 @@ export function HomeShell({ page, reportCaseId }: HomeShellProps) {
                         ? '/create'
                         : page === 'dashboard'
                           ? '/dashboard'
+                          : page === 'profile'
+                            ? '/profile'
                           : page === 'paths'
                             ? '/plant-paths'
                           : page === 'feedback'
@@ -177,6 +189,8 @@ export function HomeShell({ page, reportCaseId }: HomeShellProps) {
         <AdminReportDetailPage caseId={reportCaseId} />
       ) : page === 'feedback' ? (
         <FeedbackSection locale={locale} />
+      ) : page === 'profile' ? (
+        <ProfilePage locale={locale} />
       ) : page === 'paths' ? (
         <PlantPathPage locale={locale} />
       ) : page === 'explore' || page === 'create' || page === 'dashboard' ? (

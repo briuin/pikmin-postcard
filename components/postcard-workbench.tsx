@@ -115,6 +115,7 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
             <OpenMap
               className={exploreMapClassName}
               markers={explore.publicMarkers}
+              clusterMarkers={false}
               focusedMarkerId={explore.focusedMarkerId}
               viewerFocusSignal={explore.viewerFocusSignal}
               onLocateRequest={() => explore.requestDeviceLocation(false)}
@@ -185,22 +186,9 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
           isLoadingMine={dashboard.isLoadingMine}
           isLoadingSaved={dashboard.isLoadingSaved}
           isLoadingReports={dashboard.isLoadingReports}
-          isLoadingProfile={dashboard.isLoadingProfile}
-          isSavingProfile={dashboard.isSavingProfile}
-          profileEmail={dashboard.profileEmail}
-          profileDisplayName={dashboard.profileDisplayName}
-          profileAccountId={dashboard.profileAccountId}
-          profileHasPassword={dashboard.profileHasPassword}
-          profilePassword={dashboard.profilePassword}
-          profilePasswordConfirm={dashboard.profilePasswordConfirm}
           dashboardStatus={dashboard.dashboardStatus}
           dashboardViewMode={dashboard.dashboardViewMode}
           onSignIn={() => signIn()}
-          onProfileDisplayNameChange={dashboard.setProfileDisplayName}
-          onProfilePasswordChange={dashboard.setProfilePassword}
-          onProfilePasswordConfirmChange={dashboard.setProfilePasswordConfirm}
-          onSaveProfileDisplayName={() => void dashboard.saveProfileDisplayName()}
-          onSaveProfilePassword={() => void dashboard.saveProfilePassword()}
           onSetDashboardViewMode={dashboard.setDashboardViewMode}
           onRefresh={() => void loadDashboardData()}
           onUpdatePostcardDraft={dashboard.updatePostcardDraft}

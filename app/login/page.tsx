@@ -1,4 +1,11 @@
-import { LoginPage, resolveNextPath } from '@/components/login-page';
+import { LoginPage } from '@/components/login-page';
+
+function resolveNextPath(value: string | null | undefined): string {
+  if (!value || !value.startsWith('/')) {
+    return '/profile';
+  }
+  return value;
+}
 
 type LoginRoutePageProps = {
   searchParams?: Promise<{
