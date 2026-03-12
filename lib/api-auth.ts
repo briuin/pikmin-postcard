@@ -1,6 +1,6 @@
-import crypto from 'node:crypto';
 import { headers } from 'next/headers';
 import { UserApprovalStatus, UserRole } from '@/lib/domain/enums';
+import { verifyAppJwt } from '@/lib/auth-server';
 import { userRepo, type UserRepoRecord } from '@/lib/repos/users';
 import { isApprovedStatus } from '@/lib/user-approval';
 import { normalizeEmail, roleForEmail } from '@/lib/user-role';
@@ -31,60 +31,12 @@ type AuthenticatedUser = {
   canVote: boolean;
 };
 
-function fromBase64Url(value: string): Buffer {
-  const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
-  const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
-  return Buffer.from(padded, 'base64');
-}
-
 function parseBearerTokenFromAuthorization(value: string | null | undefined): string | null {
   if (!value) {
     return null;
   }
   const match = value.match(/^Bearer\s+(.+)$/i);
   return match?.[1]?.trim() || null;
-}
-
-function verifyBearerToken(
-  token: string,
-  secret: string
-): { sub: string; email: string; name?: string | null; exp: number } | null {
-  try {
-    const [headerPart, payloadPart, signaturePart] = token.split('.');
-    if (!headerPart || !payloadPart || !signaturePart) {
-      return null;
-    }
-
-    const signingInput = `${headerPart}.${payloadPart}`;
-    const expected = crypto.createHmac('sha256', secret).update(signingInput).digest();
-    const signature = fromBase64Url(signaturePart);
-    if (expected.length !== signature.length || !crypto.timingSafeEqual(expected, signature)) {
-      return null;
-    }
-
-    const payload = JSON.parse(fromBase64Url(payloadPart).toString('utf8')) as {
-      sub?: string;
-      email?: string;
-      name?: string | null;
-      exp?: number;
-    };
-
-    if (!payload?.sub || !payload?.email || typeof payload.exp !== 'number') {
-      return null;
-    }
-    if (payload.exp * 1000 <= Date.now()) {
-      return null;
-    }
-
-    return {
-      sub: payload.sub,
-      email: payload.email,
-      name: typeof payload.name === 'string' ? payload.name : null,
-      exp: payload.exp
-    };
-  } catch {
-    return null;
-  }
 }
 
 async function getBearerIdentityResult(): Promise<BearerIdentityResult> {
@@ -100,7 +52,7 @@ async function getBearerIdentityResult(): Promise<BearerIdentityResult> {
     return { kind: 'absent' };
   }
 
-  const payload = verifyBearerToken(token, secret);
+  const payload = verifyAppJwt(token, secret);
   if (!payload) {
     return { kind: 'invalid' };
   }

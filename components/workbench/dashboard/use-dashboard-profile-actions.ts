@@ -12,6 +12,7 @@ type UseDashboardProfileActionsArgs = {
   setDashboardStatus: (value: string) => void;
   profileDisplayName: string;
   setProfileDisplayName: Dispatch<SetStateAction<string>>;
+  setProfileHasPassword: Dispatch<SetStateAction<boolean>>;
 };
 
 export function useDashboardProfileActions({
@@ -22,9 +23,12 @@ export function useDashboardProfileActions({
   loadPublicPostcards,
   setDashboardStatus,
   profileDisplayName,
-  setProfileDisplayName
+  setProfileDisplayName,
+  setProfileHasPassword
 }: UseDashboardProfileActionsArgs) {
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profilePassword, setProfilePassword] = useState('');
+  const [profilePasswordConfirm, setProfilePasswordConfirm] = useState('');
 
   const saveProfileDisplayName = useCallback(async () => {
     if (!ensureAuthenticated()) {
@@ -81,8 +85,77 @@ export function useDashboardProfileActions({
     text.profileUnknownError
   ]);
 
+  const saveProfilePassword = useCallback(async () => {
+    if (!ensureAuthenticated()) {
+      return;
+    }
+
+    if (!profilePassword) {
+      setDashboardStatus(text.profilePasswordRequired);
+      return;
+    }
+
+    if (profilePassword.length < 8) {
+      setDashboardStatus(text.profilePasswordTooShort);
+      return;
+    }
+
+    if (profilePassword !== profilePasswordConfirm) {
+      setDashboardStatus(text.profilePasswordMismatch);
+      return;
+    }
+
+    setIsSavingProfile(true);
+    setDashboardStatus(text.profilePasswordSaving);
+    try {
+      const response = await apiFetch(
+        '/api/auth/password',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: profilePassword })
+        },
+        {
+          userId: currentUserId,
+          userEmail: currentUserEmail
+        }
+      );
+
+      await parseJsonResponseOrThrow(response, text.profilePasswordSaveFailed);
+
+      setProfileHasPassword(true);
+      setProfilePassword('');
+      setProfilePasswordConfirm('');
+      setDashboardStatus(text.profilePasswordSaved);
+    } catch (error) {
+      setDashboardStatus(error instanceof Error ? error.message : text.profileUnknownError);
+    } finally {
+      setIsSavingProfile(false);
+    }
+  }, [
+    currentUserEmail,
+    currentUserId,
+    ensureAuthenticated,
+    profilePassword,
+    profilePasswordConfirm,
+    setDashboardStatus,
+    setProfileHasPassword,
+    text.profilePasswordMismatch,
+    text.profilePasswordRequired,
+    text.profilePasswordSaveFailed,
+    text.profilePasswordSaved,
+    text.profilePasswordSaving,
+    text.profilePasswordTooShort,
+    text.profileUnknownError
+  ]);
+
   return {
     isSavingProfile,
-    saveProfileDisplayName
+    profilePassword,
+    profilePasswordConfirm,
+    setProfilePassword,
+    setProfilePasswordConfirm,
+    saveProfileDisplayName,
+    saveProfilePassword
   };
 }

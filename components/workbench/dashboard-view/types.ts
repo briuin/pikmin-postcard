@@ -33,11 +33,18 @@ export type DashboardSectionProps = {
   cancelingReportId: string | null;
   profileEmail: string;
   profileDisplayName: string;
+  profileAccountId: string;
+  profileHasPassword: boolean;
+  profilePassword: string;
+  profilePasswordConfirm: string;
   dashboardStatus: string;
   dashboardViewMode: DashboardViewMode;
   onSignIn: () => void;
   onProfileDisplayNameChange: (value: string) => void;
+  onProfilePasswordChange: (value: string) => void;
+  onProfilePasswordConfirmChange: (value: string) => void;
   onSaveProfileDisplayName: () => void;
+  onSaveProfilePassword: () => void;
   onSetDashboardViewMode: (mode: DashboardViewMode) => void;
   onRefresh: () => void;
   onUpdatePostcardDraft: (postcardId: string, patch: Partial<PostcardEditDraft>) => void;

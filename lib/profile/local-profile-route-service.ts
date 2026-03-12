@@ -28,7 +28,9 @@ export async function getProfileLocal(args: { request: Request }): Promise<NextR
   return NextResponse.json(
     {
       email: user?.email ?? identity.email,
-      displayName: user?.displayName ?? identity.name ?? null
+      displayName: user?.displayName ?? identity.name ?? null,
+      accountId: user?.accountId ?? null,
+      hasPassword: user?.hasPassword ?? false
     },
     { status: 200 }
   );

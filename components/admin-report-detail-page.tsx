@@ -194,7 +194,7 @@ export function AdminReportDetailPage({ caseId }: AdminReportDetailPageProps) {
           <button
             type="button"
             className="w-fit rounded-[12px] bg-[linear-gradient(135deg,#56b36a,#2f9e58)] px-4 py-2 font-bold text-white"
-            onClick={() => signIn('google')}
+            onClick={() => signIn()}
           >
             {messages[locale].workbench.buttonSignInGoogle}
           </button>

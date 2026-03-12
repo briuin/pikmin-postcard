@@ -9,12 +9,14 @@ import {
   useState,
   type ReactNode
 } from 'react';
+import { resolveAccountId } from '@/lib/account-id';
 import { apiFetch, clearClientAuthToken, getClientAuthToken, setClientAuthToken } from '@/lib/client-api';
 import { UserApprovalStatus, UserRole } from '@/lib/domain/enums';
 
 type SessionUser = {
   id: string;
   email: string;
+  accountId: string;
   name: string | null;
   role: UserRole;
   approvalStatus: UserApprovalStatus;
@@ -32,16 +34,18 @@ type SessionHookResult = {
 };
 
 type AuthContextValue = SessionHookResult & {
+  signInWithAccount: (accountId: string, password: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signOutUser: (options?: { callbackUrl?: string }) => Promise<void>;
 };
 
-type AuthExchangeResponse = {
+type AuthSuccessResponse = {
   token: string;
   user: {
     id: string;
     email: string;
     displayName: string | null;
+    accountId: string;
     role: 'ADMIN' | 'MANAGER' | 'MEMBER';
     approvalStatus: 'APPROVED' | 'PENDING';
   };
@@ -52,6 +56,7 @@ type AuthSessionResponse = {
     id: string;
     email: string;
     displayName?: string | null;
+    accountId?: string | null;
     role?: 'ADMIN' | 'MANAGER' | 'MEMBER';
     approvalStatus?: 'APPROVED' | 'PENDING';
   } | null;
@@ -248,11 +253,12 @@ async function resolveGoogleClientId(): Promise<string> {
   return clientId;
 }
 
-function sessionFromExchange(payload: AuthExchangeResponse): SessionData {
+function sessionFromExchange(payload: AuthSuccessResponse): SessionData {
   return {
     user: {
       id: payload.user.id,
       email: payload.user.email,
+      accountId: payload.user.accountId,
       name: payload.user.displayName ?? null,
       role: payload.user.role,
       approvalStatus: payload.user.approvalStatus
@@ -265,6 +271,7 @@ function sessionFromAuthUser(user: NonNullable<AuthSessionResponse['user']>): Se
     user: {
       id: user.id,
       email: user.email,
+      accountId: resolveAccountId(user.accountId, user.email),
       name: user.displayName ?? null,
       role:
         user.role === UserRole.ADMIN || user.role === UserRole.MANAGER
@@ -283,6 +290,7 @@ function sessionFromBearerToken(token: string): SessionData | null {
     sub?: string;
     email?: string;
     name?: string | null;
+    accountId?: string;
     role?: UserRole;
     approvalStatus?: UserApprovalStatus;
     exp?: number;
@@ -306,6 +314,7 @@ function sessionFromBearerToken(token: string): SessionData | null {
     user: {
       id: payload.sub,
       email: payload.email,
+      accountId: resolveAccountId(payload.accountId, payload.email),
       name: payload.name ?? null,
       role,
       approvalStatus
@@ -313,9 +322,32 @@ function sessionFromBearerToken(token: string): SessionData | null {
   };
 }
 
+function redirectToLogin(): void {
+  if (typeof window === 'undefined') {
+    throw new Error('Account sign-in is only available in browser.');
+  }
+
+  const next =
+    `${window.location.pathname}${window.location.search}${window.location.hash}` || '/';
+  const loginUrl = new URL('/login', window.location.origin);
+  if (next && next !== '/login') {
+    loginUrl.searchParams.set('next', next);
+  }
+  window.location.assign(loginUrl.toString());
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<SessionStatus>('loading');
   const [session, setSession] = useState<SessionData | null>(null);
+
+  const applySuccessfulSignIn = useCallback((payload: AuthSuccessResponse) => {
+    if (!payload?.token || !payload?.user?.id || !payload?.user?.email) {
+      throw new Error('Invalid auth response.');
+    }
+    setClientAuthToken(payload.token);
+    setSession(sessionFromExchange(payload));
+    setStatus('authenticated');
+  }, []);
 
   const signOutUser = useCallback(async (options?: { callbackUrl?: string }) => {
     clearClientAuthToken();
@@ -347,15 +379,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error(details);
     }
 
-    const payload = (await response.json()) as AuthExchangeResponse;
-    if (!payload?.token || !payload?.user?.id || !payload?.user?.email) {
-      throw new Error('Invalid auth exchange response.');
-    }
+    const payload = (await response.json()) as AuthSuccessResponse;
+    applySuccessfulSignIn(payload);
+  }, [applySuccessfulSignIn]);
 
-    setClientAuthToken(payload.token);
-    setSession(sessionFromExchange(payload));
-    setStatus('authenticated');
-  }, []);
+  const signInWithAccount = useCallback(
+    async (accountId: string, password: string) => {
+      const normalizedAccountId = accountId.trim();
+      const normalizedPassword = password;
+      if (!normalizedAccountId || !normalizedPassword) {
+        throw new Error('Account ID and password are required.');
+      }
+
+      const response = await apiFetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accountId: normalizedAccountId,
+          password: normalizedPassword
+        })
+      });
+
+      if (!response.ok) {
+        let details = 'Failed to sign in.';
+        try {
+          const payload = (await response.json()) as { error?: string; details?: string };
+          details = payload.details || payload.error || details;
+        } catch {
+          // ignore json parse error
+        }
+        throw new Error(details);
+      }
+
+      const payload = (await response.json()) as AuthSuccessResponse;
+      applySuccessfulSignIn(payload);
+    },
+    [applySuccessfulSignIn]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -417,10 +477,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     globalSignInImpl = async (provider?: string) => {
-      if (provider && provider !== 'google') {
-        throw new Error('Only Google sign-in is supported.');
+      if (provider === 'google') {
+        await signInWithGoogle();
+        return;
       }
-      await signInWithGoogle();
+      redirectToLogin();
     };
     globalSignOutImpl = async (options?: { callbackUrl?: string }) => {
       await signOutUser(options);
@@ -436,10 +497,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       data: session,
       status,
+      signInWithAccount,
       signInWithGoogle,
       signOutUser
     }),
-    [session, signInWithGoogle, signOutUser, status]
+    [session, signInWithAccount, signInWithGoogle, signOutUser, status]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -456,7 +518,15 @@ export function useSession(): SessionHookResult {
   };
 }
 
-export async function signIn(provider = 'google'): Promise<void> {
+export function useAuth(): AuthContextValue {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within AuthProvider.');
+  }
+  return context;
+}
+
+export async function signIn(provider?: string): Promise<void> {
   if (!globalSignInImpl) {
     throw new Error('Auth provider is not ready.');
   }

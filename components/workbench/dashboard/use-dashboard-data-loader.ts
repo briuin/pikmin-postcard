@@ -36,6 +36,8 @@ export function useDashboardDataLoader({
 
   const [profileEmail, setProfileEmail] = useState('');
   const [profileDisplayName, setProfileDisplayName] = useState('');
+  const [profileAccountId, setProfileAccountId] = useState('');
+  const [profileHasPassword, setProfileHasPassword] = useState(false);
 
   const loadDashboardData = useCallback(async () => {
     setDashboardStatus('');
@@ -93,7 +95,12 @@ export function useDashboardDataLoader({
       const mineData = (await mineResponse.json()) as PostcardRecord[];
       const savedData = (await savedResponse.json()) as PostcardRecord[];
       const reportsData = (await reportsResponse.json()) as DashboardReportRecord[];
-      const profileData = (await profileResponse.json()) as { email?: string; displayName?: string | null };
+      const profileData = (await profileResponse.json()) as {
+        email?: string;
+        displayName?: string | null;
+        accountId?: string | null;
+        hasPassword?: boolean;
+      };
 
       setJobs(jobsData);
       setMyPostcards(mineData);
@@ -101,6 +108,8 @@ export function useDashboardDataLoader({
       setMyReports(reportsData);
       setProfileEmail(profileData.email ?? '');
       setProfileDisplayName(profileData.displayName ?? '');
+      setProfileAccountId(profileData.accountId ?? '');
+      setProfileHasPassword(Boolean(profileData.hasPassword));
       setPostcardDrafts((current) => {
         const next: Record<string, PostcardEditDraft> = { ...current };
         for (const postcard of mineData) {
@@ -140,7 +149,10 @@ export function useDashboardDataLoader({
     isLoadingProfile,
     profileEmail,
     profileDisplayName,
+    profileAccountId,
+    profileHasPassword,
     setProfileDisplayName,
+    setProfileHasPassword,
     loadDashboardData
   };
 }

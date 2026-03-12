@@ -19,6 +19,7 @@ type UseDashboardMutationsArgs = {
   setPostcardDrafts: Dispatch<SetStateAction<Record<string, PostcardEditDraft>>>;
   profileDisplayName: string;
   setProfileDisplayName: Dispatch<SetStateAction<string>>;
+  setProfileHasPassword: Dispatch<SetStateAction<boolean>>;
 };
 
 export function useDashboardMutations({
@@ -33,7 +34,8 @@ export function useDashboardMutations({
   postcardDrafts,
   setPostcardDrafts,
   profileDisplayName,
-  setProfileDisplayName
+  setProfileDisplayName,
+  setProfileHasPassword
 }: UseDashboardMutationsArgs) {
   const [dashboardViewMode, setDashboardViewMode] = useState<DashboardViewMode>('grid');
 
@@ -74,7 +76,15 @@ export function useDashboardMutations({
     setPostcardDrafts
   });
 
-  const { isSavingProfile, saveProfileDisplayName } = useDashboardProfileActions({
+  const {
+    isSavingProfile,
+    profilePassword,
+    profilePasswordConfirm,
+    setProfilePassword,
+    setProfilePasswordConfirm,
+    saveProfileDisplayName,
+    saveProfilePassword
+  } = useDashboardProfileActions({
     text,
     ensureAuthenticated,
     currentUserId,
@@ -82,7 +92,8 @@ export function useDashboardMutations({
     loadPublicPostcards,
     setDashboardStatus,
     profileDisplayName,
-    setProfileDisplayName
+    setProfileDisplayName,
+    setProfileHasPassword
   });
 
   const { cancelingReportId, cancelReport } = useDashboardReportActions({
@@ -105,12 +116,17 @@ export function useDashboardMutations({
     savingCropPostcardId,
     cancelingReportId,
     isSavingProfile,
+    profilePassword,
+    profilePasswordConfirm,
     dashboardViewMode,
+    setProfilePassword,
+    setProfilePasswordConfirm,
     setDashboardViewMode,
     updatePostcardDraft,
     isJobAlreadySaved,
     saveDetectedJobAsPostcard,
     saveProfileDisplayName,
+    saveProfilePassword,
     savePostcardEdits,
     openCropEditor,
     closeCropEditor,

@@ -110,7 +110,7 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
           onSubmitFeedback={(postcardId, action, reportInput) =>
             void explore.submitExploreFeedback(postcardId, action, reportInput)
           }
-          onSignIn={() => signIn('google')}
+          onSignIn={() => signIn()}
           mapNode={
             <OpenMap
               className={exploreMapClassName}
@@ -151,7 +151,7 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
           createStatus={create.createStatus}
           queuedAiJobId={create.queuedAiJobId}
           queuedAiImageUrl={create.queuedAiImageUrl}
-          onSignIn={() => signIn('google')}
+          onSignIn={() => signIn()}
           onSubmitAi={create.submitAiDetectJob}
           onAiFileChange={create.setAiFile}
           onOpenDashboard={create.openDashboard}
@@ -189,11 +189,18 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
           isSavingProfile={dashboard.isSavingProfile}
           profileEmail={dashboard.profileEmail}
           profileDisplayName={dashboard.profileDisplayName}
+          profileAccountId={dashboard.profileAccountId}
+          profileHasPassword={dashboard.profileHasPassword}
+          profilePassword={dashboard.profilePassword}
+          profilePasswordConfirm={dashboard.profilePasswordConfirm}
           dashboardStatus={dashboard.dashboardStatus}
           dashboardViewMode={dashboard.dashboardViewMode}
-          onSignIn={() => signIn('google')}
+          onSignIn={() => signIn()}
           onProfileDisplayNameChange={dashboard.setProfileDisplayName}
+          onProfilePasswordChange={dashboard.setProfilePassword}
+          onProfilePasswordConfirmChange={dashboard.setProfilePasswordConfirm}
           onSaveProfileDisplayName={() => void dashboard.saveProfileDisplayName()}
+          onSaveProfilePassword={() => void dashboard.saveProfilePassword()}
           onSetDashboardViewMode={dashboard.setDashboardViewMode}
           onRefresh={() => void loadDashboardData()}
           onUpdatePostcardDraft={dashboard.updatePostcardDraft}

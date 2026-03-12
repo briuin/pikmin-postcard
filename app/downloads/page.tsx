@@ -175,8 +175,9 @@ export default async function DownloadsPage() {
             1. Download the APK on Android and allow installation from your browser or file manager.
           </p>
           <p style={{ margin: 0, color: 'var(--muted)', lineHeight: 1.6 }}>
-            2. Sign in with Google if you want your server-backed session; guest mode keeps only device-local
-            data.
+            2. Use your Pikmin account ID and website password if you want your server-backed session; guest
+            mode keeps only device-local data. First-time users can sign in on the website with Google once to
+            create the account and set the password.
           </p>
           <p style={{ margin: 0, color: 'var(--muted)', lineHeight: 1.6 }}>
             3. To use the Fly button, open Android Developer options and select Flypik as the mock-location

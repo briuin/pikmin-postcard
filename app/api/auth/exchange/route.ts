@@ -1,6 +1,6 @@
-import crypto from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { UserRole } from '@/lib/domain/enums';
+import { createAppJwt, toAuthResponseUser } from '@/lib/auth-server';
 import { userRepo } from '@/lib/repos/users';
 import { roleForEmail } from '@/lib/user-role';
 
@@ -13,30 +13,6 @@ type GoogleTokenInfo = {
   name?: string;
   sub?: string;
 };
-
-function toBase64Url(input: string | Buffer): string {
-  return Buffer.from(input)
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/g, '');
-}
-
-function createAppJwt(payload: Record<string, unknown>, secret: string): string {
-  const nowSeconds = Math.floor(Date.now() / 1000);
-  const header = { alg: 'HS256', typ: 'JWT' } as const;
-  const body = {
-    iat: nowSeconds,
-    exp: nowSeconds + 60 * 60 * 24 * 7,
-    ...payload
-  };
-
-  const encodedHeader = toBase64Url(JSON.stringify(header));
-  const encodedPayload = toBase64Url(JSON.stringify(body));
-  const signingInput = `${encodedHeader}.${encodedPayload}`;
-  const signature = crypto.createHmac('sha256', secret).update(signingInput).digest();
-  return `${signingInput}.${toBase64Url(signature)}`;
-}
 
 async function verifyGoogleIdToken(idToken: string): Promise<{
   email: string;
@@ -121,9 +97,10 @@ export async function POST(request: Request) {
 
     const token = createAppJwt(
       {
-        sub: user.id,
+        id: user.id,
         email: user.email,
-        name: user.displayName,
+        displayName: user.displayName,
+        accountId: user.accountId,
         role: user.role,
         approvalStatus: user.approvalStatus
       },
@@ -133,13 +110,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         token,
-        user: {
-          id: user.id,
-          email: user.email,
-          displayName: user.displayName,
-          role: user.role,
-          approvalStatus: user.approvalStatus
-        }
+        user: toAuthResponseUser(user)
       },
       { status: 200 }
     );

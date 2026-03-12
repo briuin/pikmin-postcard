@@ -74,7 +74,7 @@ export function FeedbackSection({ locale }: FeedbackSectionProps) {
           <button
             type="button"
             className="w-fit rounded-[13px] bg-[linear-gradient(135deg,#56b36a,#2f9e58)] px-4 py-2.5 font-bold text-white"
-            onClick={() => signIn('google')}
+            onClick={() => signIn()}
             disabled={isLoading}
           >
             {authText.buttonSignInGoogle}

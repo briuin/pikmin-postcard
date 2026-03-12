@@ -157,7 +157,7 @@ export function HomeShell({ page, reportCaseId }: HomeShellProps) {
                 {homeText.signOut}
               </button>
             ) : (
-              <button type="button" className={authButtonClassName} onClick={() => signIn('google')}>
+              <button type="button" className={authButtonClassName} onClick={() => signIn()}>
                 {homeText.signIn}
               </button>
             )}
