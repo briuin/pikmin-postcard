@@ -39,6 +39,13 @@ type DynamoUserRow = {
   displayName?: string | null;
 };
 
+function isMissingTableError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+  return String((error as { name?: string }).name || '') === 'ResourceNotFoundException';
+}
+
 function normalizeVisibility(value: unknown): PlantPathVisibility {
   return value === PlantPathVisibility.PUBLIC ? PlantPathVisibility.PUBLIC : PlantPathVisibility.PRIVATE;
 }
@@ -111,11 +118,27 @@ function sortByUpdatedDesc<T extends { updatedAt: string }>(rows: T[]): T[] {
 }
 
 async function loadAllPathRows(): Promise<DynamoPlantPathRow[]> {
-  return (await scanAll(ddbTables.plantPaths)) as DynamoPlantPathRow[];
+  try {
+    return (await scanAll(ddbTables.plantPaths)) as DynamoPlantPathRow[];
+  } catch (error) {
+    if (isMissingTableError(error)) {
+      console.warn(`Plant Paths table ${ddbTables.plantPaths} is missing. Returning empty path list.`);
+      return [];
+    }
+    throw error;
+  }
 }
 
 async function loadAllSaveRows(): Promise<DynamoPlantPathSaveRow[]> {
-  return (await scanAll(ddbTables.plantPathSaves)) as DynamoPlantPathSaveRow[];
+  try {
+    return (await scanAll(ddbTables.plantPathSaves)) as DynamoPlantPathSaveRow[];
+  } catch (error) {
+    if (isMissingTableError(error)) {
+      console.warn(`Plant Path saves table ${ddbTables.plantPathSaves} is missing. Returning empty saves list.`);
+      return [];
+    }
+    throw error;
+  }
 }
 
 async function loadUserByIdMap(pathRows: DynamoPlantPathRow[]): Promise<Map<string, DynamoUserRow>> {

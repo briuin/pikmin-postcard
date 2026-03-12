@@ -444,11 +444,45 @@ export function PlantPathPage({ locale = 'en' }: PlantPathPageProps) {
     <article
       className={`${panelClassName} grid h-full min-h-0 grid-cols-[minmax(320px,390px)_minmax(0,1fr)] items-stretch gap-2 max-[1080px]:h-auto max-[1080px]:grid-cols-1`}
     >
-      <aside className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-2 overflow-hidden max-[1080px]:order-2 max-[1080px]:h-auto max-[1080px]:grid-rows-[auto_auto] max-[1080px]:overflow-visible">
+      <aside className="grid h-full min-h-0 grid-rows-[auto_auto_minmax(0,1fr)] gap-2 overflow-hidden max-[1080px]:order-2 max-[1080px]:h-auto max-[1080px]:grid-rows-[auto_auto_auto] max-[1080px]:overflow-visible">
         <header className="rounded-[20px] border border-[#d9ebda] bg-[linear-gradient(150deg,rgba(255,255,255,0.96),rgba(242,255,245,0.94))] px-4 py-3 shadow-[0_10px_24px_rgba(55,82,66,0.08)]">
           <h2 className="text-[1.35rem]">{text.title}</h2>
           <p className="m-0 text-sm text-[#547062]">{text.subtitle}</p>
         </header>
+
+        {isLoading ? (
+          <section className="rounded-[20px] border border-[#dcead8] bg-white/90 px-3.5 py-3 text-sm text-[#587365] shadow-[0_10px_24px_rgba(60,82,68,0.06)]">
+            {text.loading}
+          </section>
+        ) : !selectedPath ? (
+          <section className="rounded-[20px] border border-[#dcead8] bg-white/90 px-3.5 py-3 text-sm text-[#587365] shadow-[0_10px_24px_rgba(60,82,68,0.06)]">
+            {text.noSelection}
+          </section>
+        ) : (
+          <section className="rounded-[20px] border border-[#dcead8] bg-white/90 px-3.5 py-3 shadow-[0_10px_24px_rgba(60,82,68,0.06)]">
+            <div className="flex items-start justify-between gap-3">
+              <div className="grid gap-1">
+                <strong>{text.selectedTitle}</strong>
+                <h3 className="m-0 text-[1rem] text-[#244535]">{selectedPath.name}</h3>
+              </div>
+              <span className="rounded-full border border-[#dce8dc] bg-[rgba(247,252,247,0.9)] px-2.5 py-1 text-xs font-bold text-[#587365]">
+                {selectedPath.visibility === PlantPathVisibility.PUBLIC ? text.visibilityPublic : text.visibilityPrivate}
+              </span>
+            </div>
+            <div className="mt-3 grid gap-1 text-sm text-[#587365]">
+              <small>{text.ownerLabel(selectedPath.ownerName)}</small>
+              <small>{text.pointsLabel(selectedPath.coordinates.length)}</small>
+              <small>{text.updatedLabel(selectedPath.updatedAt)}</small>
+              <small>
+                {selectedPath.isOwnedByViewer
+                  ? text.selectionOwned
+                  : selectedPath.isSavedByViewer
+                    ? text.selectionSaved
+                    : text.selectionReadonly}
+              </small>
+            </div>
+          </section>
+        )}
 
         <div className="grid min-h-0 content-start gap-3 overflow-auto overscroll-contain pr-1 max-[1080px]:overflow-visible max-[1080px]:pr-0">
           <section className="rounded-[20px] border border-[#dcead8] bg-white/90 px-3.5 py-3 shadow-[0_10px_24px_rgba(60,82,68,0.06)]">
@@ -541,40 +575,8 @@ export function PlantPathPage({ locale = 'en' }: PlantPathPageProps) {
             </div>
           </section>
 
-          {isLoading ? (
-            <section className="rounded-[20px] border border-[#dcead8] bg-white/90 px-3.5 py-3 text-sm text-[#587365] shadow-[0_10px_24px_rgba(60,82,68,0.06)]">
-              {text.loading}
-            </section>
-          ) : !selectedPath ? (
-            <section className="rounded-[20px] border border-[#dcead8] bg-white/90 px-3.5 py-3 text-sm text-[#587365] shadow-[0_10px_24px_rgba(60,82,68,0.06)]">
-              {text.noSelection}
-            </section>
-          ) : (
+          {!isLoading && selectedPath ? (
             <>
-              <section className="rounded-[20px] border border-[#dcead8] bg-white/90 px-3.5 py-3 shadow-[0_10px_24px_rgba(60,82,68,0.06)]">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="grid gap-1">
-                    <strong>{text.selectedTitle}</strong>
-                    <h3 className="m-0 text-[1rem] text-[#244535]">{selectedPath.name}</h3>
-                  </div>
-                  <span className="rounded-full border border-[#dce8dc] bg-[rgba(247,252,247,0.9)] px-2.5 py-1 text-xs font-bold text-[#587365]">
-                    {selectedPath.visibility === PlantPathVisibility.PUBLIC ? text.visibilityPublic : text.visibilityPrivate}
-                  </span>
-                </div>
-                <div className="mt-3 grid gap-1 text-sm text-[#587365]">
-                  <small>{text.ownerLabel(selectedPath.ownerName)}</small>
-                  <small>{text.pointsLabel(selectedPath.coordinates.length)}</small>
-                  <small>{text.updatedLabel(selectedPath.updatedAt)}</small>
-                  <small>
-                    {selectedPath.isOwnedByViewer
-                      ? text.selectionOwned
-                      : selectedPath.isSavedByViewer
-                        ? text.selectionSaved
-                        : text.selectionReadonly}
-                  </small>
-                </div>
-              </section>
-
               {isSelectedOwned ? (
                 <>
                   <section className="rounded-[20px] border border-[#dcead8] bg-white/90 px-3.5 py-3 shadow-[0_10px_24px_rgba(60,82,68,0.06)]">
@@ -745,19 +747,15 @@ export function PlantPathPage({ locale = 'en' }: PlantPathPageProps) {
                         <div className="grid gap-2">
                           <button
                             type="button"
-                            className="grid gap-1 text-left"
+                            className="flex items-center gap-2 text-left"
                             onClick={() => setFocusedMarkerId(coordinate.id)}
                           >
-                            <div className="flex items-center gap-2">
-                              <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-[rgba(239,255,240,0.94)] px-2 text-xs font-bold text-[#2f7a47]">
-                                {index + 1}
-                              </span>
-                              <span className="text-sm font-semibold text-[#244535]">{text.pointLabel(index)}</span>
-                            </div>
-                            <div className="grid gap-0.5 pl-8 font-mono text-sm font-semibold text-[#244535]">
-                              <span>{coordinate.latitude.toFixed(6)}</span>
-                              <span>{coordinate.longitude.toFixed(6)}</span>
-                            </div>
+                            <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-[rgba(239,255,240,0.94)] px-2 text-xs font-bold text-[#2f7a47]">
+                              {index + 1}
+                            </span>
+                            <span className="font-mono text-sm font-semibold text-[#244535]">
+                              {coordinate.latitude.toFixed(6)}, {coordinate.longitude.toFixed(6)}
+                            </span>
                           </button>
 
                           {isSelectedOwned ? (
@@ -842,7 +840,7 @@ export function PlantPathPage({ locale = 'en' }: PlantPathPageProps) {
                 )}
               </section>
             </>
-          )}
+          ) : null}
 
           {statusText ? (
             <div className="rounded-[16px] border border-[#dae7d9] bg-[rgba(247,252,247,0.92)] px-3 py-2 text-sm text-[#406351]">
