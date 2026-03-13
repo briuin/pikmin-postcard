@@ -6,6 +6,8 @@ import {
   isApprovedUser,
   isManagerOrAboveRole
 } from '@/lib/api-auth';
+import { listPremiumFeatureIds } from '@/lib/premium-feature-settings';
+import { hasPremiumFeatureAccess, PremiumFeatureKey } from '@/lib/premium-features';
 
 export type GuardResult<T> = { ok: true; value: T } | { ok: false; response: NextResponse };
 
@@ -106,14 +108,14 @@ export function createApiGuards(dependencies: ApiGuardDependencies = defaultApiG
   }
 
   async function requireApprovedActorCapability(params: {
-    canAccess: (actor: AuthActor) => boolean;
+    canAccess: (actor: AuthActor) => boolean | Promise<boolean>;
     forbiddenMessage: string;
   }): Promise<GuardResult<AuthActor>> {
     const actor = await requireApprovedActor({ createIfMissing: true });
     if (!actor.ok) {
       return actor;
     }
-    if (!params.canAccess(actor.value)) {
+    if (!(await params.canAccess(actor.value))) {
       return {
         ok: false,
         response: forbiddenResponse(params.forbiddenMessage)
@@ -146,7 +148,19 @@ export function createApiGuards(dependencies: ApiGuardDependencies = defaultApiG
 
   async function requireApprovedPlantPathUser(): Promise<GuardResult<AuthActor>> {
     return requireApprovedActorCapability({
-      canAccess: (actor) => actor.canUsePlantPaths,
+      canAccess: async (actor) => {
+        if (!actor.canUsePlantPaths) {
+          return false;
+        }
+
+        const premiumFeatureIds = await listPremiumFeatureIds();
+        return hasPremiumFeatureAccess({
+          role: actor.role,
+          hasPremiumAccess: actor.hasPremiumAccess,
+          premiumFeatureIds,
+          featureId: PremiumFeatureKey.PLANT_PATHS
+        });
+      },
       forbiddenMessage: 'You are not allowed to use plant paths.'
     });
   }

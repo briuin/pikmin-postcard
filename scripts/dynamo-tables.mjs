@@ -1,6 +1,8 @@
 export function getTableNames(prefix = "pikmin-postcard-dev") {
   return {
     users: `${prefix}-users`,
+    inviteCodes: `${prefix}-invite-codes`,
+    appSettings: `${prefix}-app-settings`,
     plantPaths: `${prefix}-plant-paths`,
     plantPathSaves: `${prefix}-plant-path-saves`,
     postcards: `${prefix}-postcards`,
@@ -44,6 +46,8 @@ export function getTableDefinitions(prefix = "pikmin-postcard-dev") {
         },
       ],
     }),
+    simpleTable(names.inviteCodes, "id"),
+    simpleTable(names.appSettings, "id"),
     simpleTable(names.plantPaths, "id"),
     simpleTable(names.plantPathSaves, "id"),
     simpleTable(names.postcards, "id", {

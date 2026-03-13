@@ -1,13 +1,16 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { parseLocationInput } from '@/components/workbench/utils';
 import { panelClassName } from '@/components/workbench/explore-view/styles';
 import { signIn, useSession } from '@/lib/auth-client';
+import { UserRole } from '@/lib/domain/enums';
 import { apiFetch } from '@/lib/client-api';
 import { parseJsonResponseOrThrow } from '@/lib/http-response';
 import { messages, type Locale, type PlantPathsText } from '@/lib/i18n';
+import { PremiumFeatureKey } from '@/lib/premium-features';
 import type { PlantPathCoordinate, PlantPathListPayload, PlantPathRecord } from '@/lib/plant-paths/types';
 import { PlantPathVisibility } from '@/lib/plant-paths/types';
 
@@ -84,7 +87,19 @@ export function PlantPathPage({ locale = 'en' }: PlantPathPageProps) {
   const { data: session, status: sessionStatus } = useSession();
   const isAuthenticated = sessionStatus === 'authenticated';
   const canUsePlantPaths = session?.user?.canUsePlantPaths !== false;
-  const isPlantPathAccessBlocked = isAuthenticated && !canUsePlantPaths;
+  const hasPremiumAccess = session?.user?.hasPremiumAccess === true;
+  const premiumFeatureIds = session?.user?.premiumFeatureIds ?? [];
+  const hasRoleBypass =
+    session?.user?.role === UserRole.ADMIN || session?.user?.role === UserRole.MANAGER;
+  const isPlantPathPremiumEnabled = premiumFeatureIds.includes(PremiumFeatureKey.PLANT_PATHS);
+  const isPlantPathPermissionBlocked = isAuthenticated && !canUsePlantPaths;
+  const isPlantPathPremiumBlocked =
+    isAuthenticated &&
+    canUsePlantPaths &&
+    isPlantPathPremiumEnabled &&
+    !hasPremiumAccess &&
+    !hasRoleBypass;
+  const isPlantPathAccessBlocked = isPlantPathPermissionBlocked || isPlantPathPremiumBlocked;
 
   const [payload, setPayload] = useState<PlantPathListPayload>({
     ownedPaths: [],
@@ -212,8 +227,12 @@ export function PlantPathPage({ locale = 'en' }: PlantPathPageProps) {
   }, [activeCollection, payload, selectedPathId]);
 
   async function ensureAuthenticatedAction(): Promise<boolean> {
-    if (isPlantPathAccessBlocked) {
+    if (isPlantPathPermissionBlocked) {
       setStatusText(text.permissionDisabledBody);
+      return false;
+    }
+    if (isPlantPathPremiumBlocked) {
+      setStatusText(text.premiumRequiredBody);
       return false;
     }
     if (isAuthenticated) {
@@ -491,9 +510,21 @@ export function PlantPathPage({ locale = 'en' }: PlantPathPageProps) {
         )}
 
         <div className="grid min-h-0 content-start gap-3 overflow-auto overscroll-contain pr-1 max-[1080px]:overflow-visible max-[1080px]:pr-0">
-          {isPlantPathAccessBlocked ? (
+          {isPlantPathPermissionBlocked ? (
             <section className="rounded-[20px] border border-[#ead5c6] bg-[rgba(255,247,242,0.94)] px-3.5 py-3 text-sm text-[#85523b] shadow-[0_10px_24px_rgba(60,82,68,0.06)]">
               {text.permissionDisabledBody}
+            </section>
+          ) : null}
+
+          {isPlantPathPremiumBlocked ? (
+            <section className="grid gap-2 rounded-[20px] border border-[#ead5c6] bg-[rgba(255,247,242,0.94)] px-3.5 py-3 text-sm text-[#85523b] shadow-[0_10px_24px_rgba(60,82,68,0.06)]">
+              <span>{text.premiumRequiredBody}</span>
+              <Link
+                href="/profile"
+                className="inline-flex w-fit items-center justify-center rounded-full border border-[#d7b7a2] bg-white px-3 py-1.5 text-[0.82rem] font-bold text-[#8a5338] no-underline transition hover:brightness-105"
+              >
+                {text.premiumUnlockButton}
+              </Link>
             </section>
           ) : null}
 

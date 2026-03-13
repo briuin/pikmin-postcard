@@ -13,6 +13,8 @@ const tablePrefix =
 
 export const ddbTables = {
   users: `${tablePrefix}-users`,
+  inviteCodes: `${tablePrefix}-invite-codes`,
+  appSettings: `${tablePrefix}-app-settings`,
   plantPaths: `${tablePrefix}-plant-paths`,
   plantPathSaves: `${tablePrefix}-plant-path-saves`,
   postcards: `${tablePrefix}-postcards`,
@@ -70,6 +72,18 @@ export function includesKeyword(values: Array<unknown>, keyword: string): boolea
     .filter((value) => value.length > 0)
     .join(' ');
   return haystack.includes(keyword);
+}
+
+export function isDynamoResourceNotFoundError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const candidate = error as { name?: unknown; __type?: unknown };
+  return (
+    String(candidate.name || '') === 'ResourceNotFoundException' ||
+    String(candidate.__type || '').includes('ResourceNotFoundException')
+  );
 }
 
 export async function scanAll(tableName: string): Promise<Record<string, unknown>[]> {

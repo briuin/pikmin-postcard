@@ -30,6 +30,7 @@ type AuthenticatedUser = {
   canSubmitDetection: boolean;
   canVote: boolean;
   canUsePlantPaths: boolean;
+  hasPremiumAccess: boolean;
 };
 
 function parseBearerTokenFromAuthorization(value: string | null | undefined): string | null {
@@ -81,6 +82,7 @@ function toAuthenticatedUser(
     canSubmitDetection: user.canSubmitDetection,
     canVote: user.canVote,
     canUsePlantPaths: user.canUsePlantPaths,
+    hasPremiumAccess: user.hasPremiumAccess,
     name
   };
 }

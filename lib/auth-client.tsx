@@ -12,6 +12,11 @@ import {
 import { resolveAccountId } from '@/lib/account-id';
 import { apiFetch, clearClientAuthToken, getClientAuthToken, setClientAuthToken } from '@/lib/client-api';
 import { UserApprovalStatus, UserRole } from '@/lib/domain/enums';
+import {
+  defaultPremiumFeatureIds,
+  normalizePremiumFeatureIds,
+  type PremiumFeatureKey
+} from '@/lib/premium-features';
 
 type SessionUser = {
   id: string;
@@ -21,6 +26,8 @@ type SessionUser = {
   role: UserRole;
   approvalStatus: UserApprovalStatus;
   canUsePlantPaths: boolean;
+  hasPremiumAccess: boolean;
+  premiumFeatureIds: PremiumFeatureKey[];
 };
 
 type SessionData = {
@@ -38,6 +45,7 @@ type AuthContextValue = SessionHookResult & {
   signInWithAccount: (accountId: string, password: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signOutUser: (options?: { callbackUrl?: string }) => Promise<void>;
+  refreshSession: () => Promise<void>;
 };
 
 type AuthSuccessResponse = {
@@ -50,6 +58,8 @@ type AuthSuccessResponse = {
     role: 'ADMIN' | 'MANAGER' | 'MEMBER';
     approvalStatus: 'APPROVED' | 'PENDING';
     canUsePlantPaths?: boolean;
+    hasPremiumAccess?: boolean;
+    premiumFeatureIds?: PremiumFeatureKey[];
   };
 };
 
@@ -62,6 +72,8 @@ type AuthSessionResponse = {
     role?: 'ADMIN' | 'MANAGER' | 'MEMBER';
     approvalStatus?: 'APPROVED' | 'PENDING';
     canUsePlantPaths?: boolean;
+    hasPremiumAccess?: boolean;
+    premiumFeatureIds?: PremiumFeatureKey[];
   } | null;
 };
 
@@ -265,7 +277,11 @@ function sessionFromExchange(payload: AuthSuccessResponse): SessionData {
       name: payload.user.displayName ?? null,
       role: payload.user.role,
       approvalStatus: payload.user.approvalStatus,
-      canUsePlantPaths: payload.user.canUsePlantPaths !== false
+      canUsePlantPaths: payload.user.canUsePlantPaths !== false,
+      hasPremiumAccess: payload.user.hasPremiumAccess === true,
+      premiumFeatureIds: normalizePremiumFeatureIds(
+        payload.user.premiumFeatureIds ?? defaultPremiumFeatureIds
+      )
     }
   };
 }
@@ -285,7 +301,11 @@ function sessionFromAuthUser(user: NonNullable<AuthSessionResponse['user']>): Se
         user.approvalStatus === UserApprovalStatus.APPROVED
           ? UserApprovalStatus.APPROVED
           : UserApprovalStatus.PENDING,
-      canUsePlantPaths: user.canUsePlantPaths !== false
+      canUsePlantPaths: user.canUsePlantPaths !== false,
+      hasPremiumAccess: user.hasPremiumAccess === true,
+      premiumFeatureIds: normalizePremiumFeatureIds(
+        user.premiumFeatureIds ?? defaultPremiumFeatureIds
+      )
     }
   };
 }
@@ -299,6 +319,8 @@ function sessionFromBearerToken(token: string): SessionData | null {
     role?: UserRole;
     approvalStatus?: UserApprovalStatus;
     canUsePlantPaths?: boolean;
+    hasPremiumAccess?: boolean;
+    premiumFeatureIds?: PremiumFeatureKey[];
     exp?: number;
   }>(token);
   if (!payload?.sub || !payload.email || !payload.exp) {
@@ -324,7 +346,11 @@ function sessionFromBearerToken(token: string): SessionData | null {
       name: payload.name ?? null,
       role,
       approvalStatus,
-      canUsePlantPaths: payload.canUsePlantPaths !== false
+      canUsePlantPaths: payload.canUsePlantPaths !== false,
+      hasPremiumAccess: payload.hasPremiumAccess === true,
+      premiumFeatureIds: normalizePremiumFeatureIds(
+        payload.premiumFeatureIds ?? defaultPremiumFeatureIds
+      )
     }
   };
 }
@@ -362,6 +388,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus('unauthenticated');
     if (options?.callbackUrl && typeof window !== 'undefined') {
       window.location.assign(options.callbackUrl);
+    }
+  }, []);
+
+  const refreshSession = useCallback(async () => {
+    const token = getClientAuthToken();
+    if (!token) {
+      setSession(null);
+      setStatus('unauthenticated');
+      return;
+    }
+
+    const restored = sessionFromBearerToken(token);
+    if (!restored) {
+      clearClientAuthToken();
+      setSession(null);
+      setStatus('unauthenticated');
+      return;
+    }
+
+    try {
+      const sessionResponse = await apiFetch('/api/auth/session', { cache: 'no-store' });
+      if (!sessionResponse.ok) {
+        throw new Error('Session refresh failed.');
+      }
+      const payload = (await sessionResponse.json()) as AuthSessionResponse;
+      if (!payload.user?.id || !payload.user?.email) {
+        clearClientAuthToken();
+        setSession(null);
+        setStatus('unauthenticated');
+        return;
+      }
+
+      setSession(sessionFromAuthUser(payload.user));
+      setStatus('authenticated');
+    } catch {
+      setSession(restored);
+      setStatus('authenticated');
     }
   }, []);
 
@@ -428,51 +491,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     async function restoreSession() {
-      const token = getClientAuthToken();
-      if (!token) {
-        if (!cancelled) {
-          setSession(null);
-          setStatus('unauthenticated');
-        }
-        return;
-      }
-
-      const restored = sessionFromBearerToken(token);
-      if (!restored) {
-        clearClientAuthToken();
-        if (!cancelled) {
-          setSession(null);
-          setStatus('unauthenticated');
-        }
-        return;
-      }
-
       try {
-        const sessionResponse = await apiFetch('/api/auth/session', { cache: 'no-store' });
-        if (sessionResponse.ok) {
-          const payload = (await sessionResponse.json()) as AuthSessionResponse;
-          if (payload.user?.id && payload.user?.email) {
-            if (!cancelled) {
-              setSession(sessionFromAuthUser(payload.user));
-              setStatus('authenticated');
-            }
-            return;
-          }
-
-          clearClientAuthToken();
-          if (!cancelled) {
-            setSession(null);
-            setStatus('unauthenticated');
-          }
+        await refreshSession();
+      } finally {
+        if (cancelled) {
           return;
         }
-      } catch {
-        // fall back to token payload
-      }
-
-      if (!cancelled) {
-        setSession(restored);
-        setStatus('authenticated');
       }
     }
 
@@ -480,7 +504,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [refreshSession]);
 
   useEffect(() => {
     globalSignInImpl = async (provider?: string) => {
@@ -506,9 +530,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       status,
       signInWithAccount,
       signInWithGoogle,
-      signOutUser
+      signOutUser,
+      refreshSession
     }),
-    [session, signInWithAccount, signInWithGoogle, signOutUser, status]
+    [refreshSession, session, signInWithAccount, signInWithGoogle, signOutUser, status]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -522,6 +547,23 @@ export function useSession(): SessionHookResult {
   return {
     data: context.data,
     status: context.status
+  };
+}
+
+export function useAuthActions(): Pick<
+  AuthContextValue,
+  'refreshSession' | 'signInWithAccount' | 'signInWithGoogle' | 'signOutUser'
+> {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuthActions must be used within AuthProvider.');
+  }
+
+  return {
+    refreshSession: context.refreshSession,
+    signInWithAccount: context.signInWithAccount,
+    signInWithGoogle: context.signInWithGoogle,
+    signOutUser: context.signOutUser
   };
 }
 

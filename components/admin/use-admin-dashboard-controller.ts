@@ -1,8 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AdminText, WorkbenchText } from '@/lib/i18n';
 import { UserRole } from '@/lib/domain/enums';
+import {
+  type InviteCodeRecord,
+  type AdminInvitationState
+} from '@/lib/invitations/types';
+import { type PremiumFeatureKey as PremiumFeatureId } from '@/lib/premium-features';
 import {
   type AdminFeedbackRecord,
   type AdminPostcardEditDraft,
@@ -22,6 +27,8 @@ import {
   parseJsonResponseOrThrow
 } from '@/lib/http-response';
 import { apiFetch } from '@/lib/client-api';
+
+const INVITE_CODES_PAGE_SIZE = 10;
 
 type UseAdminDashboardControllerArgs = {
   text: AdminText;
@@ -47,6 +54,13 @@ export function useAdminDashboardController({
   const [allPostcards, setAllPostcards] = useState<PostcardRecord[]>([]);
   const [reportedPostcards, setReportedPostcards] = useState<PostcardRecord[]>([]);
   const [feedbacks, setFeedbacks] = useState<AdminFeedbackRecord[]>([]);
+  const [premiumFeatureIds, setPremiumFeatureIds] = useState<PremiumFeatureId[]>([]);
+  const [inviteCodes, setInviteCodes] = useState<InviteCodeRecord[]>([]);
+  const [invitePage, setInvitePage] = useState(1);
+  const [invitePageSize, setInvitePageSize] = useState(INVITE_CODES_PAGE_SIZE);
+  const [inviteTotalCount, setInviteTotalCount] = useState(0);
+  const [inviteTotalPages, setInviteTotalPages] = useState(1);
+  const [inviteGenerateCount, setInviteGenerateCount] = useState('20');
   const [userAccessDrafts, setUserAccessDrafts] = useState<Record<string, UserAccessDraft>>({});
   const [postcardDrafts, setPostcardDrafts] = useState<Record<string, AdminPostcardEditDraft>>({});
   const [reportStatusDrafts, setReportStatusDrafts] = useState<Record<string, AdminReportStatusDraft>>({});
@@ -54,12 +68,16 @@ export function useAdminDashboardController({
   const [userSearchText, setUserSearchText] = useState('');
   const [userRoleFilter, setUserRoleFilter] = useState<'ALL' | UserRole>('ALL');
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+  const [isLoadingInvitations, setIsLoadingInvitations] = useState(false);
   const [isLoadingPostcards, setIsLoadingPostcards] = useState(false);
   const [isLoadingFeedbacks, setIsLoadingFeedbacks] = useState(false);
   const [savingUserAccessId, setSavingUserAccessId] = useState<string | null>(null);
+  const [isSavingPremiumFeatures, setIsSavingPremiumFeatures] = useState(false);
+  const [isGeneratingInviteCodes, setIsGeneratingInviteCodes] = useState(false);
   const [savingPostcardId, setSavingPostcardId] = useState<string | null>(null);
   const [savingReportCaseId, setSavingReportCaseId] = useState<string | null>(null);
   const [statusText, setStatusText] = useState('');
+  const invitePageRef = useRef(1);
 
   useEffect(() => {
     if (!canManageUsers && activeTab === 'users') {
@@ -151,6 +169,61 @@ export function useAdminDashboardController({
     }
   }, [canAccess, currentUserEmail, currentUserId, searchText, text.feedbackEmpty]);
 
+  const loadInvitations = useCallback(async (page = invitePageRef.current) => {
+    if (!canManageUsers) {
+      setPremiumFeatureIds([]);
+      setInviteCodes([]);
+      setInvitePage(1);
+      setInvitePageSize(INVITE_CODES_PAGE_SIZE);
+      setInviteTotalCount(0);
+      setInviteTotalPages(1);
+      invitePageRef.current = 1;
+      return;
+    }
+
+    setIsLoadingInvitations(true);
+    try {
+      const url = new URL('/api/admin/invitations', window.location.origin);
+      url.searchParams.set('page', String(Math.max(1, Math.trunc(page))));
+      url.searchParams.set('pageSize', String(INVITE_CODES_PAGE_SIZE));
+      const response = await apiFetch(
+        `${url.pathname}${url.search}`,
+        { cache: 'no-store' },
+        {
+          userId: currentUserId,
+          userEmail: currentUserEmail
+        }
+      );
+      const payload = await parseJsonPayload(response);
+      if (!response.ok || !payload || typeof payload !== 'object') {
+        throw new Error(getErrorMessageFromPayload(payload) ?? text.invitesLoadFailed);
+      }
+
+      const invitationState = payload as AdminInvitationState;
+      setPremiumFeatureIds(Array.isArray(invitationState.premiumFeatureIds) ? invitationState.premiumFeatureIds : []);
+      setInviteCodes(Array.isArray(invitationState.inviteCodes) ? invitationState.inviteCodes : []);
+      const nextPage = Number.isFinite(invitationState.page) ? Math.max(1, invitationState.page) : 1;
+      const nextPageSize = Number.isFinite(invitationState.pageSize)
+        ? Math.max(1, invitationState.pageSize)
+        : INVITE_CODES_PAGE_SIZE;
+      const nextTotalCount = Number.isFinite(invitationState.totalCount)
+        ? Math.max(0, invitationState.totalCount)
+        : 0;
+      const nextTotalPages = Number.isFinite(invitationState.totalPages)
+        ? Math.max(1, invitationState.totalPages)
+        : 1;
+      invitePageRef.current = nextPage;
+      setInvitePage(nextPage);
+      setInvitePageSize(nextPageSize);
+      setInviteTotalCount(nextTotalCount);
+      setInviteTotalPages(nextTotalPages);
+    } catch (error) {
+      setStatusText(error instanceof Error ? error.message : text.invitesLoadFailed);
+    } finally {
+      setIsLoadingInvitations(false);
+    }
+  }, [canManageUsers, currentUserEmail, currentUserId, text.invitesLoadFailed]);
+
   const loadPostcards = useCallback(
     async (reportedOnly: boolean) => {
       if (!canAccess) {
@@ -219,8 +292,8 @@ export function useAdminDashboardController({
 
   const refreshAll = useCallback(async () => {
     setStatusText('');
-    await Promise.all([loadUsers(), loadPostcards(false), loadPostcards(true), loadFeedbacks()]);
-  }, [loadFeedbacks, loadPostcards, loadUsers]);
+    await Promise.all([loadUsers(), loadInvitations(), loadPostcards(false), loadPostcards(true), loadFeedbacks()]);
+  }, [loadFeedbacks, loadInvitations, loadPostcards, loadUsers]);
 
   useEffect(() => {
     if (!isAuthenticated || !canAccess) {
@@ -279,6 +352,119 @@ export function useAdminDashboardController({
       }
     },
     [currentUserEmail, currentUserId, loadUsers, text.roleSaveFailed, text.roleSaved, userAccessDrafts]
+  );
+
+  const togglePremiumFeature = useCallback((featureId: PremiumFeatureId, enabled: boolean) => {
+    setPremiumFeatureIds((current) => {
+      if (enabled) {
+        return current.includes(featureId) ? current : [...current, featureId];
+      }
+      return current.filter((item) => item !== featureId);
+    });
+  }, []);
+
+  const savePremiumFeatures = useCallback(async () => {
+    if (!canManageUsers) {
+      return;
+    }
+
+    setIsSavingPremiumFeatures(true);
+    setStatusText('');
+    try {
+      const response = await apiFetch(
+        '/api/admin/invitations',
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            premiumFeatureIds
+          })
+        },
+        {
+          userId: currentUserId,
+          userEmail: currentUserEmail
+        }
+      );
+
+      await parseJsonResponseOrThrow<{ premiumFeatureIds?: PremiumFeatureId[] }>(
+        response,
+        text.premiumSaveFailed
+      );
+
+      setStatusText(text.premiumSaved);
+      await loadInvitations(invitePageRef.current);
+    } catch (error) {
+      setStatusText(error instanceof Error ? error.message : text.premiumSaveFailed);
+    } finally {
+      setIsSavingPremiumFeatures(false);
+    }
+  }, [
+    canManageUsers,
+    currentUserEmail,
+    currentUserId,
+    loadInvitations,
+    premiumFeatureIds,
+    text.premiumSaveFailed,
+    text.premiumSaved
+  ]);
+
+  const generateInviteCodes = useCallback(async () => {
+    if (!canManageUsers) {
+      return;
+    }
+
+    const count = Number.parseInt(inviteGenerateCount, 10);
+    if (!Number.isFinite(count) || count < 1 || count > 200) {
+      setStatusText(text.invitesGenerateInvalidCount);
+      return;
+    }
+
+    setIsGeneratingInviteCodes(true);
+    setStatusText('');
+    try {
+      const response = await apiFetch(
+        '/api/admin/invitations',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ count })
+        },
+        {
+          userId: currentUserId,
+          userEmail: currentUserEmail
+        }
+      );
+
+      await parseJsonResponseOrThrow<{ inviteCodes?: InviteCodeRecord[] }>(
+        response,
+        text.invitesGenerateFailed
+      );
+
+      setStatusText(text.invitesGenerated(count));
+      await loadInvitations(1);
+    } catch (error) {
+      setStatusText(error instanceof Error ? error.message : text.invitesGenerateFailed);
+    } finally {
+      setIsGeneratingInviteCodes(false);
+    }
+  }, [
+    canManageUsers,
+    currentUserEmail,
+    currentUserId,
+    inviteGenerateCount,
+    loadInvitations,
+    text
+  ]);
+
+  const changeInvitePage = useCallback(
+    async (page: number) => {
+      const nextPage = Math.max(1, Math.min(inviteTotalPages, Math.trunc(page)));
+      if (nextPage === invitePageRef.current) {
+        return;
+      }
+      await loadInvitations(nextPage);
+    },
+    [inviteTotalPages, loadInvitations]
   );
 
   const savePostcard = useCallback(
@@ -380,11 +566,19 @@ export function useAdminDashboardController({
     activeTab,
     setActiveTab,
     users,
+    premiumFeatureIds,
+    inviteCodes,
+    invitePage,
+    invitePageSize,
+    inviteTotalCount,
+    inviteTotalPages,
+    inviteGenerateCount,
     allPostcards,
     reportedPostcards,
     feedbacks,
     userAccessDrafts,
     setUserAccessDrafts,
+    setInviteGenerateCount,
     postcardDrafts,
     setPostcardDrafts,
     reportStatusDrafts,
@@ -396,14 +590,21 @@ export function useAdminDashboardController({
     userRoleFilter,
     setUserRoleFilter,
     isLoadingUsers,
+    isLoadingInvitations,
     isLoadingPostcards,
     isLoadingFeedbacks,
     savingUserAccessId,
+    isSavingPremiumFeatures,
+    isGeneratingInviteCodes,
     savingPostcardId,
     savingReportCaseId,
     statusText,
     refreshAll,
     saveUserAccess,
+    togglePremiumFeature,
+    savePremiumFeatures,
+    generateInviteCodes,
+    changeInvitePage,
     savePostcard,
     saveReportedPostcardStatus
   };

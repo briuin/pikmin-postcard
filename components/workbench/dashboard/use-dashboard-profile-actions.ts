@@ -2,6 +2,8 @@ import { useCallback, useState, type Dispatch, type SetStateAction } from 'react
 import type { WorkbenchText } from '@/lib/i18n';
 import { parseJsonResponseOrThrow } from '@/lib/http-response';
 import { apiFetch } from '@/lib/client-api';
+import type { InviteCodeRecord } from '@/lib/invitations/types';
+import type { PremiumFeatureKey } from '@/lib/premium-features';
 
 type ProfilePasswordStatusTone = 'neutral' | 'success' | 'error' | 'loading';
 
@@ -11,10 +13,12 @@ type UseDashboardProfileActionsArgs = {
   currentUserId: string | null;
   currentUserEmail: string | null;
   loadPublicPostcards: () => Promise<void>;
+  refreshAuthSession?: () => Promise<void>;
   setDashboardStatus: (value: string) => void;
   profileDisplayName: string;
   setProfileDisplayName: Dispatch<SetStateAction<string>>;
   setProfileHasPassword: Dispatch<SetStateAction<boolean>>;
+  loadProfileData: () => Promise<void>;
 };
 
 export function useDashboardProfileActions({
@@ -23,10 +27,12 @@ export function useDashboardProfileActions({
   currentUserId,
   currentUserEmail,
   loadPublicPostcards,
+  refreshAuthSession,
   setDashboardStatus,
   profileDisplayName,
   setProfileDisplayName,
-  setProfileHasPassword
+  setProfileHasPassword,
+  loadProfileData
 }: UseDashboardProfileActionsArgs) {
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [profilePassword, setProfilePassword] = useState('');
@@ -34,10 +40,19 @@ export function useDashboardProfileActions({
   const [profilePasswordStatus, setProfilePasswordStatus] = useState('');
   const [profilePasswordStatusTone, setProfilePasswordStatusTone] =
     useState<ProfilePasswordStatusTone>('neutral');
+  const [profileInviteCode, setProfileInviteCodeState] = useState('');
+  const [profileInviteCodeStatus, setProfileInviteCodeStatus] = useState('');
+  const [profileInviteCodeStatusTone, setProfileInviteCodeStatusTone] =
+    useState<ProfilePasswordStatusTone>('neutral');
 
   const clearProfilePasswordStatus = useCallback(() => {
     setProfilePasswordStatus('');
     setProfilePasswordStatusTone('neutral');
+  }, []);
+
+  const clearProfileInviteCodeStatus = useCallback(() => {
+    setProfileInviteCodeStatus('');
+    setProfileInviteCodeStatusTone('neutral');
   }, []);
 
   const updateProfilePassword = useCallback(
@@ -56,10 +71,27 @@ export function useDashboardProfileActions({
     [clearProfilePasswordStatus]
   );
 
+  const updateProfileInviteCode = useCallback(
+    (value: string) => {
+      clearProfileInviteCodeStatus();
+      setProfileInviteCodeState(value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 9));
+    },
+    [clearProfileInviteCodeStatus]
+  );
+
   const publishProfilePasswordStatus = useCallback(
     (message: string, tone: ProfilePasswordStatusTone) => {
       setProfilePasswordStatus(message);
       setProfilePasswordStatusTone(tone);
+      setDashboardStatus(message);
+    },
+    [setDashboardStatus]
+  );
+
+  const publishProfileInviteCodeStatus = useCallback(
+    (message: string, tone: ProfilePasswordStatusTone) => {
+      setProfileInviteCodeStatus(message);
+      setProfileInviteCodeStatusTone(tone);
       setDashboardStatus(message);
     },
     [setDashboardStatus]
@@ -184,15 +216,87 @@ export function useDashboardProfileActions({
     text.profileUnknownError
   ]);
 
+  const redeemProfileInviteCode = useCallback(async () => {
+    if (!ensureAuthenticated()) {
+      return;
+    }
+
+    if (!profileInviteCode) {
+      publishProfileInviteCodeStatus(text.profileInviteCodeRequired, 'error');
+      return;
+    }
+
+    if (!/^[A-Z]{9}$/.test(profileInviteCode)) {
+      publishProfileInviteCodeStatus(text.profileInviteCodeInvalid, 'error');
+      return;
+    }
+
+    setIsSavingProfile(true);
+    publishProfileInviteCodeStatus(text.profileInviteCodeApplying, 'loading');
+    try {
+      const response = await apiFetch(
+        '/api/profile/invite-code',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: profileInviteCode })
+        },
+        {
+          userId: currentUserId,
+          userEmail: currentUserEmail
+        }
+      );
+
+      await parseJsonResponseOrThrow<{
+        hasPremiumAccess?: boolean;
+        redeemedInviteCode?: string | null;
+        inviteCodes?: InviteCodeRecord[];
+        premiumFeatureIds?: PremiumFeatureKey[];
+      }>(response, text.profileInviteCodeApplyFailed);
+
+      setProfileInviteCodeState('');
+      await loadProfileData();
+      if (refreshAuthSession) {
+        await refreshAuthSession();
+      }
+      publishProfileInviteCodeStatus(text.profileInviteCodeApplied, 'success');
+    } catch (error) {
+      publishProfileInviteCodeStatus(
+        error instanceof Error ? error.message : text.profileInviteCodeApplyFailed,
+        'error'
+      );
+    } finally {
+      setIsSavingProfile(false);
+    }
+  }, [
+    currentUserEmail,
+    currentUserId,
+    ensureAuthenticated,
+    loadProfileData,
+    refreshAuthSession,
+    profileInviteCode,
+    publishProfileInviteCodeStatus,
+    text.profileInviteCodeApplyFailed,
+    text.profileInviteCodeApplied,
+    text.profileInviteCodeApplying,
+    text.profileInviteCodeInvalid,
+    text.profileInviteCodeRequired
+  ]);
+
   return {
     isSavingProfile,
     profilePassword,
     profilePasswordConfirm,
     profilePasswordStatus,
     profilePasswordStatusTone,
+    profileInviteCode,
+    profileInviteCodeStatus,
+    profileInviteCodeStatusTone,
     setProfilePassword: updateProfilePassword,
     setProfilePasswordConfirm: updateProfilePasswordConfirm,
+    setProfileInviteCode: updateProfileInviteCode,
     saveProfileDisplayName,
-    saveProfilePassword
+    saveProfilePassword,
+    redeemProfileInviteCode
   };
 }

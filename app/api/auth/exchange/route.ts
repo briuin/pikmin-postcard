@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { UserRole } from '@/lib/domain/enums';
 import { createAppJwt, toAuthResponseUser } from '@/lib/auth-server';
+import { listPremiumFeatureIds } from '@/lib/premium-feature-settings';
 import { userRepo } from '@/lib/repos/users';
 import { roleForEmail } from '@/lib/user-role';
 
@@ -95,6 +96,7 @@ export async function POST(request: Request) {
       forceAdmin: roleForEmail(googleIdentity.email) === UserRole.ADMIN
     });
 
+    const premiumFeatureIds = await listPremiumFeatureIds();
     const token = createAppJwt(
       {
         id: user.id,
@@ -103,7 +105,9 @@ export async function POST(request: Request) {
         accountId: user.accountId,
         role: user.role,
         approvalStatus: user.approvalStatus,
-        canUsePlantPaths: user.canUsePlantPaths
+        canUsePlantPaths: user.canUsePlantPaths,
+        hasPremiumAccess: user.hasPremiumAccess,
+        premiumFeatureIds
       },
       secret
     );
@@ -111,7 +115,10 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         token,
-        user: toAuthResponseUser(user)
+        user: toAuthResponseUser({
+          ...user,
+          premiumFeatureIds
+        })
       },
       { status: 200 }
     );

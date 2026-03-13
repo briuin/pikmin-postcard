@@ -1,6 +1,11 @@
 import crypto from 'node:crypto';
 import type { UserApprovalStatus, UserRole } from '@/lib/domain/enums';
 import { resolveAccountId } from '@/lib/account-id';
+import {
+  defaultPremiumFeatureIds,
+  normalizePremiumFeatureIds,
+  type PremiumFeatureKey
+} from '@/lib/premium-features';
 
 export const AUTH_PASSWORD_MIN_LENGTH = 8;
 export const AUTH_PASSWORD_MAX_LENGTH = 128;
@@ -13,6 +18,8 @@ type JwtUserPayload = {
   role: UserRole;
   approvalStatus: UserApprovalStatus;
   canUsePlantPaths: boolean;
+  hasPremiumAccess?: boolean;
+  premiumFeatureIds?: PremiumFeatureKey[];
 };
 
 export type VerifiedAppJwtPayload = {
@@ -23,6 +30,8 @@ export type VerifiedAppJwtPayload = {
   role?: UserRole;
   approvalStatus?: UserApprovalStatus;
   canUsePlantPaths?: boolean;
+  hasPremiumAccess?: boolean;
+  premiumFeatureIds?: PremiumFeatureKey[];
   exp: number;
 };
 
@@ -54,7 +63,9 @@ export function createAppJwt(user: JwtUserPayload, secret: string): string {
     accountId: user.accountId,
     role: user.role,
     approvalStatus: user.approvalStatus,
-    canUsePlantPaths: user.canUsePlantPaths
+    canUsePlantPaths: user.canUsePlantPaths,
+    hasPremiumAccess: user.hasPremiumAccess === true,
+    premiumFeatureIds: normalizePremiumFeatureIds(user.premiumFeatureIds ?? defaultPremiumFeatureIds)
   };
 
   const encodedHeader = toBase64Url(JSON.stringify(header));
@@ -86,6 +97,8 @@ export function verifyAppJwt(token: string, secret: string): VerifiedAppJwtPaylo
       role?: UserRole;
       approvalStatus?: UserApprovalStatus;
       canUsePlantPaths?: boolean;
+      hasPremiumAccess?: boolean;
+      premiumFeatureIds?: PremiumFeatureKey[];
       exp?: number;
     };
 
@@ -104,6 +117,8 @@ export function verifyAppJwt(token: string, secret: string): VerifiedAppJwtPaylo
       role: payload.role,
       approvalStatus: payload.approvalStatus,
       canUsePlantPaths: typeof payload.canUsePlantPaths === 'boolean' ? payload.canUsePlantPaths : true,
+      hasPremiumAccess: payload.hasPremiumAccess === true,
+      premiumFeatureIds: normalizePremiumFeatureIds(payload.premiumFeatureIds ?? defaultPremiumFeatureIds),
       exp: payload.exp
     };
   } catch {
@@ -131,6 +146,8 @@ export function toAuthResponseUser(user: AuthResponseUserInput) {
     accountId: user.accountId,
     role: user.role,
     approvalStatus: user.approvalStatus,
-    canUsePlantPaths: user.canUsePlantPaths
+    canUsePlantPaths: user.canUsePlantPaths,
+    hasPremiumAccess: user.hasPremiumAccess === true,
+    premiumFeatureIds: normalizePremiumFeatureIds(user.premiumFeatureIds ?? defaultPremiumFeatureIds)
   };
 }

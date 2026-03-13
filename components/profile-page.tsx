@@ -2,8 +2,9 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect } from 'react';
-import { signIn, useSession } from '@/lib/auth-client';
+import { signIn, useAuthActions, useSession } from '@/lib/auth-client';
 import { messages, type Locale } from '@/lib/i18n';
+import { ProfileInvitationsPanel } from '@/components/profile-invitations-panel';
 import { useDashboardController } from '@/components/workbench/use-dashboard-controller';
 import { DashboardAuthCallout } from '@/components/workbench/dashboard-view/auth-callout';
 import { DashboardProfilePanel } from '@/components/workbench/dashboard-view/profile-panel';
@@ -20,6 +21,7 @@ type ProfilePageProps = {
 
 export function ProfilePage({ locale = 'en' }: ProfilePageProps) {
   const { data: session, status } = useSession();
+  const { refreshSession } = useAuthActions();
   const isAuthenticated = status === 'authenticated';
   const currentUserId = (session?.user as { id?: string } | undefined)?.id ?? null;
   const currentUserEmail = session?.user?.email ?? null;
@@ -33,7 +35,8 @@ export function ProfilePage({ locale = 'en' }: ProfilePageProps) {
     ensureAuthenticated,
     currentUserId,
     currentUserEmail,
-    loadPublicPostcards
+    loadPublicPostcards,
+    refreshAuthSession: refreshSession
   });
 
   useEffect(() => {
@@ -76,6 +79,11 @@ export function ProfilePage({ locale = 'en' }: ProfilePageProps) {
                 {text.profilePasswordStatusLabel}:{' '}
                 {profile.profileHasPassword ? text.profilePasswordStatusSet : text.profilePasswordStatusUnset}
               </span>
+              <span className={chipClassName}>
+                {text.profilePremiumChip(
+                  profile.profileHasPremiumAccess ? text.profilePremiumActive : text.profilePremiumLocked
+                )}
+              </span>
             </div>
             <div className="flex flex-wrap gap-2">
               <Link href="/dashboard" className={secondaryLinkClassName}>
@@ -105,6 +113,20 @@ export function ProfilePage({ locale = 'en' }: ProfilePageProps) {
             onProfilePasswordConfirmChange={profile.setProfilePasswordConfirm}
             onSaveProfileDisplayName={() => void profile.saveProfileDisplayName()}
             onSaveProfilePassword={() => void profile.saveProfilePassword()}
+          />
+
+          <ProfileInvitationsPanel
+            text={text}
+            hasPremiumAccess={profile.profileHasPremiumAccess}
+            redeemedInviteCode={profile.profileRedeemedInviteCode}
+            premiumFeatureIds={profile.profilePremiumFeatureIds}
+            inviteCodes={profile.profileInviteCodes}
+            inviteCodeInput={profile.profileInviteCode}
+            inviteCodeStatus={profile.profileInviteCodeStatus}
+            inviteCodeStatusTone={profile.profileInviteCodeStatusTone}
+            isBusy={profile.isSavingProfile}
+            onInviteCodeChange={profile.setProfileInviteCode}
+            onApplyInviteCode={() => void profile.redeemProfileInviteCode()}
           />
 
           {shouldShowPageStatus ? <small className={smallMutedClassName}>{profile.dashboardStatus}</small> : null}

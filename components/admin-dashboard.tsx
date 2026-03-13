@@ -42,11 +42,19 @@ export function AdminDashboard({ locale }: AdminDashboardProps) {
     activeTab,
     setActiveTab,
     users,
+    premiumFeatureIds,
+    inviteCodes,
+    invitePage,
+    invitePageSize,
+    inviteTotalCount,
+    inviteTotalPages,
+    inviteGenerateCount,
     allPostcards,
     reportedPostcards,
     feedbacks,
     userAccessDrafts,
     setUserAccessDrafts,
+    setInviteGenerateCount,
     postcardDrafts,
     setPostcardDrafts,
     reportStatusDrafts,
@@ -58,14 +66,21 @@ export function AdminDashboard({ locale }: AdminDashboardProps) {
     userRoleFilter,
     setUserRoleFilter,
     isLoadingUsers,
+    isLoadingInvitations,
     isLoadingPostcards,
     isLoadingFeedbacks,
     savingUserAccessId,
+    isSavingPremiumFeatures,
+    isGeneratingInviteCodes,
     savingPostcardId,
     savingReportCaseId,
     statusText,
     refreshAll,
     saveUserAccess,
+    togglePremiumFeature,
+    savePremiumFeatures,
+    generateInviteCodes,
+    changeInvitePage,
     savePostcard,
     saveReportedPostcardStatus
   } = useAdminDashboardController({
@@ -161,11 +176,26 @@ export function AdminDashboard({ locale }: AdminDashboardProps) {
         <AdminUsersPanel
           text={text}
           users={users}
+          premiumFeatureIds={premiumFeatureIds}
+          inviteCodes={inviteCodes}
+          invitePage={invitePage}
+          invitePageSize={invitePageSize}
+          inviteTotalCount={inviteTotalCount}
+          inviteTotalPages={inviteTotalPages}
+          inviteGenerateCount={inviteGenerateCount}
           userAccessDrafts={userAccessDrafts}
           setUserAccessDrafts={setUserAccessDrafts}
+          setInviteGenerateCount={setInviteGenerateCount}
           isLoadingUsers={isLoadingUsers}
+          isLoadingInvitations={isLoadingInvitations}
           savingUserAccessId={savingUserAccessId}
+          isSavingPremiumFeatures={isSavingPremiumFeatures}
+          isGeneratingInviteCodes={isGeneratingInviteCodes}
           onSaveUserAccess={(user) => void saveUserAccess(user)}
+          onTogglePremiumFeature={togglePremiumFeature}
+          onSavePremiumFeatures={() => void savePremiumFeatures()}
+          onGenerateInviteCodes={() => void generateInviteCodes()}
+          onChangeInvitePage={(page) => void changeInvitePage(page)}
           dateLocale={dateLocale}
         />
       ) : null}

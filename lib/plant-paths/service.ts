@@ -1,6 +1,14 @@
 import { DeleteCommand, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { maskEmail } from '@/lib/postcards/shared';
-import { batchGetByIds, ddbDoc, ddbTables, newId, nowIso, scanAll } from '@/lib/repos/dynamodb/shared';
+import {
+  batchGetByIds,
+  ddbDoc,
+  ddbTables,
+  isDynamoResourceNotFoundError,
+  newId,
+  nowIso,
+  scanAll
+} from '@/lib/repos/dynamodb/shared';
 import {
   PlantPathVisibility,
   type PlantPathCoordinate,
@@ -40,10 +48,15 @@ type DynamoUserRow = {
 };
 
 function isMissingTableError(error: unknown): boolean {
-  if (!error || typeof error !== 'object') {
-    return false;
-  }
-  return String((error as { name?: string }).name || '') === 'ResourceNotFoundException';
+  return isDynamoResourceNotFoundError(error);
+}
+
+export function isPlantPathStorageMissingError(error: unknown): boolean {
+  return isMissingTableError(error);
+}
+
+export function getPlantPathStorageUnavailableMessage(): string {
+  return `Plant Paths storage is not provisioned for ${ddbTables.plantPaths}. Run npm run ddb:provision for the current DDB_TABLE_PREFIX first.`;
 }
 
 function normalizeVisibility(value: unknown): PlantPathVisibility {

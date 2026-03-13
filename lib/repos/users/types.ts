@@ -11,6 +11,8 @@ export type UserRepoRecord = {
   canSubmitDetection: boolean;
   canVote: boolean;
   canUsePlantPaths: boolean;
+  hasPremiumAccess: boolean;
+  redeemedInviteCode: string | null;
   hasPassword: boolean;
 };
 
@@ -32,4 +34,9 @@ export type UserRepo = {
   upsertByEmail: (input: UpsertUserByEmailInput) => Promise<UserRepoRecord>;
   updateDisplayNameById: (id: string, displayName: string) => Promise<UserRepoRecord | null>;
   updatePasswordById: (id: string, passwordHash: string, passwordSalt: string) => Promise<UserRepoRecord | null>;
+  grantPremiumAccessById: (input: {
+    id: string;
+    redeemedInviteCode: string;
+    invitedByUserId?: string | null;
+  }) => Promise<UserRepoRecord | null>;
 };

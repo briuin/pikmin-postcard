@@ -12,6 +12,8 @@ type UseDashboardMutationsArgs = {
   currentUserId: string | null;
   currentUserEmail: string | null;
   loadPublicPostcards: () => Promise<void>;
+  refreshAuthSession?: () => Promise<void>;
+  loadProfileData: () => Promise<void>;
   loadDashboardData: () => Promise<void>;
   setDashboardStatus: (value: string) => void;
   myPostcards: PostcardRecord[];
@@ -28,6 +30,8 @@ export function useDashboardMutations({
   currentUserId,
   currentUserEmail,
   loadPublicPostcards,
+  refreshAuthSession,
+  loadProfileData,
   loadDashboardData,
   setDashboardStatus,
   myPostcards,
@@ -82,16 +86,23 @@ export function useDashboardMutations({
     profilePasswordConfirm,
     profilePasswordStatus,
     profilePasswordStatusTone,
+    profileInviteCode,
+    profileInviteCodeStatus,
+    profileInviteCodeStatusTone,
     setProfilePassword,
     setProfilePasswordConfirm,
+    setProfileInviteCode,
     saveProfileDisplayName,
-    saveProfilePassword
+    saveProfilePassword,
+    redeemProfileInviteCode
   } = useDashboardProfileActions({
     text,
     ensureAuthenticated,
     currentUserId,
     currentUserEmail,
     loadPublicPostcards,
+    refreshAuthSession,
+    loadProfileData,
     setDashboardStatus,
     profileDisplayName,
     setProfileDisplayName,
@@ -122,15 +133,20 @@ export function useDashboardMutations({
     profilePasswordConfirm,
     profilePasswordStatus,
     profilePasswordStatusTone,
+    profileInviteCode,
+    profileInviteCodeStatus,
+    profileInviteCodeStatusTone,
     dashboardViewMode,
     setProfilePassword,
     setProfilePasswordConfirm,
+    setProfileInviteCode,
     setDashboardViewMode,
     updatePostcardDraft,
     isJobAlreadySaved,
     saveDetectedJobAsPostcard,
     saveProfileDisplayName,
     saveProfilePassword,
+    redeemProfileInviteCode,
     savePostcardEdits,
     openCropEditor,
     closeCropEditor,

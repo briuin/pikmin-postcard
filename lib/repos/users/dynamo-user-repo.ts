@@ -22,6 +22,10 @@ type DynamoUserRow = {
   canSubmitDetection?: boolean;
   canVote?: boolean;
   canUsePlantPaths?: boolean;
+  hasPremiumAccess?: boolean;
+  redeemedInviteCode?: string | null;
+  invitedByUserId?: string | null;
+  premiumAccessGrantedAt?: string | null;
   passwordHash?: string | null;
   passwordSalt?: string | null;
   passwordUpdatedAt?: string | null;
@@ -74,6 +78,11 @@ function toUserRepoRecord(row: DynamoUserRow, fallbackRole: UserRole): UserRepoR
     canSubmitDetection: typeof row.canSubmitDetection === 'boolean' ? row.canSubmitDetection : true,
     canVote: typeof row.canVote === 'boolean' ? row.canVote : true,
     canUsePlantPaths: typeof row.canUsePlantPaths === 'boolean' ? row.canUsePlantPaths : true,
+    hasPremiumAccess: row.hasPremiumAccess === true,
+    redeemedInviteCode:
+      typeof row.redeemedInviteCode === 'string' && row.redeemedInviteCode.trim().length > 0
+        ? row.redeemedInviteCode.trim()
+        : null,
     hasPassword: rowHasPassword(row)
   };
 }
@@ -233,6 +242,7 @@ async function upsertByEmail(input: UpsertUserByEmailInput): Promise<UserRepoRec
       canSubmitDetection: true,
       canVote: true,
       canUsePlantPaths: true,
+      hasPremiumAccess: false,
       createdAt: now,
       updatedAt: now
     };
@@ -267,6 +277,8 @@ async function upsertByEmail(input: UpsertUserByEmailInput): Promise<UserRepoRec
     canSubmitDetection: current.canSubmitDetection,
     canVote: current.canVote,
     canUsePlantPaths: current.canUsePlantPaths,
+    hasPremiumAccess: current.hasPremiumAccess,
+    redeemedInviteCode: current.redeemedInviteCode,
     updatedAt: nowIso()
   };
 
@@ -337,11 +349,45 @@ async function updatePasswordById(
   return toUserRepoRecord(updated, roleForEmail(String(updated.email)));
 }
 
+async function grantPremiumAccessById(input: {
+  id: string;
+  redeemedInviteCode: string;
+  invitedByUserId?: string | null;
+}): Promise<UserRepoRecord | null> {
+  const existing = await findRowById(input.id);
+  if (!existing) {
+    return null;
+  }
+
+  const resolved = await ensureStoredAccountId(existing);
+  const updated: DynamoUserRow = {
+    ...resolved,
+    hasPremiumAccess: true,
+    redeemedInviteCode: input.redeemedInviteCode.trim().toUpperCase(),
+    invitedByUserId:
+      typeof input.invitedByUserId === 'string' && input.invitedByUserId.trim().length > 0
+        ? input.invitedByUserId.trim()
+        : null,
+    premiumAccessGrantedAt: nowIso(),
+    updatedAt: nowIso()
+  };
+
+  await ddbDoc.send(
+    new PutCommand({
+      TableName: ddbTables.users,
+      Item: updated
+    })
+  );
+
+  return toUserRepoRecord(updated, roleForEmail(String(updated.email)));
+}
+
 export const dynamoUserRepo: UserRepo = {
   findById,
   findByEmail,
   findAuthByAccountId,
   upsertByEmail,
   updateDisplayNameById,
-  updatePasswordById
+  updatePasswordById,
+  grantPremiumAccessById
 };

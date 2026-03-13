@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getAuthenticatedIdentity, getAuthenticatedUserId } from '@/lib/api-auth';
 import { apiError, getUnknownErrorDetails } from '@/lib/backend/contracts';
+import { getProfileInvitationState } from '@/lib/invitations/service';
 import { userRepo } from '@/lib/repos/users';
 import { recordUserAction } from '@/lib/user-action-log';
 
@@ -24,13 +25,18 @@ export async function getProfileLocal(args: { request: Request }): Promise<NextR
   });
 
   const user = await userRepo.findById(userId);
+  const invitationState = await getProfileInvitationState(userId);
 
   return NextResponse.json(
     {
       email: user?.email ?? identity.email,
       displayName: user?.displayName ?? identity.name ?? null,
       accountId: user?.accountId ?? null,
-      hasPassword: user?.hasPassword ?? false
+      hasPassword: user?.hasPassword ?? false,
+      hasPremiumAccess: invitationState.hasPremiumAccess,
+      redeemedInviteCode: invitationState.redeemedInviteCode,
+      premiumFeatureIds: invitationState.premiumFeatureIds,
+      inviteCodes: invitationState.inviteCodes
     },
     { status: 200 }
   );

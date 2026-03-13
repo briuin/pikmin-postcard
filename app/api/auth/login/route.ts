@@ -7,6 +7,7 @@ import {
   toAuthResponseUser,
   verifyPassword
 } from '@/lib/auth-server';
+import { listPremiumFeatureIds } from '@/lib/premium-feature-settings';
 import { userRepo } from '@/lib/repos/users';
 
 const loginSchema = z.object({
@@ -35,6 +36,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: INVALID_CREDENTIALS_MESSAGE }, { status: 401 });
     }
 
+    const premiumFeatureIds = await listPremiumFeatureIds();
     const token = createAppJwt(
       {
         id: user.id,
@@ -43,7 +45,9 @@ export async function POST(request: Request) {
         accountId: user.accountId,
         role: user.role,
         approvalStatus: user.approvalStatus,
-        canUsePlantPaths: user.canUsePlantPaths
+        canUsePlantPaths: user.canUsePlantPaths,
+        hasPremiumAccess: user.hasPremiumAccess,
+        premiumFeatureIds
       },
       secret
     );
@@ -51,7 +55,10 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         token,
-        user: toAuthResponseUser(user)
+        user: toAuthResponseUser({
+          ...user,
+          premiumFeatureIds
+        })
       },
       { status: 200 }
     );

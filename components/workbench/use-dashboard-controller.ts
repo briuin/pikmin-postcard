@@ -11,6 +11,7 @@ type UseDashboardControllerArgs = {
   currentUserId: string | null;
   currentUserEmail: string | null;
   loadPublicPostcards: () => Promise<void>;
+  refreshAuthSession?: () => Promise<void>;
 };
 
 export function useDashboardController({
@@ -18,7 +19,8 @@ export function useDashboardController({
   ensureAuthenticated,
   currentUserId,
   currentUserEmail,
-  loadPublicPostcards
+  loadPublicPostcards,
+  refreshAuthSession
 }: UseDashboardControllerArgs) {
   const [dashboardStatus, setDashboardStatus] = useState('');
 
@@ -38,6 +40,10 @@ export function useDashboardController({
     profileDisplayName,
     profileAccountId,
     profileHasPassword,
+    profileHasPremiumAccess,
+    profileRedeemedInviteCode,
+    profileInviteCodes,
+    profilePremiumFeatureIds,
     setProfileDisplayName,
     setProfileHasPassword,
     loadProfileData,
@@ -63,15 +69,20 @@ export function useDashboardController({
     profilePasswordConfirm,
     profilePasswordStatus,
     profilePasswordStatusTone,
+    profileInviteCode,
+    profileInviteCodeStatus,
+    profileInviteCodeStatusTone,
     dashboardViewMode,
     setProfilePassword,
     setProfilePasswordConfirm,
+    setProfileInviteCode,
     setDashboardViewMode,
     updatePostcardDraft,
     isJobAlreadySaved,
     saveDetectedJobAsPostcard,
     saveProfileDisplayName,
     saveProfilePassword,
+    redeemProfileInviteCode,
     savePostcardEdits,
     openCropEditor,
     closeCropEditor,
@@ -85,6 +96,8 @@ export function useDashboardController({
     currentUserId,
     currentUserEmail,
     loadPublicPostcards,
+    refreshAuthSession,
+    loadProfileData,
     loadDashboardData,
     setDashboardStatus,
     myPostcards,
@@ -119,15 +132,23 @@ export function useDashboardController({
     profileDisplayName,
     profileAccountId,
     profileHasPassword,
+    profileHasPremiumAccess,
+    profileRedeemedInviteCode,
+    profileInviteCodes,
+    profilePremiumFeatureIds,
     profilePassword,
     profilePasswordConfirm,
     profilePasswordStatus,
     profilePasswordStatusTone,
+    profileInviteCode,
+    profileInviteCodeStatus,
+    profileInviteCodeStatusTone,
     dashboardStatus,
     dashboardViewMode,
     setProfileDisplayName,
     setProfilePassword,
     setProfilePasswordConfirm,
+    setProfileInviteCode,
     setDashboardViewMode,
     loadProfileData,
     loadDashboardData,
@@ -135,6 +156,7 @@ export function useDashboardController({
     saveDetectedJobAsPostcard,
     saveProfileDisplayName,
     saveProfilePassword,
+    redeemProfileInviteCode,
     savePostcardEdits,
     isJobAlreadySaved,
     openCropEditor,

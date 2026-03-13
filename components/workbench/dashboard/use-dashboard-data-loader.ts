@@ -1,5 +1,7 @@
 import { useCallback, useState } from 'react';
 import type { WorkbenchText } from '@/lib/i18n';
+import type { InviteCodeRecord } from '@/lib/invitations/types';
+import type { PremiumFeatureKey } from '@/lib/premium-features';
 import type {
   DashboardReportRecord,
   DetectionJobRecord,
@@ -38,6 +40,10 @@ export function useDashboardDataLoader({
   const [profileDisplayName, setProfileDisplayName] = useState('');
   const [profileAccountId, setProfileAccountId] = useState('');
   const [profileHasPassword, setProfileHasPassword] = useState(false);
+  const [profileHasPremiumAccess, setProfileHasPremiumAccess] = useState(false);
+  const [profileRedeemedInviteCode, setProfileRedeemedInviteCode] = useState('');
+  const [profileInviteCodes, setProfileInviteCodes] = useState<InviteCodeRecord[]>([]);
+  const [profilePremiumFeatureIds, setProfilePremiumFeatureIds] = useState<PremiumFeatureKey[]>([]);
 
   const loadProfileData = useCallback(async () => {
     setDashboardStatus('');
@@ -62,12 +68,20 @@ export function useDashboardDataLoader({
         displayName?: string | null;
         accountId?: string | null;
         hasPassword?: boolean;
+        hasPremiumAccess?: boolean;
+        redeemedInviteCode?: string | null;
+        inviteCodes?: InviteCodeRecord[];
+        premiumFeatureIds?: PremiumFeatureKey[];
       };
 
       setProfileEmail(profileData.email ?? '');
       setProfileDisplayName(profileData.displayName ?? '');
       setProfileAccountId(profileData.accountId ?? '');
       setProfileHasPassword(Boolean(profileData.hasPassword));
+      setProfileHasPremiumAccess(profileData.hasPremiumAccess === true);
+      setProfileRedeemedInviteCode(profileData.redeemedInviteCode ?? '');
+      setProfileInviteCodes(Array.isArray(profileData.inviteCodes) ? profileData.inviteCodes : []);
+      setProfilePremiumFeatureIds(Array.isArray(profileData.premiumFeatureIds) ? profileData.premiumFeatureIds : []);
     } catch (error) {
       setDashboardStatus(error instanceof Error ? error.message : text.dashboardUnknownError);
     } finally {
@@ -167,6 +181,10 @@ export function useDashboardDataLoader({
     profileDisplayName,
     profileAccountId,
     profileHasPassword,
+    profileHasPremiumAccess,
+    profileRedeemedInviteCode,
+    profileInviteCodes,
+    profilePremiumFeatureIds,
     setProfileDisplayName,
     setProfileHasPassword,
     loadProfileData,

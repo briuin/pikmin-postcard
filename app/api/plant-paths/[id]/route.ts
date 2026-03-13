@@ -2,7 +2,12 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireApprovedPlantPathUser, withGuardedValue } from '@/lib/api-guards';
 import { PlantPathVisibility } from '@/lib/plant-paths/types';
-import { deletePlantPath, updatePlantPath } from '@/lib/plant-paths/service';
+import {
+  deletePlantPath,
+  getPlantPathStorageUnavailableMessage,
+  isPlantPathStorageMissingError,
+  updatePlantPath
+} from '@/lib/plant-paths/service';
 
 const coordinateSchema = z.object({
   id: z.string().trim().min(1).max(80),
@@ -33,12 +38,13 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       }
       return NextResponse.json(updated, { status: 200 });
     } catch (error) {
+      const storageMissing = isPlantPathStorageMissingError(error);
       return NextResponse.json(
         {
-          error: 'Failed to update plant path.',
+          error: storageMissing ? getPlantPathStorageUnavailableMessage() : 'Failed to update plant path.',
           details: error instanceof Error ? error.message : 'Unknown error'
         },
-        { status: 400 }
+        { status: storageMissing ? 503 : 400 }
       );
     }
   });
@@ -46,11 +52,22 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
 export async function DELETE(_request: Request, context: { params: Promise<{ id: string }> }) {
   return withGuardedValue(requireApprovedPlantPathUser(), async (actor) => {
-    const { id } = await context.params;
-    const deleted = await deletePlantPath({ userId: actor.id, pathId: id });
-    if (!deleted) {
-      return NextResponse.json({ error: 'Plant path not found.' }, { status: 404 });
+    try {
+      const { id } = await context.params;
+      const deleted = await deletePlantPath({ userId: actor.id, pathId: id });
+      if (!deleted) {
+        return NextResponse.json({ error: 'Plant path not found.' }, { status: 404 });
+      }
+      return NextResponse.json({ ok: true }, { status: 200 });
+    } catch (error) {
+      const storageMissing = isPlantPathStorageMissingError(error);
+      return NextResponse.json(
+        {
+          error: storageMissing ? getPlantPathStorageUnavailableMessage() : 'Failed to delete plant path.',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        },
+        { status: storageMissing ? 503 : 400 }
+      );
     }
-    return NextResponse.json({ ok: true }, { status: 200 });
   });
 }

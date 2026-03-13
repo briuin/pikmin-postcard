@@ -13,6 +13,8 @@ type TestActor = {
   canCreatePostcard: boolean;
   canSubmitDetection: boolean;
   canVote: boolean;
+  canUsePlantPaths: boolean;
+  hasPremiumAccess: boolean;
 };
 
 function createTestActor(
@@ -27,6 +29,8 @@ function createTestActor(
     canCreatePostcard: true,
     canSubmitDetection: true,
     canVote: true,
+    canUsePlantPaths: true,
+    hasPremiumAccess: true,
     ...overrides
   };
 }

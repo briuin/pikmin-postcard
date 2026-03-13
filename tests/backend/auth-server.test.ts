@@ -27,7 +27,9 @@ test('createAppJwt and verifyAppJwt preserve account auth payloads', () => {
       displayName: 'Pilot',
       accountId: 'pilot',
       role: UserRole.MEMBER,
-      approvalStatus: UserApprovalStatus.APPROVED
+      approvalStatus: UserApprovalStatus.APPROVED,
+      canUsePlantPaths: true,
+      hasPremiumAccess: false
     },
     'test-secret'
   );
@@ -38,4 +40,6 @@ test('createAppJwt and verifyAppJwt preserve account auth payloads', () => {
   assert.equal(payload?.email, 'pilot@example.com');
   assert.equal(payload?.name, 'Pilot');
   assert.equal(payload?.accountId, 'pilot');
+  assert.equal(payload?.canUsePlantPaths, true);
+  assert.equal(payload?.hasPremiumAccess, false);
 });

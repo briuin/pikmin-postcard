@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { verifyAppJwt, toAuthResponseUser } from '@/lib/auth-server';
+import { listPremiumFeatureIds } from '@/lib/premium-feature-settings';
 import { userRepo } from '@/lib/repos/users';
 
 function getBearerToken(request: Request): string | null {
@@ -29,5 +30,14 @@ export async function GET(request: Request) {
     return NextResponse.json({ user: null }, { status: 200 });
   }
 
-  return NextResponse.json({ user: toAuthResponseUser(user) }, { status: 200 });
+  const premiumFeatureIds = await listPremiumFeatureIds();
+  return NextResponse.json(
+    {
+      user: toAuthResponseUser({
+        ...user,
+        premiumFeatureIds
+      })
+    },
+    { status: 200 }
+  );
 }
