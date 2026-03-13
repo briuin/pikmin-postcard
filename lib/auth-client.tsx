@@ -20,6 +20,7 @@ type SessionUser = {
   name: string | null;
   role: UserRole;
   approvalStatus: UserApprovalStatus;
+  canUsePlantPaths: boolean;
 };
 
 type SessionData = {
@@ -48,6 +49,7 @@ type AuthSuccessResponse = {
     accountId: string;
     role: 'ADMIN' | 'MANAGER' | 'MEMBER';
     approvalStatus: 'APPROVED' | 'PENDING';
+    canUsePlantPaths?: boolean;
   };
 };
 
@@ -59,6 +61,7 @@ type AuthSessionResponse = {
     accountId?: string | null;
     role?: 'ADMIN' | 'MANAGER' | 'MEMBER';
     approvalStatus?: 'APPROVED' | 'PENDING';
+    canUsePlantPaths?: boolean;
   } | null;
 };
 
@@ -261,7 +264,8 @@ function sessionFromExchange(payload: AuthSuccessResponse): SessionData {
       accountId: payload.user.accountId,
       name: payload.user.displayName ?? null,
       role: payload.user.role,
-      approvalStatus: payload.user.approvalStatus
+      approvalStatus: payload.user.approvalStatus,
+      canUsePlantPaths: payload.user.canUsePlantPaths !== false
     }
   };
 }
@@ -280,7 +284,8 @@ function sessionFromAuthUser(user: NonNullable<AuthSessionResponse['user']>): Se
       approvalStatus:
         user.approvalStatus === UserApprovalStatus.APPROVED
           ? UserApprovalStatus.APPROVED
-          : UserApprovalStatus.PENDING
+          : UserApprovalStatus.PENDING,
+      canUsePlantPaths: user.canUsePlantPaths !== false
     }
   };
 }
@@ -293,6 +298,7 @@ function sessionFromBearerToken(token: string): SessionData | null {
     accountId?: string;
     role?: UserRole;
     approvalStatus?: UserApprovalStatus;
+    canUsePlantPaths?: boolean;
     exp?: number;
   }>(token);
   if (!payload?.sub || !payload.email || !payload.exp) {
@@ -317,7 +323,8 @@ function sessionFromBearerToken(token: string): SessionData | null {
       accountId: resolveAccountId(payload.accountId, payload.email),
       name: payload.name ?? null,
       role,
-      approvalStatus
+      approvalStatus,
+      canUsePlantPaths: payload.canUsePlantPaths !== false
     }
   };
 }

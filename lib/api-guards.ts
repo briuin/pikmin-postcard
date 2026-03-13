@@ -144,6 +144,13 @@ export function createApiGuards(dependencies: ApiGuardDependencies = defaultApiG
     });
   }
 
+  async function requireApprovedPlantPathUser(): Promise<GuardResult<AuthActor>> {
+    return requireApprovedActorCapability({
+      canAccess: (actor) => actor.canUsePlantPaths,
+      forbiddenMessage: 'You are not allowed to use plant paths.'
+    });
+  }
+
   async function requireRoleActor(
     roleCheck: (role: AuthActor['role']) => boolean
   ): Promise<GuardResult<AuthActor>> {
@@ -176,6 +183,7 @@ export function createApiGuards(dependencies: ApiGuardDependencies = defaultApiG
     requireApprovedCreator,
     requireApprovedVoter,
     requireApprovedDetectionSubmitter,
+    requireApprovedPlantPathUser,
     requireManagerActor,
     requireAdminActor
   };
@@ -190,5 +198,6 @@ export const requireApprovedCreator = defaultApiGuards.requireApprovedCreator;
 export const requireApprovedVoter = defaultApiGuards.requireApprovedVoter;
 export const requireApprovedDetectionSubmitter =
   defaultApiGuards.requireApprovedDetectionSubmitter;
+export const requireApprovedPlantPathUser = defaultApiGuards.requireApprovedPlantPathUser;
 export const requireManagerActor = defaultApiGuards.requireManagerActor;
 export const requireAdminActor = defaultApiGuards.requireAdminActor;

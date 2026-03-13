@@ -158,6 +158,23 @@ export function AdminUsersPanel({
                       />
                       {text.userPermissionVote}
                     </label>
+                    <label className="inline-flex items-center gap-1.5 rounded-full border border-[#d8e8d8] bg-[#f5fff5] px-2 py-1 text-[0.83rem] font-semibold text-[#2f4d40]">
+                      <input
+                        type="checkbox"
+                        className="h-3.5 w-3.5"
+                        checked={draft.canUsePlantPaths}
+                        onChange={(event) =>
+                          setUserAccessDrafts((current) => ({
+                            ...current,
+                            [user.id]: {
+                              ...draft,
+                              canUsePlantPaths: event.target.checked
+                            }
+                          }))
+                        }
+                      />
+                      {text.userPermissionPlantPaths}
+                    </label>
                   </div>
                 </div>
               </div>

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getAuthenticatedUserId } from '@/lib/api-auth';
+import { requireApprovedPlantPathUser, withGuardedValue } from '@/lib/api-guards';
 import { PlantPathVisibility } from '@/lib/plant-paths/types';
 import { deletePlantPath, updatePlantPath } from '@/lib/plant-paths/service';
 
@@ -17,46 +17,40 @@ const updatePlantPathSchema = z.object({
 });
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
-  const userId = await getAuthenticatedUserId({ createIfMissing: true });
-  if (!userId) {
-    return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
-  }
-
-  try {
-    const { id } = await context.params;
-    const payload = updatePlantPathSchema.parse(await request.json());
-    const updated = await updatePlantPath({
-      userId,
-      pathId: id,
-      name: payload.name,
-      visibility: payload.visibility,
-      coordinates: payload.coordinates
-    });
-    if (!updated) {
-      return NextResponse.json({ error: 'Plant path not found.' }, { status: 404 });
+  return withGuardedValue(requireApprovedPlantPathUser(), async (actor) => {
+    try {
+      const { id } = await context.params;
+      const payload = updatePlantPathSchema.parse(await request.json());
+      const updated = await updatePlantPath({
+        userId: actor.id,
+        pathId: id,
+        name: payload.name,
+        visibility: payload.visibility,
+        coordinates: payload.coordinates
+      });
+      if (!updated) {
+        return NextResponse.json({ error: 'Plant path not found.' }, { status: 404 });
+      }
+      return NextResponse.json(updated, { status: 200 });
+    } catch (error) {
+      return NextResponse.json(
+        {
+          error: 'Failed to update plant path.',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        },
+        { status: 400 }
+      );
     }
-    return NextResponse.json(updated, { status: 200 });
-  } catch (error) {
-    return NextResponse.json(
-      {
-        error: 'Failed to update plant path.',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 400 }
-    );
-  }
+  });
 }
 
 export async function DELETE(_request: Request, context: { params: Promise<{ id: string }> }) {
-  const userId = await getAuthenticatedUserId({ createIfMissing: true });
-  if (!userId) {
-    return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
-  }
-
-  const { id } = await context.params;
-  const deleted = await deletePlantPath({ userId, pathId: id });
-  if (!deleted) {
-    return NextResponse.json({ error: 'Plant path not found.' }, { status: 404 });
-  }
-  return NextResponse.json({ ok: true }, { status: 200 });
+  return withGuardedValue(requireApprovedPlantPathUser(), async (actor) => {
+    const { id } = await context.params;
+    const deleted = await deletePlantPath({ userId: actor.id, pathId: id });
+    if (!deleted) {
+      return NextResponse.json({ error: 'Plant path not found.' }, { status: 404 });
+    }
+    return NextResponse.json({ ok: true }, { status: 200 });
+  });
 }

@@ -15,6 +15,7 @@ export type AdminUserRecord = {
   canCreatePostcard: boolean;
   canSubmitDetection: boolean;
   canVote: boolean;
+  canUsePlantPaths: boolean;
   createdAt: string;
   postcardCount: number;
 };
@@ -25,6 +26,7 @@ export type UserAccessDraft = {
   canCreatePostcard: boolean;
   canSubmitDetection: boolean;
   canVote: boolean;
+  canUsePlantPaths: boolean;
 };
 
 export type AdminPostcardEditDraft = {
@@ -62,7 +64,8 @@ export function buildUserAccessDraft(user: AdminUserRecord): UserAccessDraft {
     approvalStatus: user.approvalStatus,
     canCreatePostcard: user.canCreatePostcard,
     canSubmitDetection: user.canSubmitDetection,
-    canVote: user.canVote
+    canVote: user.canVote,
+    canUsePlantPaths: user.canUsePlantPaths
   };
 }
 

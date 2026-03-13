@@ -29,6 +29,7 @@ type AuthenticatedUser = {
   canCreatePostcard: boolean;
   canSubmitDetection: boolean;
   canVote: boolean;
+  canUsePlantPaths: boolean;
 };
 
 function parseBearerTokenFromAuthorization(value: string | null | undefined): string | null {
@@ -79,6 +80,7 @@ function toAuthenticatedUser(
     canCreatePostcard: user.canCreatePostcard,
     canSubmitDetection: user.canSubmitDetection,
     canVote: user.canVote,
+    canUsePlantPaths: user.canUsePlantPaths,
     name
   };
 }

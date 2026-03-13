@@ -12,6 +12,7 @@ type JwtUserPayload = {
   accountId: string;
   role: UserRole;
   approvalStatus: UserApprovalStatus;
+  canUsePlantPaths: boolean;
 };
 
 export type VerifiedAppJwtPayload = {
@@ -21,6 +22,7 @@ export type VerifiedAppJwtPayload = {
   accountId: string;
   role?: UserRole;
   approvalStatus?: UserApprovalStatus;
+  canUsePlantPaths?: boolean;
   exp: number;
 };
 
@@ -51,7 +53,8 @@ export function createAppJwt(user: JwtUserPayload, secret: string): string {
     name: user.displayName,
     accountId: user.accountId,
     role: user.role,
-    approvalStatus: user.approvalStatus
+    approvalStatus: user.approvalStatus,
+    canUsePlantPaths: user.canUsePlantPaths
   };
 
   const encodedHeader = toBase64Url(JSON.stringify(header));
@@ -82,6 +85,7 @@ export function verifyAppJwt(token: string, secret: string): VerifiedAppJwtPaylo
       accountId?: string;
       role?: UserRole;
       approvalStatus?: UserApprovalStatus;
+      canUsePlantPaths?: boolean;
       exp?: number;
     };
 
@@ -99,6 +103,7 @@ export function verifyAppJwt(token: string, secret: string): VerifiedAppJwtPaylo
       accountId: resolveAccountId(payload.accountId, payload.email),
       role: payload.role,
       approvalStatus: payload.approvalStatus,
+      canUsePlantPaths: typeof payload.canUsePlantPaths === 'boolean' ? payload.canUsePlantPaths : true,
       exp: payload.exp
     };
   } catch {
@@ -125,6 +130,7 @@ export function toAuthResponseUser(user: AuthResponseUserInput) {
     displayName: user.displayName,
     accountId: user.accountId,
     role: user.role,
-    approvalStatus: user.approvalStatus
+    approvalStatus: user.approvalStatus,
+    canUsePlantPaths: user.canUsePlantPaths
   };
 }

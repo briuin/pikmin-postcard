@@ -10,6 +10,7 @@ export type UserRepoRecord = {
   canCreatePostcard: boolean;
   canSubmitDetection: boolean;
   canVote: boolean;
+  canUsePlantPaths: boolean;
   hasPassword: boolean;
 };
 

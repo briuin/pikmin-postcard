@@ -101,7 +101,8 @@ export async function updateAdminUserAccessLocal(args: {
         approvalStatus: payload.approvalStatus,
         canCreatePostcard: payload.canCreatePostcard,
         canSubmitDetection: payload.canSubmitDetection,
-        canVote: payload.canVote
+        canVote: payload.canVote,
+        canUsePlantPaths: payload.canUsePlantPaths
       }
     });
 

@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import type { Metadata } from 'next';
 import {
   formatBuiltAt,
@@ -58,12 +57,8 @@ export default async function DownloadsPage() {
             Flypik APK
           </h1>
           <p style={{ margin: 0, fontSize: '1.05rem', lineHeight: 1.6, color: 'var(--muted)' }}>
-            This page only shows the manually verified APK. For every build produced from code pushed to
-            main, check the full history page.
+            This page only shows the manually verified APK.
           </p>
-          <Link href="/downloads-history" style={{ fontWeight: 700, color: 'var(--pikmin-leaf)' }}>
-            View full build history
-          </Link>
         </div>
 
         <div

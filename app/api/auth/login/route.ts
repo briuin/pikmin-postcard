@@ -42,7 +42,8 @@ export async function POST(request: Request) {
         displayName: user.displayName,
         accountId: user.accountId,
         role: user.role,
-        approvalStatus: user.approvalStatus
+        approvalStatus: user.approvalStatus,
+        canUsePlantPaths: user.canUsePlantPaths
       },
       secret
     );

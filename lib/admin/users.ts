@@ -17,7 +17,8 @@ export const updateUserAccessSchema = z
     approvalStatus: z.nativeEnum(UserApprovalStatus).optional(),
     canCreatePostcard: z.boolean().optional(),
     canSubmitDetection: z.boolean().optional(),
-    canVote: z.boolean().optional()
+    canVote: z.boolean().optional(),
+    canUsePlantPaths: z.boolean().optional()
   })
   .refine(
     (value) =>
@@ -25,7 +26,8 @@ export const updateUserAccessSchema = z
       value.approvalStatus !== undefined ||
       value.canCreatePostcard !== undefined ||
       value.canSubmitDetection !== undefined ||
-      value.canVote !== undefined,
+      value.canVote !== undefined ||
+      value.canUsePlantPaths !== undefined,
     { message: 'No update fields provided.' }
   );
 
@@ -41,6 +43,7 @@ export type AdminUserListItem = {
   canCreatePostcard: boolean;
   canSubmitDetection: boolean;
   canVote: boolean;
+  canUsePlantPaths: boolean;
   createdAt: Date;
   postcardCount: number;
 };
@@ -60,6 +63,7 @@ type DynamoUserRow = {
   canCreatePostcard?: boolean;
   canSubmitDetection?: boolean;
   canVote?: boolean;
+  canUsePlantPaths?: boolean;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -118,6 +122,7 @@ function toAdminUserListItem(
     canSubmitDetection:
       typeof row.canSubmitDetection === 'boolean' ? row.canSubmitDetection : true,
     canVote: typeof row.canVote === 'boolean' ? row.canVote : true,
+    canUsePlantPaths: typeof row.canUsePlantPaths === 'boolean' ? row.canUsePlantPaths : true,
     createdAt: new Date(String(row.createdAt || nowIso())),
     postcardCount
   };
@@ -229,6 +234,12 @@ export async function updateAdminUserAccess(
         ? payload.canVote
         : typeof existing.canVote === 'boolean'
           ? existing.canVote
+          : true,
+    canUsePlantPaths:
+      payload.canUsePlantPaths !== undefined
+        ? payload.canUsePlantPaths
+        : typeof existing.canUsePlantPaths === 'boolean'
+          ? existing.canUsePlantPaths
           : true,
     updatedAt: nowIso()
   };

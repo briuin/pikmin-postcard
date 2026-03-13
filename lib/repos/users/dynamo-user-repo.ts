@@ -21,6 +21,7 @@ type DynamoUserRow = {
   canCreatePostcard?: boolean;
   canSubmitDetection?: boolean;
   canVote?: boolean;
+  canUsePlantPaths?: boolean;
   passwordHash?: string | null;
   passwordSalt?: string | null;
   passwordUpdatedAt?: string | null;
@@ -72,6 +73,7 @@ function toUserRepoRecord(row: DynamoUserRow, fallbackRole: UserRole): UserRepoR
     canCreatePostcard: typeof row.canCreatePostcard === 'boolean' ? row.canCreatePostcard : true,
     canSubmitDetection: typeof row.canSubmitDetection === 'boolean' ? row.canSubmitDetection : true,
     canVote: typeof row.canVote === 'boolean' ? row.canVote : true,
+    canUsePlantPaths: typeof row.canUsePlantPaths === 'boolean' ? row.canUsePlantPaths : true,
     hasPassword: rowHasPassword(row)
   };
 }
@@ -230,6 +232,7 @@ async function upsertByEmail(input: UpsertUserByEmailInput): Promise<UserRepoRec
       canCreatePostcard: true,
       canSubmitDetection: true,
       canVote: true,
+      canUsePlantPaths: true,
       createdAt: now,
       updatedAt: now
     };
@@ -263,6 +266,7 @@ async function upsertByEmail(input: UpsertUserByEmailInput): Promise<UserRepoRec
     canCreatePostcard: current.canCreatePostcard,
     canSubmitDetection: current.canSubmitDetection,
     canVote: current.canVote,
+    canUsePlantPaths: current.canUsePlantPaths,
     updatedAt: nowIso()
   };
 

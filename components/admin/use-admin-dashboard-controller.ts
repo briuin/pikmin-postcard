@@ -259,7 +259,8 @@ export function useAdminDashboardController({
               approvalStatus: draft.approvalStatus,
               canCreatePostcard: draft.canCreatePostcard,
               canSubmitDetection: draft.canSubmitDetection,
-              canVote: draft.canVote
+              canVote: draft.canVote,
+              canUsePlantPaths: draft.canUsePlantPaths
             })
           },
           {

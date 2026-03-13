@@ -81,8 +81,10 @@ type PlantPathPageProps = {
 export function PlantPathPage({ locale = 'en' }: PlantPathPageProps) {
   const text = messages[locale].plantPaths;
   const parseText = messages[locale].workbench;
-  const { status: sessionStatus } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
   const isAuthenticated = sessionStatus === 'authenticated';
+  const canUsePlantPaths = session?.user?.canUsePlantPaths !== false;
+  const isPlantPathAccessBlocked = isAuthenticated && !canUsePlantPaths;
 
   const [payload, setPayload] = useState<PlantPathListPayload>({
     ownedPaths: [],
@@ -210,6 +212,10 @@ export function PlantPathPage({ locale = 'en' }: PlantPathPageProps) {
   }, [activeCollection, payload, selectedPathId]);
 
   async function ensureAuthenticatedAction(): Promise<boolean> {
+    if (isPlantPathAccessBlocked) {
+      setStatusText(text.permissionDisabledBody);
+      return false;
+    }
     if (isAuthenticated) {
       return true;
     }
@@ -485,6 +491,12 @@ export function PlantPathPage({ locale = 'en' }: PlantPathPageProps) {
         )}
 
         <div className="grid min-h-0 content-start gap-3 overflow-auto overscroll-contain pr-1 max-[1080px]:overflow-visible max-[1080px]:pr-0">
+          {isPlantPathAccessBlocked ? (
+            <section className="rounded-[20px] border border-[#ead5c6] bg-[rgba(255,247,242,0.94)] px-3.5 py-3 text-sm text-[#85523b] shadow-[0_10px_24px_rgba(60,82,68,0.06)]">
+              {text.permissionDisabledBody}
+            </section>
+          ) : null}
+
           <section className="rounded-[20px] border border-[#dcead8] bg-white/90 px-3.5 py-3 shadow-[0_10px_24px_rgba(60,82,68,0.06)]">
             <div className="grid gap-1">
               <strong>{text.libraryTitle}</strong>
@@ -499,7 +511,7 @@ export function PlantPathPage({ locale = 'en' }: PlantPathPageProps) {
                   value={newPathName}
                   onChange={(event) => setNewPathName(event.target.value)}
                   placeholder={text.createPlaceholder}
-                  disabled={isMutating}
+                  disabled={isMutating || isPlantPathAccessBlocked}
                 />
               </label>
               <div className="flex flex-wrap gap-2">
@@ -507,7 +519,7 @@ export function PlantPathPage({ locale = 'en' }: PlantPathPageProps) {
                   type="button"
                   className="rounded-full bg-[linear-gradient(135deg,#56b36a,#2f9e58)] px-3 py-2 text-sm font-bold text-white disabled:opacity-60"
                   onClick={() => void createPath()}
-                  disabled={isMutating}
+                  disabled={isMutating || isPlantPathAccessBlocked}
                 >
                   {text.createButton}
                 </button>
@@ -594,7 +606,7 @@ export function PlantPathPage({ locale = 'en' }: PlantPathPageProps) {
                           onChange={(event) =>
                             draftPath ? setDraftPath({ ...draftPath, name: event.target.value }) : undefined
                           }
-                          disabled={isMutating}
+                          disabled={isMutating || isPlantPathAccessBlocked}
                         />
                       </label>
 
@@ -614,7 +626,7 @@ export function PlantPathPage({ locale = 'en' }: PlantPathPageProps) {
                                 })
                               : undefined
                           }
-                          disabled={isMutating}
+                          disabled={isMutating || isPlantPathAccessBlocked}
                         >
                           <option value={PlantPathVisibility.PRIVATE}>{text.visibilityPrivate}</option>
                           <option value={PlantPathVisibility.PUBLIC}>{text.visibilityPublic}</option>
@@ -626,7 +638,7 @@ export function PlantPathPage({ locale = 'en' }: PlantPathPageProps) {
                           type="button"
                           className="rounded-full bg-[linear-gradient(135deg,#56b36a,#2f9e58)] px-3 py-2 text-sm font-bold text-white disabled:opacity-60"
                           onClick={() => void saveSelectedPath()}
-                          disabled={isMutating}
+                          disabled={isMutating || isPlantPathAccessBlocked}
                         >
                           {text.saveChanges}
                         </button>
@@ -634,7 +646,7 @@ export function PlantPathPage({ locale = 'en' }: PlantPathPageProps) {
                           type="button"
                           className="rounded-full border border-[#edcfc6] bg-white px-3 py-2 text-sm font-semibold text-[#96533d] disabled:opacity-60"
                           onClick={() => void deleteSelectedPath()}
-                          disabled={isMutating}
+                          disabled={isMutating || isPlantPathAccessBlocked}
                         >
                           {text.deletePath}
                         </button>
@@ -656,7 +668,7 @@ export function PlantPathPage({ locale = 'en' }: PlantPathPageProps) {
                           value={manualCoordinateInput}
                           onChange={(event) => setManualCoordinateInput(event.target.value)}
                           placeholder={text.manualCoordinatePlaceholder}
-                          disabled={isMutating}
+                          disabled={isMutating || isPlantPathAccessBlocked}
                         />
                       </label>
                       <small className="text-[#587365]">{text.manualCoordinateHelp}</small>
@@ -665,7 +677,7 @@ export function PlantPathPage({ locale = 'en' }: PlantPathPageProps) {
                           type="button"
                           className="rounded-full bg-[linear-gradient(135deg,#56b36a,#2f9e58)] px-3 py-2 text-sm font-bold text-white disabled:opacity-60"
                           onClick={appendManualCoordinate}
-                          disabled={isMutating || !manualCoordinateInput.trim()}
+                          disabled={isMutating || isPlantPathAccessBlocked || !manualCoordinateInput.trim()}
                         >
                           {text.appendManualPointButton}
                         </button>
@@ -713,7 +725,7 @@ export function PlantPathPage({ locale = 'en' }: PlantPathPageProps) {
                       type="button"
                       className="rounded-full bg-[linear-gradient(135deg,#56b36a,#2f9e58)] px-3 py-2 text-sm font-bold text-white disabled:opacity-60"
                       onClick={() => void cloneSelectedPath()}
-                      disabled={isMutating}
+                      disabled={isMutating || isPlantPathAccessBlocked}
                     >
                       {text.clonePath}
                     </button>
@@ -722,7 +734,7 @@ export function PlantPathPage({ locale = 'en' }: PlantPathPageProps) {
                         type="button"
                         className="rounded-full border border-[#cfe2cc] bg-white px-3 py-2 text-sm font-semibold text-[#2d6542] disabled:opacity-60"
                         onClick={() => void toggleSaveSelectedPath()}
-                        disabled={isMutating}
+                        disabled={isMutating || isPlantPathAccessBlocked}
                       >
                         {selectedPath.isSavedByViewer ? text.unsavePublicPath : text.savePublicPath}
                       </button>
