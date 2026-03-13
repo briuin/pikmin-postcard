@@ -169,6 +169,8 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
         <DashboardSection
           text={text}
           isAuthenticated={isAuthenticated}
+          isSessionLoading={sessionStatus === 'loading'}
+          sessionCheckingText={messages[locale].session.checking}
           jobs={dashboard.jobs}
           myPostcards={dashboard.myPostcards}
           savedPostcards={dashboard.savedPostcards}

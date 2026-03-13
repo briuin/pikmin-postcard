@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { signIn, useSession } from '@/lib/auth-client';
 import { UserRole } from '@/lib/domain/enums';
+import { AuthLoadingState } from '@/components/auth-loading-state';
 import { usePersistedLocale } from '@/components/use-persisted-locale';
 import { messages, type AdminText } from '@/lib/i18n';
 import { parseJsonResponseOrThrow } from '@/lib/http-response';
@@ -179,9 +180,7 @@ export function AdminReportDetailPage({ caseId }: AdminReportDetailPageProps) {
   if (status === 'loading') {
     return (
       <section className="mx-auto grid w-full max-w-[980px] gap-3 px-3 py-3">
-        <article className="grid gap-2 rounded-[18px] border border-[#dbe9d9] bg-[#fbfffb] p-3">
-          <strong>{text.reportedTitle}</strong>
-        </article>
+        <AuthLoadingState title={text.reportedTitle} body={messages[locale].session.checking} />
       </section>
     );
   }

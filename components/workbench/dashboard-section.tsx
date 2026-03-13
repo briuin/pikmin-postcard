@@ -8,6 +8,7 @@ import { DashboardImagePreviewModal } from '@/components/workbench/dashboard-vie
 import { DashboardPostcardsList } from '@/components/workbench/dashboard-view/postcards-list';
 import { DashboardReportsList } from '@/components/workbench/dashboard-view/reports-list';
 import { DashboardSavedList } from '@/components/workbench/dashboard-view/saved-list';
+import { AuthLoadingState } from '@/components/auth-loading-state';
 import {
   getDashboardListClassName,
   panelClassName,
@@ -25,6 +26,8 @@ import { useBodyScrollLock } from '@/components/use-body-scroll-lock';
 export function DashboardSection({
   text,
   isAuthenticated,
+  isSessionLoading,
+  sessionCheckingText,
   jobs,
   myPostcards,
   savedPostcards,
@@ -59,7 +62,7 @@ export function DashboardSection({
   onCancelReport
 }: DashboardSectionProps) {
   const [previewImage, setPreviewImage] = useState<PreviewImage | null>(null);
-  const [activeCategory, setActiveCategory] = useState<DashboardCategory>('ai');
+  const [activeCategory, setActiveCategory] = useState<DashboardCategory>('postcards');
   useBodyScrollLock(Boolean(previewImage));
 
   const dashboardListClassName = getDashboardListClassName(dashboardViewMode);
@@ -74,7 +77,11 @@ export function DashboardSection({
       </div>
 
       {!isAuthenticated ? (
-        <DashboardAuthCallout text={text} onSignIn={onSignIn} />
+        isSessionLoading ? (
+          <AuthLoadingState title={text.loginRequiredTitle} body={sessionCheckingText} />
+        ) : (
+          <DashboardAuthCallout text={text} onSignIn={onSignIn} />
+        )
       ) : (
         <>
           <DashboardToolbar
@@ -128,6 +135,7 @@ export function DashboardSection({
                 cropDraft={cropDraft}
                 savingCropPostcardId={savingCropPostcardId}
                 isLoadingMine={isLoadingMine}
+                dashboardViewMode={dashboardViewMode}
                 dashboardListClassName={dashboardListClassName}
                 onUpdatePostcardDraft={onUpdatePostcardDraft}
                 onSavePostcard={onSavePostcard}

@@ -12,6 +12,8 @@ import type { CropDraft } from '@/components/workbench/utils';
 export type DashboardSectionProps = {
   text: WorkbenchText;
   isAuthenticated: boolean;
+  isSessionLoading: boolean;
+  sessionCheckingText: string;
   jobs: DetectionJobRecord[];
   myPostcards: PostcardRecord[];
   savedPostcards: PostcardRecord[];

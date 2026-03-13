@@ -28,17 +28,6 @@ export function DashboardCategoryTabs({
       <button
         type="button"
         className={
-          activeCategory === 'ai'
-            ? `${categoryTabButtonClassName} border-[#83c797] bg-[linear-gradient(135deg,#56b36a,#359d59)] text-white shadow-[0_6px_12px_rgba(47,158,88,0.22)]`
-            : `${categoryTabButtonClassName} border-[#d6e8d4] bg-[#f4fff4] text-[#2b6442]`
-        }
-        onClick={() => onChangeCategory('ai')}
-      >
-        {text.aiJobsTitle} ({jobsCount})
-      </button>
-      <button
-        type="button"
-        className={
           activeCategory === 'postcards'
             ? `${categoryTabButtonClassName} border-[#83c797] bg-[linear-gradient(135deg,#56b36a,#359d59)] text-white shadow-[0_6px_12px_rgba(47,158,88,0.22)]`
             : `${categoryTabButtonClassName} border-[#d6e8d4] bg-[#f4fff4] text-[#2b6442]`
@@ -46,6 +35,17 @@ export function DashboardCategoryTabs({
         onClick={() => onChangeCategory('postcards')}
       >
         {text.myPostcardsTitle} ({postcardsCount})
+      </button>
+      <button
+        type="button"
+        className={
+          activeCategory === 'ai'
+            ? `${categoryTabButtonClassName} border-[#83c797] bg-[linear-gradient(135deg,#56b36a,#359d59)] text-white shadow-[0_6px_12px_rgba(47,158,88,0.22)]`
+            : `${categoryTabButtonClassName} border-[#d6e8d4] bg-[#f4fff4] text-[#2b6442]`
+        }
+        onClick={() => onChangeCategory('ai')}
+      >
+        {text.aiJobsTitle} ({jobsCount})
       </button>
       <button
         type="button"

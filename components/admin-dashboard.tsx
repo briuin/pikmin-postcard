@@ -14,6 +14,7 @@ import {
 import { AdminTabToolbar } from '@/components/admin-dashboard-view/tab-toolbar';
 import type { VisibleAdminTab } from '@/components/admin-dashboard-view/types';
 import { AdminUsersPanel } from '@/components/admin-dashboard-view/users-panel';
+import { AuthLoadingState } from '@/components/auth-loading-state';
 import { isManagerOrAbove } from '@/components/admin-dashboard-types';
 import { useAdminDashboardController } from '@/components/admin/use-admin-dashboard-controller';
 import type { Locale } from '@/lib/i18n';
@@ -108,9 +109,11 @@ export function AdminDashboard({ locale }: AdminDashboardProps) {
 
   if (status === 'loading') {
     return (
-      <section className={fallbackPanelClassName}>
-        <h2>{text.title}</h2>
-      </section>
+      <AuthLoadingState
+        title={text.title}
+        body={messages[locale].session.checking}
+        className={fallbackPanelClassName}
+      />
     );
   }
 

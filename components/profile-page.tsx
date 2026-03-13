@@ -5,6 +5,7 @@ import { useCallback, useEffect } from 'react';
 import { signIn, useAuthActions, useSession } from '@/lib/auth-client';
 import { messages, type Locale } from '@/lib/i18n';
 import { ProfileInvitationsPanel } from '@/components/profile-invitations-panel';
+import { AuthLoadingState } from '@/components/auth-loading-state';
 import { useDashboardController } from '@/components/workbench/use-dashboard-controller';
 import { DashboardAuthCallout } from '@/components/workbench/dashboard-view/auth-callout';
 import { DashboardProfilePanel } from '@/components/workbench/dashboard-view/profile-panel';
@@ -61,7 +62,9 @@ export function ProfilePage({ locale = 'en' }: ProfilePageProps) {
         </div>
       </div>
 
-      {!isAuthenticated ? (
+      {status === 'loading' ? (
+        <AuthLoadingState title={text.loginRequiredTitle} body={messages[locale].session.checking} />
+      ) : !isAuthenticated ? (
         <DashboardAuthCallout text={text} body={text.loginRequiredProfileBody} onSignIn={() => signIn()} />
       ) : (
         <>
@@ -95,25 +98,49 @@ export function ProfilePage({ locale = 'en' }: ProfilePageProps) {
             </div>
           </div>
 
-          <DashboardProfilePanel
-            text={text}
-            showHeader={false}
-            profileEmail={profile.profileEmail}
-            profileDisplayName={profile.profileDisplayName}
-            profileAccountId={profile.profileAccountId}
-            profileHasPassword={profile.profileHasPassword}
-            profilePassword={profile.profilePassword}
-            profilePasswordConfirm={profile.profilePasswordConfirm}
-            profilePasswordStatus={profile.profilePasswordStatus}
-            profilePasswordStatusTone={profile.profilePasswordStatusTone}
-            isLoadingProfile={profile.isLoadingProfile}
-            isSavingProfile={profile.isSavingProfile}
-            onProfileDisplayNameChange={profile.setProfileDisplayName}
-            onProfilePasswordChange={profile.setProfilePassword}
-            onProfilePasswordConfirmChange={profile.setProfilePasswordConfirm}
-            onSaveProfileDisplayName={() => void profile.saveProfileDisplayName()}
-            onSaveProfilePassword={() => void profile.saveProfilePassword()}
-          />
+          <div className="grid gap-3 min-[920px]:grid-cols-2">
+            <DashboardProfilePanel
+              text={text}
+              showHeader={false}
+              section="personal"
+              profileEmail={profile.profileEmail}
+              profileDisplayName={profile.profileDisplayName}
+              profileAccountId={profile.profileAccountId}
+              profileHasPassword={profile.profileHasPassword}
+              profilePassword={profile.profilePassword}
+              profilePasswordConfirm={profile.profilePasswordConfirm}
+              profilePasswordStatus={profile.profilePasswordStatus}
+              profilePasswordStatusTone={profile.profilePasswordStatusTone}
+              isLoadingProfile={profile.isLoadingProfile}
+              isSavingProfile={profile.isSavingProfile}
+              onProfileDisplayNameChange={profile.setProfileDisplayName}
+              onProfilePasswordChange={profile.setProfilePassword}
+              onProfilePasswordConfirmChange={profile.setProfilePasswordConfirm}
+              onSaveProfileDisplayName={() => void profile.saveProfileDisplayName()}
+              onSaveProfilePassword={() => void profile.saveProfilePassword()}
+            />
+
+            <DashboardProfilePanel
+              text={text}
+              showHeader={false}
+              section="password"
+              profileEmail={profile.profileEmail}
+              profileDisplayName={profile.profileDisplayName}
+              profileAccountId={profile.profileAccountId}
+              profileHasPassword={profile.profileHasPassword}
+              profilePassword={profile.profilePassword}
+              profilePasswordConfirm={profile.profilePasswordConfirm}
+              profilePasswordStatus={profile.profilePasswordStatus}
+              profilePasswordStatusTone={profile.profilePasswordStatusTone}
+              isLoadingProfile={profile.isLoadingProfile}
+              isSavingProfile={profile.isSavingProfile}
+              onProfileDisplayNameChange={profile.setProfileDisplayName}
+              onProfilePasswordChange={profile.setProfilePassword}
+              onProfilePasswordConfirmChange={profile.setProfilePasswordConfirm}
+              onSaveProfileDisplayName={() => void profile.saveProfileDisplayName()}
+              onSaveProfilePassword={() => void profile.saveProfilePassword()}
+            />
+          </div>
 
           <ProfileInvitationsPanel
             text={text}

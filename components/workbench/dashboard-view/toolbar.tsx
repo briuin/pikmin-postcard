@@ -37,8 +37,8 @@ export function DashboardToolbar({
   return (
     <div className={dashboardToolbarClassName}>
       <div className={chipRowClassName}>
-        <span className={chipClassName}>{text.chipAiJobs(jobsCount)}</span>
         <span className={chipClassName}>{text.chipMyPostcards(postcardsCount)}</span>
+        <span className={chipClassName}>{text.chipAiJobs(jobsCount)}</span>
         <span className={chipClassName}>{text.chipSavedPostcards(savedCount)}</span>
       </div>
       <div className={chipRowClassName}>

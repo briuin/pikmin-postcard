@@ -25,6 +25,6 @@ export const primaryButtonClassName =
 
 export function getDashboardListClassName(dashboardViewMode: 'grid' | 'list') {
   return dashboardViewMode === 'grid'
-    ? 'mt-2 grid grid-cols-2 gap-2 max-[780px]:grid-cols-1'
+    ? 'mt-2 grid grid-cols-1 gap-2 min-[760px]:grid-cols-2 min-[1220px]:grid-cols-3'
     : 'mt-2 grid grid-cols-1 gap-2';
 }
