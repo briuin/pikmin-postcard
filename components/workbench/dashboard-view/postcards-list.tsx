@@ -9,6 +9,7 @@ import { DashboardLoadMoreFooter } from '@/components/workbench/dashboard-view/l
 import { PostcardTypeOptions } from '@/components/workbench/postcard-type-options';
 import type { PostcardEditDraft, PostcardRecord } from '@/components/workbench/types';
 import type { CropDraft } from '@/components/workbench/utils';
+import { getPostcardTypeLabel } from '@/lib/postcard-type-label';
 import {
   actionButtonClassName,
   chipRowClassName,
@@ -77,13 +78,10 @@ function SummaryStat({
 }
 
 function resolvePostcardLocationStatusLabel(text: WorkbenchText, locationStatus: PostcardRecord['locationStatus']) {
-  if (locationStatus === 'USER_CONFIRMED') {
-    return text.myPostcardsLocationConfirmed;
+  if (locationStatus === 'AUTO') {
+    return text.myPostcardsLocationAuto;
   }
-  if (locationStatus === 'MANUAL') {
-    return text.myPostcardsLocationManual;
-  }
-  return text.myPostcardsLocationAuto;
+  return null;
 }
 
 function resolvePostcardLocationSummary(text: WorkbenchText, postcard: PostcardRecord) {
@@ -250,6 +248,7 @@ export function DashboardPostcardsList({
           const locationSummary = resolvePostcardLocationSummary(text, postcard);
           const coordinateSummary = resolvePostcardCoordinateSummary(text, postcard);
           const locationDisplay = locationSummary ?? coordinateSummary;
+          const locationStatusLabel = resolvePostcardLocationStatusLabel(text, postcard.locationStatus);
 
           return (
             <article
@@ -300,16 +299,18 @@ export function DashboardPostcardsList({
                   </div>
                   <div className="flex flex-wrap justify-end gap-1">
                     <span className="rounded-full border border-[#d8e7d8] bg-white px-2.5 py-1 text-[0.72rem] font-bold text-[#315445]">
-                      {postcard.postcardType}
+                      {getPostcardTypeLabel(postcard.postcardType, text)}
                     </span>
-                    <span className="rounded-full border border-[#cfe5cd] bg-[#f1fff0] px-2.5 py-1 text-[0.72rem] font-bold text-[#2f7a44]">
-                      {resolvePostcardLocationStatusLabel(text, postcard.locationStatus)}
-                    </span>
+                    {locationStatusLabel ? (
+                      <span className="rounded-full border border-[#cfe5cd] bg-[#f1fff0] px-2.5 py-1 text-[0.72rem] font-bold text-[#2f7a44]">
+                        {locationStatusLabel}
+                      </span>
+                    ) : null}
                   </div>
                 </div>
 
                 <div className="grid gap-2 rounded-[16px] border border-[#dfeadf] bg-[rgba(248,252,248,0.92)] p-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     {locationDisplay ? (
                       <div className="min-w-0 flex-1">
                         {locationSummary ? (
@@ -323,14 +324,6 @@ export function DashboardPostcardsList({
                     ) : (
                       <div className="flex-1" />
                     )}
-                    <div className="flex items-center gap-1.5">
-                      <SummaryStat label={text.myPostcardsLikesLabel} value={postcard.likeCount} icon="heart" />
-                      <SummaryStat
-                        label={text.myPostcardsReportsLabel}
-                        value={postcard.wrongLocationReports}
-                        icon="flag"
-                      />
-                    </div>
                   </div>
                   {locationSummary && coordinateSummary ? (
                     <code className="w-fit rounded-[10px] bg-white/92 px-2.5 py-1.5 text-[0.8rem] font-semibold text-[#295240]">
@@ -347,7 +340,7 @@ export function DashboardPostcardsList({
                   ) : null}
                 </div>
 
-                <div className={chipRowClassName}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <button
                     type="button"
                     className={actionButtonClassName}
@@ -356,6 +349,14 @@ export function DashboardPostcardsList({
                   >
                     {text.myPostcardsOpenEditor}
                   </button>
+                  <div className="flex items-center gap-1.5">
+                    <SummaryStat label={text.myPostcardsLikesLabel} value={postcard.likeCount} icon="heart" />
+                    <SummaryStat
+                      label={text.myPostcardsReportsLabel}
+                      value={postcard.wrongLocationReports}
+                      icon="flag"
+                    />
+                  </div>
                 </div>
               </div>
             </article>
