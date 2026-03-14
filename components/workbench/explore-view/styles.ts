@@ -11,7 +11,7 @@ export {
 export const exploreResultsClassName =
   'flex min-h-0 max-h-full flex-col gap-2 overflow-auto overscroll-contain pr-1 max-[1080px]:max-h-none max-[1080px]:overflow-visible max-[1080px]:pr-0';
 export const cardThumbClassName =
-  'h-auto max-h-[320px] w-full rounded-[14px] border border-[#d7e8df] bg-[#eef6f2] object-cover shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]';
+  'h-auto max-h-[320px] w-full rounded-[14px] border border-[#d7e8df] bg-[#eef6f2] object-contain shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]';
 export const modalChipClassName =
   'inline-flex items-center rounded-full border border-[#d5e8d8] bg-[#f6fff7] px-2.5 py-1 text-[0.78rem] font-semibold text-[#355848]';
 export const modalActionButtonClassName =
