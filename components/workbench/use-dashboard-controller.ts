@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from 'react';
 import type { WorkbenchText } from '@/lib/i18n';
+import { sharePostcardLink } from '@/lib/postcard-share';
 import { useDashboardDataLoader } from '@/components/workbench/dashboard/use-dashboard-data-loader';
 import { useDashboardMutations } from '@/components/workbench/dashboard/use-dashboard-mutations';
 import type { PostcardRecord } from '@/components/workbench/types';
@@ -112,24 +113,10 @@ export function useDashboardController({
   const sharePostcard = useCallback(
     async (postcard: PostcardRecord) => {
       try {
-        const url = `${window.location.origin}/postcard/${postcard.id}`;
-
-        if (typeof navigator.share === 'function') {
-          try {
-            await navigator.share({
-              title: postcard.title,
-              url
-            });
-            setDashboardStatus(text.exploreSharePostcardDone);
-            return;
-          } catch (error) {
-            if (error instanceof DOMException && error.name === 'AbortError') {
-              return;
-            }
-          }
+        const result = await sharePostcardLink(postcard);
+        if (result === 'cancelled') {
+          return;
         }
-
-        await navigator.clipboard.writeText(url);
         setDashboardStatus(text.exploreSharePostcardDone);
       } catch {
         setDashboardStatus(text.exploreSharePostcardFailed);

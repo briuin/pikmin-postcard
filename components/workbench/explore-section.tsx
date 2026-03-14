@@ -14,6 +14,7 @@ import type { ExploreReportInput, ExploreToast } from '@/components/workbench/ex
 import { useAutoDismiss } from '@/components/use-auto-dismiss';
 import { useBodyScrollLock } from '@/components/use-body-scroll-lock';
 import type { WorkbenchText } from '@/lib/i18n';
+import { sharePostcardLink } from '@/lib/postcard-share';
 import type { ExploreSort, PostcardRecord } from '@/components/workbench/types';
 import type { ExploreFeedbackAction } from '@/components/workbench/explore/shared';
 
@@ -103,8 +104,10 @@ export function ExploreSection({
 
   async function copyShareLink(postcard: PostcardRecord) {
     try {
-      const baseUrl = window.location.origin;
-      await navigator.clipboard.writeText(`${baseUrl}/postcard/${postcard.id}`);
+      const result = await sharePostcardLink(postcard);
+      if (result === 'cancelled') {
+        return;
+      }
       showToast(text.exploreSharePostcardDone, 'success');
     } catch {
       showToast(text.exploreSharePostcardFailed, 'error');
