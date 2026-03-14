@@ -221,16 +221,16 @@ export function DashboardPostcardsList({
   const cropCanvasSize =
     cropViewportSize && cropImageSize && cropViewportSize.width > 0 && cropViewportSize.height > 0
       ? (() => {
-          const scale = Math.min(
-            cropViewportSize.width / cropImageSize.width,
-            cropViewportSize.height / cropImageSize.height
-          );
+        const scale = Math.min(
+          cropViewportSize.width / cropImageSize.width,
+          cropViewportSize.height / cropImageSize.height
+        );
 
-          return {
-            width: Math.max(1, Math.floor(cropImageSize.width * scale)),
-            height: Math.max(1, Math.floor(cropImageSize.height * scale))
-          };
-        })()
+        return {
+          width: Math.max(1, Math.floor(cropImageSize.width * scale)),
+          height: Math.max(1, Math.floor(cropImageSize.height * scale))
+        };
+      })()
       : null;
 
   function closeEditModal() {
@@ -255,11 +255,10 @@ export function DashboardPostcardsList({
           return (
             <article
               key={postcard.id}
-              className={`${postcardItemClassName} overflow-hidden rounded-[18px] border-[#dcead8] bg-[linear-gradient(165deg,rgba(255,255,255,0.98),rgba(246,255,247,0.95))] px-0 py-0 shadow-[0_12px_24px_rgba(53,79,63,0.08)] ${
-                isListMode && postcard.imageUrl
+              className={`${postcardItemClassName} overflow-hidden rounded-[18px] border-[#dcead8] bg-[linear-gradient(165deg,rgba(255,255,255,0.98),rgba(246,255,247,0.95))] px-0 py-0 shadow-[0_12px_24px_rgba(53,79,63,0.08)] ${isListMode && postcard.imageUrl
                   ? 'grid items-start grid-cols-[220px_minmax(0,1fr)] max-[780px]:grid-cols-[180px_minmax(0,1fr)] max-[560px]:grid-cols-[132px_minmax(0,1fr)]'
                   : 'grid'
-              }`}
+                }`}
             >
               {postcard.imageUrl ? (
                 (() => {
@@ -267,31 +266,30 @@ export function DashboardPostcardsList({
                   return (
                     <button
                       type="button"
-                      className={`relative block cursor-zoom-in border-0 bg-transparent p-0 text-left ${
-                        isListMode ? 'self-start' : ''
-                      }`}
+                      className={`relative block cursor-zoom-in border-0 bg-transparent p-0 text-left ${isListMode ? 'self-start' : ''
+                        }`}
                       onClick={() => onPreviewImage({ src: imageUrl, alt: postcard.title })}
-                      >
-                        <Image
-                          className={
-                            isListMode
-                              ? 'aspect-[16/10] h-auto w-full object-cover'
-                              : 'h-[210px] w-full object-cover'
-                          }
-                          src={imageUrl}
-                          alt={postcard.title}
-                          width={640}
-                          height={420}
-                        />
-                        {locationStatusLabel ? (
-                          <span className="pointer-events-none absolute left-3 top-3 rounded-full border border-[#c6d9ff] bg-[#e9f1ff] px-2.5 py-1 text-[0.72rem] font-black uppercase tracking-[0.06em] text-[#365da6] shadow-[0_8px_14px_rgba(39,74,137,0.18)]">
-                            {locationStatusLabel}
-                          </span>
-                        ) : null}
-                        <span className="pointer-events-none absolute bottom-3 right-3 rounded-full border border-white/70 bg-[rgba(20,38,28,0.68)] px-3 py-1 text-[0.74rem] font-bold text-white shadow-[0_10px_18px_rgba(15,28,21,0.2)] max-[560px]:hidden">
-                          {text.myPostcardsQuickPreview}
+                    >
+                      <Image
+                        className={
+                          isListMode
+                            ? 'aspect-[16/10] h-auto w-full object-cover'
+                            : 'h-[210px] w-full object-cover'
+                        }
+                        src={imageUrl}
+                        alt={postcard.title}
+                        width={640}
+                        height={420}
+                      />
+                      {locationStatusLabel ? (
+                        <span className="pointer-events-none absolute left-3 top-3 rounded-full border border-[#c6d9ff] bg-[#e9f1ff] px-2.5 py-1 text-[0.72rem] font-black uppercase tracking-[0.06em] text-[#365da6] shadow-[0_8px_14px_rgba(39,74,137,0.18)]">
+                          {locationStatusLabel}
                         </span>
-                      </button>
+                      ) : null}
+                      <span className="pointer-events-none absolute bottom-3 right-3 rounded-full border border-white/70 bg-[rgba(20,38,28,0.68)] px-3 py-1 text-[0.74rem] font-bold text-white shadow-[0_10px_18px_rgba(15,28,21,0.2)] max-[560px]:hidden">
+                        {text.myPostcardsQuickPreview}
+                      </span>
+                    </button>
                   );
                 })()
               ) : null}
@@ -304,7 +302,7 @@ export function DashboardPostcardsList({
                       {new Date(postcard.createdAt).toLocaleDateString(text.dateLocale)}
                     </small>
                   </div>
-                  <div className="flex flex-wrap justify-end gap-1">
+                  <div className="flex flex-wrap justify-end gap-1 w-max">
                     <span
                       className={`rounded-full border px-2.5 py-1 text-[0.72rem] font-bold ${getPostcardTypeBadgeClassName(
                         postcard.postcardType
