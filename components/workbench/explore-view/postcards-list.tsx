@@ -5,7 +5,7 @@ import {
   postcardItemClassName
 } from '@/components/workbench/explore-view/styles';
 import type { ExplorePostcardsListProps } from '@/components/workbench/explore-view/types';
-import { getPostcardTypeLabel } from '@/lib/postcard-type-label';
+import { getPostcardTypeBadgeClassName, getPostcardTypeLabel } from '@/lib/postcard-type-label';
 
 export function ExplorePostcardsList({
   text,
@@ -60,7 +60,11 @@ export function ExplorePostcardsList({
                   <strong className="min-w-0 truncate">{postcard.title}</strong>
                 </div>
                 <div className="flex flex-wrap gap-1">
-                  <span className="inline-flex items-center rounded-full border border-[#d7cda2] bg-[#fff4cb] px-2 py-0.5 text-[0.68rem] font-semibold text-[#6a5423]">
+                  <span
+                    className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[0.68rem] font-semibold ${getPostcardTypeBadgeClassName(
+                      postcard.postcardType
+                    )}`}
+                  >
                     {getPostcardTypeLabel(postcard.postcardType, text)}
                   </span>
                   <span className="inline-flex items-center rounded-full border border-[#d5e8d8] bg-[#f6fff7] px-2 py-0.5 text-[0.68rem] font-semibold text-[#355848]">

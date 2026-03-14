@@ -9,7 +9,7 @@ import { DashboardLoadMoreFooter } from '@/components/workbench/dashboard-view/l
 import { PostcardTypeOptions } from '@/components/workbench/postcard-type-options';
 import type { PostcardEditDraft, PostcardRecord } from '@/components/workbench/types';
 import type { CropDraft } from '@/components/workbench/utils';
-import { getPostcardTypeLabel } from '@/lib/postcard-type-label';
+import { getPostcardTypeBadgeClassName, getPostcardTypeLabel } from '@/lib/postcard-type-label';
 import {
   actionButtonClassName,
   chipRowClassName,
@@ -305,7 +305,11 @@ export function DashboardPostcardsList({
                     </small>
                   </div>
                   <div className="flex flex-wrap justify-end gap-1">
-                    <span className="rounded-full border border-[#d8e7d8] bg-white px-2.5 py-1 text-[0.72rem] font-bold text-[#315445]">
+                    <span
+                      className={`rounded-full border px-2.5 py-1 text-[0.72rem] font-bold ${getPostcardTypeBadgeClassName(
+                        postcard.postcardType
+                      )}`}
+                    >
                       {getPostcardTypeLabel(postcard.postcardType, text)}
                     </span>
                     {locationStatusLabel && !postcard.imageUrl ? (

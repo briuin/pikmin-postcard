@@ -10,7 +10,7 @@ import {
   smallMutedClassName
 } from '@/components/workbench/explore-view/styles';
 import type { ExplorePostcardModalProps } from '@/components/workbench/explore-view/types';
-import { getPostcardTypeLabel } from '@/lib/postcard-type-label';
+import { getPostcardTypeBadgeClassName, getPostcardTypeLabel } from '@/lib/postcard-type-label';
 
 export function ExplorePostcardModal({
   text,
@@ -92,7 +92,11 @@ export function ExplorePostcardModal({
               height={680}
             />
             <div className="flex flex-wrap gap-1.5">
-              <span className={modalChipClassName}>
+              <span
+                className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[0.78rem] font-semibold ${getPostcardTypeBadgeClassName(
+                  postcard.postcardType
+                )}`}
+              >
                 {text.fieldPostcardType}: {getPostcardTypeLabel(postcard.postcardType, text)}
               </span>
               <span className={modalChipClassName}>{placeLabel}</span>

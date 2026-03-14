@@ -27,3 +27,16 @@ export function getPostcardTypeLabel(
   }
   return text.postcardTypeUnknown;
 }
+
+export function getPostcardTypeBadgeClassName(postcardType: string | null | undefined): string {
+  if (postcardType === 'MUSHROOM') {
+    return 'border-[#d8c6a5] bg-[#fff3de] text-[#7d5221]';
+  }
+  if (postcardType === 'FLOWER') {
+    return 'border-[#efc4d8] bg-[#fff1f7] text-[#a1466a]';
+  }
+  if (postcardType === 'EXPLORATION') {
+    return 'border-[#c8d8ff] bg-[#edf4ff] text-[#365ea8]';
+  }
+  return 'border-[#d8e1d8] bg-[#f5f8f5] text-[#5a6d60]';
+}

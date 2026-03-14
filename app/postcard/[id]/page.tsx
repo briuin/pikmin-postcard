@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { PostcardCoordinateCopy } from '@/components/postcard-coordinate-copy';
-import { getPostcardTypeLabel } from '@/lib/postcard-type-label';
+import { getPostcardTypeBadgeClassName, getPostcardTypeLabel } from '@/lib/postcard-type-label';
 import { buildLocationLabel } from '@/lib/postcards/location-label';
 
 type PageProps = {
@@ -258,7 +258,11 @@ export default async function PostcardSharePage({ params }: PageProps) {
         ) : null}
 
         <div className="flex flex-wrap gap-1.5">
-          <span className="inline-flex items-center rounded-full border border-[#d5e8d8] bg-[#f6fff7] px-2.5 py-1 text-[0.8rem] font-semibold text-[#36594a]">
+          <span
+            className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[0.8rem] font-semibold ${getPostcardTypeBadgeClassName(
+              postcard.postcardType
+            )}`}
+          >
             Type: {getPostcardTypeLabel(postcard.postcardType)}
           </span>
           <span className="inline-flex items-center rounded-full border border-[#d5e8d8] bg-[#f6fff7] px-2.5 py-1 text-[0.8rem] font-semibold text-[#36594a]">
