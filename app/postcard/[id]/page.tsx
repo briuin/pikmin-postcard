@@ -180,11 +180,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       description,
       images: imageUrl
         ? [
-            {
-              url: imageUrl,
-              alt: title
-            }
-          ]
+          {
+            url: imageUrl,
+            alt: title
+          }
+        ]
         : undefined
     },
     twitter: {
@@ -253,7 +253,7 @@ export default async function PostcardSharePage({ params }: PageProps) {
             alt={postcard.title}
             width={1200}
             height={860}
-            className="h-auto max-h-[520px] w-full rounded-[14px] border border-[#d7e7d9] bg-[#eef6f0] object-cover"
+            className="h-auto max-h-[520px] w-full rounded-[14px] border border-[#d7e7d9] bg-[#eef6f0] object-contain"
           />
         ) : null}
 
