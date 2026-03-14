@@ -256,8 +256,8 @@ export function DashboardPostcardsList({
             <article
               key={postcard.id}
               className={`${postcardItemClassName} overflow-hidden rounded-[18px] border-[#dcead8] bg-[linear-gradient(165deg,rgba(255,255,255,0.98),rgba(246,255,247,0.95))] px-0 py-0 shadow-[0_12px_24px_rgba(53,79,63,0.08)] ${isListMode && postcard.imageUrl
-                  ? 'grid items-start grid-cols-[220px_minmax(0,1fr)] max-[780px]:grid-cols-[180px_minmax(0,1fr)] max-[560px]:grid-cols-[132px_minmax(0,1fr)]'
-                  : 'grid'
+                ? 'grid items-start grid-cols-[220px_minmax(0,1fr)] max-[780px]:grid-cols-[180px_minmax(0,1fr)] max-[560px]:grid-cols-[132px_minmax(0,1fr)]'
+                : 'grid'
                 }`}
             >
               {postcard.imageUrl ? (
@@ -304,7 +304,7 @@ export function DashboardPostcardsList({
                   </div>
                   <div className="flex flex-wrap justify-end gap-1 w-max">
                     <span
-                      className={`rounded-full border px-2.5 py-1 text-[0.72rem] font-bold ${getPostcardTypeBadgeClassName(
+                      className={`rounded-full border px-2.5 py-1 text-[0.72rem] font-bold w-max ${getPostcardTypeBadgeClassName(
                         postcard.postcardType
                       )}`}
                     >
