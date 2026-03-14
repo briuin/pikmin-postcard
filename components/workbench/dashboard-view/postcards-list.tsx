@@ -38,6 +38,7 @@ type DashboardPostcardsListProps = {
   onUpdatePostcardDraft: (postcardId: string, patch: Partial<PostcardEditDraft>) => void;
   onSavePostcard: (postcard: PostcardRecord) => void;
   onOpenCropEditor: (postcard: PostcardRecord) => void;
+  onSharePostcard: (postcard: PostcardRecord) => Promise<void>;
   onSaveCrop: (postcardId: string) => void;
   onCloseCropEditor: () => void;
   onSoftDelete: (postcard: PostcardRecord) => void;
@@ -114,6 +115,7 @@ export function DashboardPostcardsList({
   onUpdatePostcardDraft,
   onSavePostcard,
   onOpenCropEditor,
+  onSharePostcard,
   onSaveCrop,
   onCloseCropEditor,
   onSoftDelete,
@@ -269,22 +271,27 @@ export function DashboardPostcardsList({
                         isListMode ? 'self-start' : ''
                       }`}
                       onClick={() => onPreviewImage({ src: imageUrl, alt: postcard.title })}
-                    >
-                      <Image
-                        className={
-                          isListMode
-                            ? 'aspect-[16/10] h-auto w-full object-cover'
-                            : 'h-[210px] w-full object-cover'
-                        }
-                        src={imageUrl}
-                        alt={postcard.title}
-                        width={640}
-                        height={420}
-                      />
-                      <span className="pointer-events-none absolute bottom-3 right-3 rounded-full border border-white/70 bg-[rgba(20,38,28,0.68)] px-3 py-1 text-[0.74rem] font-bold text-white shadow-[0_10px_18px_rgba(15,28,21,0.2)] max-[560px]:hidden">
-                        {text.myPostcardsQuickPreview}
-                      </span>
-                    </button>
+                      >
+                        <Image
+                          className={
+                            isListMode
+                              ? 'aspect-[16/10] h-auto w-full object-cover'
+                              : 'h-[210px] w-full object-cover'
+                          }
+                          src={imageUrl}
+                          alt={postcard.title}
+                          width={640}
+                          height={420}
+                        />
+                        {locationStatusLabel ? (
+                          <span className="pointer-events-none absolute left-3 top-3 rounded-full border border-[#c6d9ff] bg-[#e9f1ff] px-2.5 py-1 text-[0.72rem] font-black uppercase tracking-[0.06em] text-[#365da6] shadow-[0_8px_14px_rgba(39,74,137,0.18)]">
+                            {locationStatusLabel}
+                          </span>
+                        ) : null}
+                        <span className="pointer-events-none absolute bottom-3 right-3 rounded-full border border-white/70 bg-[rgba(20,38,28,0.68)] px-3 py-1 text-[0.74rem] font-bold text-white shadow-[0_10px_18px_rgba(15,28,21,0.2)] max-[560px]:hidden">
+                          {text.myPostcardsQuickPreview}
+                        </span>
+                      </button>
                   );
                 })()
               ) : null}
@@ -301,7 +308,7 @@ export function DashboardPostcardsList({
                     <span className="rounded-full border border-[#d8e7d8] bg-white px-2.5 py-1 text-[0.72rem] font-bold text-[#315445]">
                       {getPostcardTypeLabel(postcard.postcardType, text)}
                     </span>
-                    {locationStatusLabel ? (
+                    {locationStatusLabel && !postcard.imageUrl ? (
                       <span className="rounded-full border border-[#cfe5cd] bg-[#f1fff0] px-2.5 py-1 text-[0.72rem] font-bold text-[#2f7a44]">
                         {locationStatusLabel}
                       </span>
@@ -341,14 +348,24 @@ export function DashboardPostcardsList({
                 </div>
 
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <button
-                    type="button"
-                    className={actionButtonClassName}
-                    onClick={() => setEditingPostcardId(postcard.id)}
-                    disabled={deletingPostcardId === postcard.id}
-                  >
-                    {text.myPostcardsOpenEditor}
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      className={actionButtonClassName}
+                      onClick={() => setEditingPostcardId(postcard.id)}
+                      disabled={deletingPostcardId === postcard.id}
+                    >
+                      {text.myPostcardsOpenEditor}
+                    </button>
+                    <button
+                      type="button"
+                      className={actionButtonClassName}
+                      onClick={() => void onSharePostcard(postcard)}
+                      disabled={deletingPostcardId === postcard.id}
+                    >
+                      {text.exploreSharePostcard}
+                    </button>
+                  </div>
                   <div className="flex items-center gap-1.5">
                     <SummaryStat label={text.myPostcardsLikesLabel} value={postcard.likeCount} icon="heart" />
                     <SummaryStat

@@ -41,6 +41,7 @@ export type DashboardSectionProps = {
   onSavePostcard: (postcard: PostcardRecord) => void;
   isJobAlreadySaved: (job: DetectionJobRecord) => boolean;
   onOpenCropEditor: (postcard: PostcardRecord) => void;
+  onSharePostcard: (postcard: PostcardRecord) => Promise<void>;
   onSaveCrop: (postcardId: string) => void;
   onCloseCropEditor: () => void;
   onSoftDelete: (postcard: PostcardRecord) => void;

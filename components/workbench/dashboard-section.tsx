@@ -55,6 +55,7 @@ export function DashboardSection({
   onSavePostcard,
   isJobAlreadySaved,
   onOpenCropEditor,
+  onSharePostcard,
   onSaveCrop,
   onCloseCropEditor,
   onSoftDelete,
@@ -140,6 +141,7 @@ export function DashboardSection({
                 onUpdatePostcardDraft={onUpdatePostcardDraft}
                 onSavePostcard={onSavePostcard}
                 onOpenCropEditor={onOpenCropEditor}
+                onSharePostcard={onSharePostcard}
                 onSaveCrop={onSaveCrop}
                 onCloseCropEditor={onCloseCropEditor}
                 onSoftDelete={onSoftDelete}

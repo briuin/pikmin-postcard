@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
+import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { PostcardCoordinateCopy } from '@/components/postcard-coordinate-copy';
 import { getPostcardTypeLabel } from '@/lib/postcard-type-label';
@@ -36,7 +37,30 @@ type SharedPostcardRecord = {
   createdAt: string;
 };
 
-function resolveBaseUrl(): URL {
+function getForwardedHeaderValue(value: string | null): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const first = value.split(',')[0]?.trim();
+  return first && first.length > 0 ? first : null;
+}
+
+async function resolveBaseUrl(): Promise<URL> {
+  const requestHeaders = await headers();
+  const forwardedHost = getForwardedHeaderValue(requestHeaders.get('x-forwarded-host'));
+  const host = forwardedHost ?? getForwardedHeaderValue(requestHeaders.get('host'));
+  const forwardedProto = getForwardedHeaderValue(requestHeaders.get('x-forwarded-proto'));
+
+  if (host) {
+    const protocol = forwardedProto ?? (host.includes('localhost') || host.startsWith('127.0.0.1') ? 'http' : 'https');
+    try {
+      return new URL(`${protocol}://${host}`);
+    } catch {
+      // Fall through to configured defaults.
+    }
+  }
+
   const candidates = [
     process.env.NEXT_PUBLIC_APP_URL,
     process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
@@ -59,7 +83,7 @@ function resolveBaseUrl(): URL {
   return new URL(DEFAULT_SITE_URL);
 }
 
-function toAbsoluteUrl(value: string): string {
+function toAbsoluteUrl(value: string, base: URL): string {
   if (!value) {
     return value;
   }
@@ -67,14 +91,13 @@ function toAbsoluteUrl(value: string): string {
   try {
     return new URL(value).toString();
   } catch {
-    const base = resolveBaseUrl();
     const path = value.startsWith('/') ? value : `/${value}`;
     return new URL(path, base).toString();
   }
 }
 
-async function findSharedPostcardById(id: string) {
-  const endpoint = new URL(`/api/postcards/${encodeURIComponent(id)}`, resolveBaseUrl()).toString();
+async function findSharedPostcardById(id: string, baseUrl: URL) {
+  const endpoint = new URL(`/api/postcards/${encodeURIComponent(id)}`, baseUrl).toString();
   const response = await fetch(endpoint, {
     cache: 'no-store'
   });
@@ -129,7 +152,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     };
   }
 
-  const postcard = await findSharedPostcardById(id);
+  const baseUrl = await resolveBaseUrl();
+  const postcard = await findSharedPostcardById(id, baseUrl);
   if (!postcard) {
     return {
       title: 'Postcard not found | Pikmin Postcard',
@@ -139,8 +163,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   const title = postcard.title?.trim() || 'Shared Postcard';
   const description = buildShareDescription(postcard);
-  const canonicalUrl = toAbsoluteUrl(`/postcard/${postcard.id}`);
-  const imageUrl = postcard.imageUrl ? toAbsoluteUrl(postcard.imageUrl) : undefined;
+  const canonicalUrl = toAbsoluteUrl(`/postcard/${postcard.id}`, baseUrl);
+  const imageUrl = postcard.imageUrl ? toAbsoluteUrl(postcard.imageUrl, baseUrl) : undefined;
 
   return {
     title: `${title} | Pikmin Postcard`,
@@ -178,7 +202,8 @@ export default async function PostcardSharePage({ params }: PageProps) {
     notFound();
   }
 
-  const postcard = await findSharedPostcardById(id);
+  const baseUrl = await resolveBaseUrl();
+  const postcard = await findSharedPostcardById(id, baseUrl);
   if (!postcard) {
     notFound();
   }

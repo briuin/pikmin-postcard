@@ -194,13 +194,14 @@ export function PostcardWorkbench({ mode = 'full', locale = 'en' }: PostcardWork
           onSetDashboardViewMode={dashboard.setDashboardViewMode}
           onRefresh={() => void loadDashboardData()}
           onUpdatePostcardDraft={dashboard.updatePostcardDraft}
-          onSaveDetectedJob={(job) => void dashboard.saveDetectedJobAsPostcard(job)}
-          onSavePostcard={(postcard) => void dashboard.savePostcardEdits(postcard)}
-          isJobAlreadySaved={dashboard.isJobAlreadySaved}
-          onOpenCropEditor={dashboard.openCropEditor}
-          onSaveCrop={(postcardId) => void dashboard.saveCropEdit(postcardId)}
-          onCloseCropEditor={dashboard.closeCropEditor}
-          onSoftDelete={(postcard) => void dashboard.softDeletePostcard(postcard)}
+                onSaveDetectedJob={(job) => void dashboard.saveDetectedJobAsPostcard(job)}
+                onSavePostcard={(postcard) => void dashboard.savePostcardEdits(postcard)}
+                isJobAlreadySaved={dashboard.isJobAlreadySaved}
+                onOpenCropEditor={dashboard.openCropEditor}
+                onSharePostcard={(postcard) => dashboard.sharePostcard(postcard)}
+                onSaveCrop={(postcardId) => void dashboard.saveCropEdit(postcardId)}
+                onCloseCropEditor={dashboard.closeCropEditor}
+                onSoftDelete={(postcard) => void dashboard.softDeletePostcard(postcard)}
           onCropChange={dashboard.updateCropDraft}
           onCancelReport={(report) => void dashboard.cancelReport(report)}
         />

@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import type { WorkbenchText } from '@/lib/i18n';
 import { useDashboardDataLoader } from '@/components/workbench/dashboard/use-dashboard-data-loader';
 import { useDashboardMutations } from '@/components/workbench/dashboard/use-dashboard-mutations';
+import type { PostcardRecord } from '@/components/workbench/types';
 
 type UseDashboardControllerArgs = {
   text: WorkbenchText;
@@ -108,6 +109,35 @@ export function useDashboardController({
     setProfileHasPassword
   });
 
+  const sharePostcard = useCallback(
+    async (postcard: PostcardRecord) => {
+      try {
+        const url = `${window.location.origin}/postcard/${postcard.id}`;
+
+        if (typeof navigator.share === 'function') {
+          try {
+            await navigator.share({
+              title: postcard.title,
+              url
+            });
+            setDashboardStatus(text.exploreSharePostcardDone);
+            return;
+          } catch (error) {
+            if (error instanceof DOMException && error.name === 'AbortError') {
+              return;
+            }
+          }
+        }
+
+        await navigator.clipboard.writeText(url);
+        setDashboardStatus(text.exploreSharePostcardDone);
+      } catch {
+        setDashboardStatus(text.exploreSharePostcardFailed);
+      }
+    },
+    [setDashboardStatus, text.exploreSharePostcardDone, text.exploreSharePostcardFailed]
+  );
+
   return {
     jobs,
     myPostcards,
@@ -160,6 +190,7 @@ export function useDashboardController({
     savePostcardEdits,
     isJobAlreadySaved,
     openCropEditor,
+    sharePostcard,
     saveCropEdit,
     closeCropEditor,
     softDeletePostcard,
